@@ -64,10 +64,12 @@ model:
   surface_neighbors: true # Pre-compute surface neighborhood from input data
   num_surface_neighbors: 7 # How many neighbors?
   use_surface_normals: true # Use surface normals and surface areas for surface computation?
-  use_only_normals: true # Use only surface normals and not surface area
+  use_only_normals: false # Use only surface normals and not surface area
   integral_loss_scaling_factor: 1 # Scale integral loss by this factor
   normalization: min_max_scaling # or mean_std_scaling
   encode_parameters: false # encode inlet velocity and air density in the model
+  surf_loss_scaling: 5.0
+  vol_loss_scaling: 1.0
   geometry_rep: # Hyperparameters for geometry representation network
     geo_conv:
       base_neurons: 32 # 256 or 64
@@ -118,6 +120,7 @@ eval: # Testing configurable parameters
   test_path: /lustre/rranade/benchmarking/drivaer_aws_surface_test_new/
   save_path: /lustre/rranade/domino/mesh_predictions_surf_final1/
   checkpoint_name: DoMINO.0.50.pt
+  scaling_param_path: /lustre/rranade/modulus_dev/modulus_forked/modulus/examples/cfd/external_aerodynamics/domino/outputs/AWS_Dataset/
 
 data_processor: # Data processor configurable parameters
   kind: drivaer_aws # must be either drivesim or drivaer_aws

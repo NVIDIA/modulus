@@ -583,6 +583,12 @@ class DoMINO(nn.Module):
             model_parameters=model_parameters,
         )
 
+        self.geo_rep_surface1 = GeometryRep(
+            input_features=input_features,
+            radii=model_parameters.geometry_rep.geo_conv.volume_radii,
+            model_parameters=model_parameters,
+        )
+
         # Basis functions for surface and volume
         base_layer_nn = model_parameters.nn_basis_functions.base_layer
         if self.output_features_surf is not None:
@@ -686,12 +692,12 @@ class DoMINO(nn.Module):
             )
 
         # Transmitting surface to volume
-        # self.surf_to_vol_conv1 = nn.Conv3d(
-        #     3, 3, kernel_size=3, padding="same"
-        # )
-        # self.surf_to_vol_conv2 = nn.Conv3d(
-        #     3, 3, kernel_size=3, padding="same"
-        # )
+        self.surf_to_vol_conv1 = nn.Conv3d(
+            len(model_parameters.geometry_rep.geo_conv.volume_radii)+1, 16, kernel_size=3, padding="same"
+        )
+        self.surf_to_vol_conv2 = nn.Conv3d(
+            16, len(model_parameters.geometry_rep.geo_conv.volume_radii)+1, kernel_size=3, padding="same"
+        )
 
         
         # total_neighbors_in_radius = 0
@@ -859,14 +865,14 @@ class DoMINO(nn.Module):
 
             else:
                 surface_mesh_centers = torch.cat(
-                    (surface_mesh_centers, surface_normals, 10**5 * surface_areas),
+                    (surface_mesh_centers, surface_normals, torch.log(surface_areas) / 10),
                     axis=-1,
                 )
                 surface_mesh_neighbors = torch.cat(
                     (
                         surface_mesh_neighbors,
                         surface_neighbors_normals,
-                        10**5 * surface_neighbors_areas,
+                        torch.log(surface_neighbors_areas) / 10,
                     ),
                     axis=-1,
                 )
@@ -1018,15 +1024,15 @@ class DoMINO(nn.Module):
             encoding_g_vol = self.geo_rep_volume(geo_centers_vol, p_grid, sdf_grid)
 
             # Normalize based on BBox around surface (car)
-            # geo_centers_surf = (
-            #     2.0 * (geo_centers - surf_min) / (surf_max - surf_min) - 1
-            # )
-            # encoding_g_surf = self.geo_rep_surface(geo_centers_surf, s_grid, sdf_surf_grid)
+            geo_centers_surf = (
+                2.0 * (geo_centers - surf_min) / (surf_max - surf_min) - 1
+            )
+            encoding_g_surf = self.geo_rep_surface1(geo_centers_surf, s_grid, sdf_surf_grid)
 
-            # for _ in range(10):
+            # for _ in range(1):
             #     encoding_g_surf = self.surf_to_vol_conv2(self.activation(self.surf_to_vol_conv1(encoding_g_surf)))
 
-            # encoding_g_vol += encoding_g_surf
+            encoding_g_vol += encoding_g_surf
 
             # SDF on volume mesh nodes
             sdf_nodes = data_dict["sdf_nodes"]
@@ -1060,7 +1066,7 @@ class DoMINO(nn.Module):
             )
 
         # encoding_g = 0.5 * encoding_g_surf
-        # # Average the encodings
+        # # # Average the encodings
         # if self.output_features_vol is not None:
         #     encoding_g += 0.5 * encoding_g_vol
 

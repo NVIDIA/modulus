@@ -370,79 +370,82 @@ def validation_step(
     use_surface_normals=False,
     integral_scaling_factor=1.0,
     loss_fn_type="mse",
+    vol_loss_scaling=None,
+    surf_loss_scaling=None,
 ):
     running_vloss = 0.0
     with torch.no_grad():
         for i_batch, sample_batched in enumerate(dataloader):
             sampled_batched = dict_to_device(sample_batched, device)
 
-            prediction_vol, prediction_surf = model(sampled_batched)
+            with autocast(enabled=True):
 
-            if prediction_vol is not None:
-                target_vol = sampled_batched["volume_fields"]
-                if loss_fn_type == "rmse":
-                    loss_norm_vol = relative_loss_fn(
-                        prediction_vol, target_vol, padded_value=-10
-                    )
-                else:
-                    loss_norm_vol = mse_loss_fn(
-                        prediction_vol, target_vol, padded_value=-10
-                    )
+                prediction_vol, prediction_surf = model(sampled_batched)
 
-            if prediction_surf is not None:
-                target_surf = sampled_batched["surface_fields"]
-                surface_normals = sampled_batched["surface_normals"]
-                surface_areas = sampled_batched["surface_areas"]
-                if loss_fn_type == "rmse":
-                    loss_norm_surf = relative_loss_fn_surface(
-                        prediction_surf, target_surf, surface_normals, padded_value=-10
-                    )
-                    loss_norm_surf_area = relative_loss_fn_area(
-                        prediction_surf,
-                        target_surf,
-                        surface_normals,
-                        surface_areas,
-                        padded_value=-10,
-                    )
-                else:
-                    loss_norm_surf = mse_loss_fn_surface(
-                        prediction_surf, target_surf, surface_normals, padded_value=-10
-                    )
-                    loss_norm_surf_area = mse_loss_fn_area(
-                        prediction_surf,
-                        target_surf,
-                        surface_normals,
-                        surface_areas,
-                        padded_value=-10,
-                    )
-                loss_integral = (
-                    integral_loss_fn_new(
-                        prediction_surf,
-                        target_surf,
-                        surface_areas,
-                        surface_normals,
-                        padded_value=-10,
-                    )
-                ) * integral_scaling_factor
+                if prediction_vol is not None:
+                    target_vol = sampled_batched["volume_fields"]
+                    if loss_fn_type == "rmse":
+                        loss_norm_vol = relative_loss_fn(
+                            prediction_vol, target_vol, padded_value=-10
+                        )
+                    else:
+                        loss_norm_vol = mse_loss_fn(
+                            prediction_vol, target_vol, padded_value=-10
+                        )*vol_loss_scaling
 
-            if prediction_surf is not None and prediction_vol is not None:
-                vloss = (
-                    loss_norm_vol
-                    + 0.5 * loss_norm_surf
-                    + loss_integral
-                    + 0.5 * loss_norm_surf_area
-                )
-            elif prediction_vol is not None:
-                vloss = loss_norm_vol
-            elif prediction_surf is not None:
-                vloss = 0.5 * loss_norm_surf + loss_integral + 0.5 * loss_norm_surf_area
+                if prediction_surf is not None:
+                    target_surf = sampled_batched["surface_fields"]
+                    surface_normals = sampled_batched["surface_normals"]
+                    surface_areas = sampled_batched["surface_areas"]
+                    if loss_fn_type == "rmse":
+                        loss_norm_surf = relative_loss_fn_surface(
+                            prediction_surf, target_surf, surface_normals, padded_value=-10
+                        )
+                        loss_norm_surf_area = relative_loss_fn_area(
+                            prediction_surf,
+                            target_surf,
+                            surface_normals,
+                            surface_areas,
+                            padded_value=-10,
+                        )
+                    else:
+                        loss_norm_surf = mse_loss_fn_surface(
+                            prediction_surf, target_surf, surface_normals, padded_value=-10
+                        ) * surf_loss_scaling
+                        loss_norm_surf_area = mse_loss_fn_area(
+                            prediction_surf,
+                            target_surf,
+                            surface_normals,
+                            surface_areas,
+                            padded_value=-10,
+                        ) * surf_loss_scaling
+                    loss_integral = (
+                        integral_loss_fn_new(
+                            prediction_surf,
+                            target_surf,
+                            surface_areas,
+                            surface_normals,
+                            padded_value=-10,
+                        )
+                    ) * 0.0
+
+                if prediction_surf is not None and prediction_vol is not None:
+                    vloss = (
+                        loss_norm_vol
+                        + 0.5 * loss_norm_surf
+                        + 0.0*loss_integral
+                        + 0.5 * loss_norm_surf_area
+                    )
+                elif prediction_vol is not None:
+                    vloss = loss_norm_vol
+                elif prediction_surf is not None:
+                    vloss = 0.5 * loss_norm_surf + 0.0*loss_integral + 0.5 * loss_norm_surf_area
 
             running_vloss += vloss
 
     avg_vloss = running_vloss / (i_batch + 1)
 
     return avg_vloss
-
 
 def train_epoch(
     dataloader,
@@ -454,6 +457,8 @@ def train_epoch(
     device,
     integral_scaling_factor,
     loss_fn_type,
+    vol_loss_scaling=None,
+    surf_loss_scaling=None
 ):
 
     running_loss = 0.0
@@ -464,7 +469,7 @@ def train_epoch(
 
         sampled_batched = dict_to_device(sample_batched, device)
 
-        with autocast(enabled=False):
+        with autocast(enabled=True):
             prediction_vol, prediction_surf = model(sampled_batched)
 
             if prediction_vol is not None:
@@ -476,7 +481,7 @@ def train_epoch(
                 else:
                     loss_norm_vol = mse_loss_fn(
                         prediction_vol, target_vol, padded_value=-10
-                    )
+                    )*vol_loss_scaling
 
             if prediction_surf is not None:
 
@@ -497,14 +502,14 @@ def train_epoch(
                 else:
                     loss_norm_surf = mse_loss_fn_surface(
                         prediction_surf, target_surf, surface_normals, padded_value=-10
-                    )
+                    ) * surf_loss_scaling
                     loss_norm_surf_area = mse_loss_fn_area(
                         prediction_surf,
                         target_surf,
                         surface_normals,
                         surface_areas,
                         padded_value=-10,
-                    )
+                    ) * surf_loss_scaling
                 loss_integral = (
                     integral_loss_fn_new(
                         prediction_surf,
@@ -513,20 +518,20 @@ def train_epoch(
                         surface_normals,
                         padded_value=-10,
                     )
-                ) * integral_scaling_factor
+                ) * 0.0
 
             if prediction_vol is not None and prediction_surf is not None:
                 loss_norm = (
                     loss_norm_vol
                     + 0.5 * loss_norm_surf
-                    + loss_integral
+                    + 0.0* loss_integral
                     + 0.5 * loss_norm_surf_area
                 )
             elif prediction_vol is not None:
                 loss_norm = loss_norm_vol
             elif prediction_surf is not None:
                 loss_norm = (
-                    0.5 * loss_norm_surf + loss_integral + 0.5 * loss_norm_surf_area
+                    0.5 * loss_norm_surf + 0.0 * loss_integral + 0.5 * loss_norm_surf_area
                 )
 
         loss = loss_norm
@@ -901,7 +906,8 @@ def main(cfg: DictConfig) -> None:
             static_graph=True,
         )
 
-    optimizer = apex.optimizers.FusedAdam(model.parameters(), lr=0.001)
+    # optimizer = apex.optimizers.FusedAdam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=[50, 100, 150, 200, 250, 300, 350, 400], gamma=0.5
     )
@@ -969,6 +975,8 @@ def main(cfg: DictConfig) -> None:
             device=dist.device,
             integral_scaling_factor=initial_integral_factor,
             loss_fn_type=cfg.model.loss_function,
+            vol_loss_scaling=cfg.model.vol_loss_scaling,
+            surf_loss_scaling=cfg.model.surf_loss_scaling,
         )
 
         model.eval()
@@ -980,6 +988,8 @@ def main(cfg: DictConfig) -> None:
             use_surface_normals=cfg.model.use_surface_normals,
             integral_scaling_factor=initial_integral_factor,
             loss_fn_type=cfg.model.loss_function,
+            vol_loss_scaling=cfg.mode.vol_loss_scaling,
+            surf_loss_scaling=cfg.mode.surf_loss_scaling,
         )
 
         scheduler.step()

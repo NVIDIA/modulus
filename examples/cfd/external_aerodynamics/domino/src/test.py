@@ -114,12 +114,13 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
             encoding_g_vol = model.module.geo_rep_volume(geo_centers_vol, p_grid, sdf_grid)
 
             # Normalize based on BBox around surface (car)
-            # geo_centers_surf = (
-            #     2.0 * (geo_centers - surf_min) / (surf_max - surf_min) - 1
-            # )
-            # encoding_g_surf = model.module.geo_rep(
-            #     geo_centers_surf, s_grid, sdf_surf_grid
-            # )
+            geo_centers_surf = (
+                2.0 * (geo_centers - surf_min) / (surf_max - surf_min) - 1
+            )
+            encoding_g_surf = model.module.geo_rep_surface1(
+                geo_centers_surf, s_grid, sdf_surf_grid
+            )
+            encoding_g_vol += encoding_g_surf
 
         if output_features_surf is not None:
             # Represent geometry on bounding box
@@ -237,8 +238,8 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
 
             start_time = time.time()
 
-            surface_areas = torch.unsqueeze(surface_areas, -1)
-            surface_neighbors_areas = torch.unsqueeze(surface_neighbors_areas, -1)
+            # surface_areas = torch.unsqueeze(surface_areas, -1)
+            # surface_neighbors_areas = torch.unsqueeze(surface_neighbors_areas, -1)
 
             for p in range(subdomain_points + 1):
                 start_idx = p * point_batch_size
@@ -347,16 +348,19 @@ def main(cfg: DictConfig):
         num_surf_vars = None
 
     vol_save_path = os.path.join(
-        "outputs", cfg.project.name, "volume_scaling_factors.npy"
+        cfg.eval.scaling_param_path, "volume_scaling_factors.npy"
     )
     surf_save_path = os.path.join(
-        "outputs", cfg.project.name, "surface_scaling_factors.npy"
+        cfg.eval.scaling_param_path, "surface_scaling_factors.npy"
     )
-    if os.path.exists(vol_save_path) and os.path.exists(surf_save_path):
+    if os.path.exists(vol_save_path):
         vol_factors = np.load(vol_save_path)
-        surf_factors = np.load(surf_save_path)
     else:
         vol_factors = None
+
+    if os.path.exists(surf_save_path):
+        surf_factors = np.load(surf_save_path)
+    else:
         surf_factors = None
 
     model = DoMINO(
