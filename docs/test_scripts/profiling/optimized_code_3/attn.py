@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 torch.backends.cuda.enable_flash_sdp(True)
-from modulus.utils.profiling import profile, annotate
+from physicsnemo.utils.profiling import profile, annotate
 
 class Attention(nn.Module):
     """Dummy example Attention mechanism using Flash Attention for efficient computation.

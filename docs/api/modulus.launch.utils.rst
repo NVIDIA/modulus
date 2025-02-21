@@ -1,8 +1,8 @@
-Modulus Launch Utils
+PhysicsNeMo Launch Utils
 ====================
 
-.. automodule:: modulus.launch.utils
-.. currentmodule:: modulus.launch.utils
+.. automodule:: physicsnemo.launch.utils
+.. currentmodule:: physicsnemo.launch.utils
 
 .. autosummary::
    :toctree: generated
@@ -10,7 +10,7 @@ Modulus Launch Utils
 Checkpointing
 -------------
 
-.. automodule:: modulus.launch.utils.checkpoint
+.. automodule:: physicsnemo.launch.utils.checkpoint
     :members:
     :show-inheritance:
 

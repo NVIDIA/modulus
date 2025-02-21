@@ -1,36 +1,36 @@
 
-Modulus Models
+PhysicsNeMo Models
 ==============
 
-.. automodule:: modulus.models
-.. currentmodule:: modulus.models
+.. automodule:: physicsnemo.models
+.. currentmodule:: physicsnemo.models
 
 Basics
 ^^^^^^
 
-Modulus contains its own Model class for constructing neural networks. This model class
+PhysicsNeMo contains its own Model class for constructing neural networks. This model class
 is built on top of PyTorch's ``nn.Module`` and can be used interchangeably within the
-PyTorch ecosystem. Using Modulus models allows you to leverage various features of
-Modulus aimed at improving performance and ease of use. These features include, but are
+PyTorch ecosystem. Using PhysicsNeMo models allows you to leverage various features of
+PhysicsNeMo aimed at improving performance and ease of use. These features include, but are
 not limited to, model zoo, automatic mixed-precision, CUDA Graphs, and easy checkpointing.
 We discuss each of these features in the following sections.
 
 Model Zoo
 ^^^^^^^^^
 
-Modulus contains several optimized, customizable and easy-to-use models.
+PhysicsNeMo contains several optimized, customizable and easy-to-use models.
 These include some very general models like Fourier Neural Operators (FNOs),
 ResNet, and Graph Neural Networks (GNNs) as well as domain-specific models like
 Deep Learning Weather Prediction (DLWP) and Spherical Fourier Neural Operators (SFNO).
 
-For a list of currently available models, please refer the `models on GitHub <https://github.com/NVIDIA/modulus/tree/main/modulus/models>`_.
+For a list of currently available models, please refer the `models on GitHub <https://github.com/NVIDIA/physicsnemo/tree/main/modulus/models>`_.
 
 Below are some simple examples of how to use these models.
 
 .. code:: python
 
     >>> import torch
-    >>> from modulus.models.mlp.fully_connected import FullyConnected
+    >>> from physicsnemo.models.mlp.fully_connected import FullyConnected
     >>> model = FullyConnected(in_features=32, out_features=64)
     >>> input = torch.randn(128, 32)
     >>> output = model(input)
@@ -40,7 +40,7 @@ Below are some simple examples of how to use these models.
 .. code:: python
 
     >>> import torch
-    >>> from modulus.models.fno.fno import FNO
+    >>> from physicsnemo.models.fno.fno import FNO
     >>> model = FNO(
             in_channels=4,
             out_channels=3,
@@ -56,13 +56,13 @@ Below are some simple examples of how to use these models.
     >>> output.size()
     torch.Size([32, 3, 32, 32])
 
-How to write your own Modulus model
+How to write your own PhysicsNeMo model
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-There are a few different ways to construct a Modulus model. If you are a seasoned
+There are a few different ways to construct a PhysicsNeMo model. If you are a seasoned
 PyTorch user, the easiest way would be to write your model using the optimized layers and
-utilities from Modulus or Pytorch. Lets take a look at a simple example of a UNet model
-first showing a simple PyTorch implementation and then a Modulus implementation that
+utilities from PhysicsNeMo or Pytorch. Lets take a look at a simple example of a UNet model
+first showing a simple PyTorch implementation and then a PhysicsNeMo implementation that
 supports CUDA Graphs and Automatic Mixed-Precision.
 
 .. code:: python
@@ -99,22 +99,22 @@ supports CUDA Graphs and Automatic Mixed-Precision.
             x = self.dec1(x2)
             return self.final(x)
 
-Now we show this model rewritten in Modulus. First, let's subclass the model from
-``modulus.Module`` instead of ``torch.nn.Module``. The
-``modulus.Module`` class acts like a direct replacement for the
+Now we show this model rewritten in PhysicsNeMo. First, let's subclass the model from
+``physicsnemo.Module`` instead of ``torch.nn.Module``. The
+``physicsnemo.Module`` class acts like a direct replacement for the
 ``torch.nn.Module`` and provides additional functionality for saving and loading
-checkpoints, etc. Refer to the API docs of ``modulus.Module`` for further
+checkpoints, etc. Refer to the API docs of ``physicsnemo.Module`` for further
 details. Additionally we will add metadata to the model to capture the optimizations
 that this model supports. In this case we will enable CUDA Graphs and Automatic Mixed-Precision.
 
 .. code:: python
 
     from dataclasses import dataclass
-    import modulus
+    import physicsnemo
     import torch.nn as nn
 
     @dataclass
-    class UNetMetaData(modulus.ModelMetaData):
+    class UNetMetaData(physicsnemo.ModelMetaData):
         name: str = "UNet"
         # Optimization
         jit: bool = True
@@ -122,7 +122,7 @@ that this model supports. In this case we will enable CUDA Graphs and Automatic 
         amp_cpu: bool = True
         amp_gpu: bool = True
 
-    class UNet(modulus.Module):
+    class UNet(physicsnemo.Module):
         def __init__(self, in_channels=1, out_channels=1):
             super(UNet, self).__init__(meta=UNetMetaData())
 
@@ -152,14 +152,14 @@ that this model supports. In this case we will enable CUDA Graphs and Automatic 
             x = self.dec1(x2)
             return self.final(x)
 
-Now that we have our Modulus model, we can make use of these optimizations using the
-``modulus.utils.StaticCaptureTraining`` decorator. This decorator will capture the
+Now that we have our PhysicsNeMo model, we can make use of these optimizations using the
+``physicsnemo.utils.StaticCaptureTraining`` decorator. This decorator will capture the
 training step function and optimize it for the specified optimizations.
 
 .. code:: python
 
     import torch
-    from modulus.utils import StaticCaptureTraining
+    from physicsnemo.utils import StaticCaptureTraining
 
     model = UNet().to("cuda")
     input = torch.randn(8, 1, 128, 128).to("cuda")
@@ -195,31 +195,31 @@ The speed-up observed changes from model to model and is typically greater for m
 complex models.
 
 .. note::
-    The ``ModelMetaData`` and ``modulus.Module`` do not make the model
+    The ``ModelMetaData`` and ``physicsnemo.Module`` do not make the model
     support CUDA Graphs, AMP, etc. optimizations automatically. The user is responsible
     to write the model code that enables each of these optimizations.
-    Models in the Modulus Model Zoo are written to support many of these optimizations
-    and checked against Modulus's CI to ensure that they work correctly.
+    Models in the PhysicsNeMo Model Zoo are written to support many of these optimizations
+    and checked against PhysicsNeMo's CI to ensure that they work correctly.
 
 .. note::
     The ``StaticCaptureTraining`` decorator is still under development and may be
     refactored in the future.
 
 
-.. _modulus-models-from-torch:
+.. _physicsnemo-models-from-torch:
 
-Converting PyTorch Models to Modulus Models
+Converting PyTorch Models to PhysicsNeMo Models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In the above example we show constructing a Modulus model from scratch. However you
-can also convert existing PyTorch models to Modulus models in order to leverage
-Modulus features. To do this, you can use the ``Module.from_torch`` method as shown
+In the above example we show constructing a PhysicsNeMo model from scratch. However you
+can also convert existing PyTorch models to PhysicsNeMo models in order to leverage
+PhysicsNeMo features. To do this, you can use the ``Module.from_torch`` method as shown
 below.
 
 .. code:: python
 
     from dataclasses import dataclass
-    import modulus
+    import physicsnemo
     import torch.nn as nn
 
     class TorchModel(nn.Module):
@@ -241,27 +241,27 @@ below.
         amp_cpu: bool = True
         amp_gpu: bool = True
 
-    ModulusModel = modulus.Module.from_torch(TorchModel, meta=ConvMetaData())
+    PhysicsNeMoModel = physicsnemo.Module.from_torch(TorchModel, meta=ConvMetaData())
 
 
 
 
-.. _saving-and-loading-modulus-models:
+.. _saving-and-loading-physicsnemo-models:
 
-Saving and Loading Modulus Models
+Saving and Loading PhysicsNeMo Models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As mentioned above, Modulus models are interoperable with PyTorch models. This means that
-you can save and load Modulus models using the standard PyTorch APIs however, we provide
+As mentioned above, PhysicsNeMo models are interoperable with PyTorch models. This means that
+you can save and load PhysicsNeMo models using the standard PyTorch APIs however, we provide
 a few additional utilities to make this process easier. A key challenge in saving and
-loading models is keeping track of the model metadata such as layer sizes, etc. Modulus
+loading models is keeping track of the model metadata such as layer sizes, etc. PhysicsNeMo
 models can be saved with this metadata to a custom ``.mdlus`` file. These files allow
 for easy loading and instantiation of the model. We show two examples of this below.
 The first example shows saving and loading a model from an already instantiated model.
 
 .. code:: python
 
-    >>> from modulus.models.mlp.fully_connected import FullyConnected
+    >>> from physicsnemo.models.mlp.fully_connected import FullyConnected
     >>> model = FullyConnected(in_features=32, out_features=64)
     >>> model.save("model.mdlus") # Save model to .mdlus file
     >>> model.load("model.mdlus") # Load model weights from .mdlus file from already instantiated model
@@ -290,7 +290,7 @@ model from the ``.mdlus`` file.
 
 .. code:: python
 
-    >>> from modulus import Module
+    >>> from physicsnemo import Module
     >>> fc_model = Module.from_checkpoint("model.mdlus") # Instantiate model from .mdlus file.
     >>> fc_model
     FullyConnected(
@@ -314,20 +314,20 @@ model from the ``.mdlus`` file.
 
 .. note::
    In order to make use of this functionality, the model must have json serializable
-   inputs to the ``__init__`` function. It is highly recommended that all Modulus
+   inputs to the ``__init__`` function. It is highly recommended that all PhysicsNeMo
    models be developed with this requirement in mind.
 
 
-Modulus Model Registry and Entry Points
+PhysicsNeMo Model Registry and Entry Points
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Modulus contains a model registry that allows for easy access and ingestion of
+PhysicsNeMo contains a model registry that allows for easy access and ingestion of
 models. Below is a simple example of how to use the model registry to obtain a model
 class.
 
 .. code:: python
 
-    >>> from modulus.registry import ModelRegistry
+    >>> from physicsnemo.registry import ModelRegistry
     >>> model_registry = ModelRegistry()
     >>> model_registry.list_models()
     ['AFNO', 'DLWP', 'FNO', 'FullyConnected', 'GraphCastNet', 'MeshGraphNet', 'One2ManyRNN', 'Pix2Pix', 'SFNO', 'SRResNet']
@@ -335,9 +335,9 @@ class.
     >>> model = FullyConnected(in_features=32, out_features=64)
 
 The model registry also allows exposing models via entry points. This allows for
-integration of models into the Modulus ecosystem. For example, suppose you have a
+integration of models into the PhysicsNeMo ecosystem. For example, suppose you have a
 package ``MyPackage`` that contains a model ``MyModel``. You can expose this model
-to the Modulus registry by adding an entry point to your ``toml`` file. For
+to the PhysicsNeMo registry by adding an entry point to your ``toml`` file. For
 example, suppose your package structure is as follows:
 
 .. code:: python
@@ -361,15 +361,15 @@ example, suppose your package structure is as follows:
     description = "My Neural Network Zoo."
     version = "0.1.0"
 
-    [project.entry-points."modulus.models"]
-    MyModulusModel = "mypackage.models.MyModulusModel:MyModulusModel"
+    [project.entry-points."physicsnemo.models"]
+    MyPhysicsNeMoModel = "mypackage.models.MyPhysicsNeMoModel:MyPhysicsNeMoModel"
 
 .. code:: python
 
    # mypackage/models.py
 
    import torch.nn as nn
-   from modulus.models import Model
+   from physicsnemo.models import Model
 
    class MyModel(nn.Module):
        def __init__(self):
@@ -381,20 +381,20 @@ example, suppose your package structure is as follows:
            x = self.conv1(x)
            return self.conv2(x)
 
-   MyModulusModel = Model.from_pytorch(MyModel)
+   MyPhysicsNeMoModel = Model.from_pytorch(MyModel)
 
 
-Once this package is installed, you can access the model via the Modulus model
+Once this package is installed, you can access the model via the PhysicsNeMo model
 registry.
 
 
 .. code:: python
 
-   >>> from modulus.registry import ModelRegistry
+   >>> from physicsnemo.registry import ModelRegistry
    >>> model_registry = ModelRegistry()
    >>> model_registry.list_models()
-   ['MyModulusModel', 'AFNO', 'DLWP', 'FNO', 'FullyConnected', 'GraphCastNet', 'MeshGraphNet', 'One2ManyRNN', 'Pix2Pix', 'SFNO', 'SRResNet']
-   >>> MyModulusModel = model_registry.factory("MyModulusModel")
+   ['MyPhysicsNeMoModel', 'AFNO', 'DLWP', 'FNO', 'FullyConnected', 'GraphCastNet', 'MeshGraphNet', 'One2ManyRNN', 'Pix2Pix', 'SFNO', 'SRResNet']
+   >>> MyPhysicsNeMoModel = model_registry.factory("MyPhysicsNeMoModel")
 
 
 For more information on entry points and potential use cases, see
@@ -406,37 +406,37 @@ For more information on entry points and potential use cases, see
 Fully Connected Network
 -----------------------
 
-.. automodule:: modulus.models.mlp.fully_connected
+.. automodule:: physicsnemo.models.mlp.fully_connected
     :members:
     :show-inheritance:
 
 Fourier Neural Operators
 ------------------------
 
-.. automodule:: modulus.models.fno.fno
+.. automodule:: physicsnemo.models.fno.fno
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.afno.afno
+.. automodule:: physicsnemo.models.afno.afno
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.afno.modafno
+.. automodule:: physicsnemo.models.afno.modafno
     :members:
     :show-inheritance:
 
 Graph Neural Networks
 ---------------------
 
-.. automodule:: modulus.models.meshgraphnet.meshgraphnet
+.. automodule:: physicsnemo.models.meshgraphnet.meshgraphnet
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.mesh_reduced.mesh_reduced
+.. automodule:: physicsnemo.models.mesh_reduced.mesh_reduced
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.meshgraphnet.bsms_mgn
+.. automodule:: physicsnemo.models.meshgraphnet.bsms_mgn
     :members:
     :show-inheritance:
 
@@ -444,22 +444,22 @@ Graph Neural Networks
 Convolutional Networks
 -----------------------
 
-.. automodule:: modulus.models.pix2pix.pix2pix
+.. automodule:: physicsnemo.models.pix2pix.pix2pix
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.srrn.super_res_net
+.. automodule:: physicsnemo.models.srrn.super_res_net
     :members:
     :show-inheritance:
 
 Recurrent Neural Networks
 -------------------------
 
-.. automodule:: modulus.models.rnn.rnn_one2many
+.. automodule:: physicsnemo.models.rnn.rnn_one2many
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.rnn.rnn_seq2seq
+.. automodule:: physicsnemo.models.rnn.rnn_seq2seq
     :members:
     :show-inheritance:
 
@@ -467,27 +467,27 @@ Recurrent Neural Networks
 Weather / Climate Models
 -------------------------
 
-.. automodule:: modulus.models.dlwp.dlwp
+.. automodule:: physicsnemo.models.dlwp.dlwp
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.dlwp_healpix.HEALPixRecUNet
+.. automodule:: physicsnemo.models.dlwp_healpix.HEALPixRecUNet
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.graphcast.graph_cast_net
+.. automodule:: physicsnemo.models.graphcast.graph_cast_net
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.fengwu.fengwu
+.. automodule:: physicsnemo.models.fengwu.fengwu
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.pangu.pangu
+.. automodule:: physicsnemo.models.pangu.pangu
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.swinvrnn.swinvrnn
+.. automodule:: physicsnemo.models.swinvrnn.swinvrnn
     :members:
     :show-inheritance:
 
@@ -495,14 +495,14 @@ Weather / Climate Models
 Diffusion Model
 ---------------
 
-.. automodule:: modulus.models.diffusion.dhariwal_unet
+.. automodule:: physicsnemo.models.diffusion.dhariwal_unet
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.diffusion.song_unet
+.. automodule:: physicsnemo.models.diffusion.song_unet
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.models.diffusion.unet
+.. automodule:: physicsnemo.models.diffusion.unet
     :members:
     :show-inheritance:

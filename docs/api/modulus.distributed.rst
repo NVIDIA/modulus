@@ -1,17 +1,17 @@
-Modulus Distributed
+PhysicsNeMo Distributed
 ===================
 
-.. automodule:: modulus.distributed
-.. currentmodule:: modulus.distributed
+.. automodule:: physicsnemo.distributed
+.. currentmodule:: physicsnemo.distributed
 
-Distributed utilites in Modulus are designed to simplify implementation of parallel training and
+Distributed utilites in PhysicsNeMo are designed to simplify implementation of parallel training and
 make inference scripts easier by providing a unified way to configure and query parameters associated 
-with the distributed environment. The utilites in ``modulus.distributed`` build on top of the 
+with the distributed environment. The utilites in ``physicsnemo.distributed`` build on top of the 
 utilites from ``torch.distributed`` and abstract out some of the complexities of setting up a
 distributed execution environment.
 
 The example below shows how to setup a simple distributed data parallel training recipe using the
-distributed utilites in Modulus. 
+distributed utilites in PhysicsNeMo. 
 `DistributedDataParallel <https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html>`_ 
 in PyTorch provides the framework for data parallel training by reducing parameter gradients
 across multiple worker processes after the backwards pass. The code below shows how to specify 
@@ -22,8 +22,8 @@ arguments of the ``DistributedDataParallel`` utility using the ``DistributedMana
 
     import torch
     from torch.nn.parallel import DistributedDataParallel
-    from modulus.distributed import DistributedManager
-    from modulus.models.mlp.fully_connected import FullyConnected
+    from physicsnemo.distributed import DistributedManager
+    from physicsnemo.models.mlp.fully_connected import FullyConnected
 
     def main():
         # Initialize the DistributedManager. This will automatically 
@@ -110,12 +110,12 @@ How does this work?
 An important aspect of the ``DistributedManager`` is that it is follows the 
 `Borg pattern <https://code.activestate.com/recipes/66531-singleton-we-dont-need-no-stinkin-singleton-the-bo/>`_.
 This means that ``DistributedManager`` essentially functions like a singleton 
-class and once configured, all utilities in Modulus can access the same configuration 
+class and once configured, all utilities in PhysicsNeMo can access the same configuration 
 and adapt to the specified distributed structure.
 
 For example, see the constructor of the ``DistributedAFNO`` class:
 
-.. literalinclude:: ../../modulus/models/afno/distributed/afno.py
+.. literalinclude:: ../../physicsnemo/models/afno/distributed/afno.py
    :pyobject: DistributedAFNO.__init__
 
 This model parallel implementation can just instantiate ``DistributedManager`` and query 
@@ -135,37 +135,37 @@ without having to explicitly pass those params down the call stack.
 .. autosummary::
    :toctree: generated
 
-modulus.distributed.manager
+physicsnemo.distributed.manager
 ----------------------------
 
-.. automodule:: modulus.distributed.manager
+.. automodule:: physicsnemo.distributed.manager
     :members:
     :show-inheritance:
 
-modulus.distributed.utils
+physicsnemo.distributed.utils
 ----------------------------
 
-.. automodule:: modulus.distributed.utils
+.. automodule:: physicsnemo.distributed.utils
     :members:
     :show-inheritance:
 
-modulus.distributed.autograd
+physicsnemo.distributed.autograd
 ----------------------------
 
-.. automodule:: modulus.distributed.autograd
+.. automodule:: physicsnemo.distributed.autograd
     :members:
     :show-inheritance:
 
-modulus.distributed.fft
+physicsnemo.distributed.fft
 ----------------------------
 
-.. automodule:: modulus.distributed.fft
+.. automodule:: physicsnemo.distributed.fft
     :members:
     :show-inheritance:
 
-modulus.distributed.mappings
+physicsnemo.distributed.mappings
 ----------------------------
 
-.. automodule:: modulus.distributed.mappings
+.. automodule:: physicsnemo.distributed.mappings
     :members:
     :show-inheritance:

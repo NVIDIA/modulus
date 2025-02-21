@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from modulus.utils.profiling import profile, annotate
+from physicsnemo.utils.profiling import profile, annotate
 
 class Attention(nn.Module):
     """Dummy example Attention mechanism.  Meant not for efficienct computation

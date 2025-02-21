@@ -1,19 +1,19 @@
-Profiling Applications in Modulus
+Profiling Applications in PhysicsNeMo
 ==================================
 
-In this tutorial, we'll learn about profiling your scientific AI applications in Modulus.
+In this tutorial, we'll learn about profiling your scientific AI applications in PhysicsNeMo.
 First, we'll discuss the high-level philosophy of profiling AI applications, then get 
 in to the profiling tools available to understand performance.  We'll look at the 
-features available in modulus to deploy these tools easily on your model, and finally
-we'll walk through a full example of profiling a Modulus model (FigConvNet) with these 
+features available in physicsnemo to deploy these tools easily on your model, and finally
+we'll walk through a full example of profiling a PhysicsNeMo model (FigConvNet) with these 
 tools.
 
 Profiling Techniques
 ---------------------
 
-Before we get in to the details of profiling AI applications in Modulus, it's worth
+Before we get in to the details of profiling AI applications in PhysicsNeMo, it's worth
 discussing a few general techniques and terminologies of profiling - and especially 
-how they relate to profiling AI applications and Modulus.  There are some links
+how they relate to profiling AI applications and PhysicsNeMo.  There are some links
 to other resources here as well, and deeper resources on profiling are abudant.  For 
 example, 
 `Nvidia's Nsight User Guide <https://docs.nvidia.com/nsight-systems/UserGuide/index.html>`_
@@ -113,7 +113,7 @@ is the true hotspot.  Mixed-language tracing tools, such as pytorch's own
 `profiler <https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html>`_,
 are powerful ways to visualize
 
-Profiling AI Applications and Modulus
+Profiling AI Applications and PhysicsNeMo
 --------------------------------------
 
 As described in brief above, many of the tools and tricks of profiling applications
@@ -125,33 +125,33 @@ it challenging to see entire application performance at once.
 
 Because of these challenges, and because the end goal of profiling is to study an
 application to determine hotspots that the user can take action on, profiling AI
-workloads almost always employs multiple tools in multiple passes.  In Modulus, we have
+workloads almost always employs multiple tools in multiple passes.  In PhysicsNeMo, we have
 designed profiling tool integration to make profiling your workloads straightforward,
 without introducing additional overhead, and we've designed these tools to be "leave-in".
 
-In the rest of this tutororial, we'll look at how to use Modulus's profiling tools to 
+In the rest of this tutororial, we'll look at how to use PhysicsNeMo's profiling tools to 
 profile a simple application, as well as how to extend the tools to new profilers.
-Modulus's tools are designed to be inserted into your workload once, and generally
+PhysicsNeMo's tools are designed to be inserted into your workload once, and generally
 provide no significant overhead (or even do anything at all!) until enabled.
 
-Modulus Profiling Tools
+PhysicsNeMo Profiling Tools
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-Modulus provides three high level tools for profiling utilities:
+PhysicsNeMo provides three high level tools for profiling utilities:
 
 .. code-block:: python
 
-    from modulus.utils.profiling import Profiler, profile, annotate
+    from physicsnemo.utils.profiling import Profiler, profile, annotate
 
 We'll get more into the details of some of these tools later, but at a high level:
 
-#. The `Profiler` is the core utility of `modulus`'s profiling features.
-Similar to the `modulus` DistributedManager, this class is a singleton instance
+#. The `Profiler` is the core utility of `physicsnemo`'s profiling features.
+Similar to the `physicsnemo` DistributedManager, this class is a singleton instance
 designed to enable easy access to profiling handles and propogate configurations.
 The Profiler is meant to be your steering wheel for driving different profiling
 techniques, without having to go into your code and change annotations or decorations.
 We'll see how to enable the profiler with different techniques below. An instance of the 
-Modulus Profiler can be used as a context for profiling.
+PhysicsNeMo Profiler can be used as a context for profiling.
 
 #. `profile` is a function decorator that you can use to mark specific functions
 in your code for profiling.  It is targeting tools like python's `line_profiler`
@@ -162,7 +162,7 @@ an asynchronous backend like CUDA.  You can freely decorate functions with
 #. `annotate` is context-decorator and shortcut to `nvtx` annotations.
 `annotate` can also be used as a context just like `nvtx.annotate`.
 
-which will (in the modulus
+which will (in the physicsnemo
 profiling tools) turn on automatic annotation for the duration of the context.
 This can be expensive, and has to be explicitly
 
@@ -170,7 +170,7 @@ The Workload
 ^^^^^^^^^^^^
 
 This is a toy workload, using an Attention layer on randomly generated data. But, to
-make it look like the tools you're familiar with in Modulus, it is configured with
+make it look like the tools you're familiar with in PhysicsNeMo, it is configured with
 Hydra and uses the usual tools (Pytorch Dataloader, for example).  Here's the workload:
 
 .. literalinclude:: ../test_scripts/profiling/original_code/workload.py
@@ -242,7 +242,7 @@ Python Level Profiling
 ^^^^^^^^^^^^^^^^^^^^^^
 
 A great place to start when running profiles of AI code is the python level
-profilers.  They are quick, easy, and generally low overhead.  Modulus
+profilers.  They are quick, easy, and generally low overhead.  PhysicsNeMo
 has support to enable `line_profiler` built in - all you might need is to
 run `pip install line_profiler` to ensure you've installed the base package too.
 
@@ -258,7 +258,7 @@ compared to the original:
       import torch
       from torch import nn
 
-    + from modulus.utils.profiling import profile, annotate
+    + from physicsnemo.utils.profiling import profile, annotate
     +
       class Attention(nn.Module):
           """Dummy example Attention mechanism.  Meant not for efficienct computation
@@ -337,8 +337,8 @@ the `workload` function itself.
     Upon entering the context, if the profiler interface isn't initialized
     it will trigger automatically.
 
-Once the profiled run has completed, modulus will automatically deposit the outputs
-into a folder `modulus_profiling_ouputs`.
+Once the profiled run has completed, physicsnemo will automatically deposit the outputs
+into a folder `physicsnemo_profiling_ouputs`.
 
 .. note:: 
     You can change the location of the output.  Call `Profiler().output_dir(your_path)`
@@ -356,7 +356,7 @@ function breakdown looks like this (for an inference run):
 .. code-block:: text
 
     Total time: 4.54253 s
-    File: /root/modulus/docs/test_scripts/profiling/annotated_code/workload.py
+    File: /root/physicsnemo/docs/test_scripts/profiling/annotated_code/workload.py
     Function: workload at line 30
 
     Line #      Hits         Time  Per Hit   % Time  Line Contents
@@ -417,7 +417,7 @@ function breakdown looks like this (for an inference run):
 
 
 .. note::
-    Modulus does not depend on `line_profiler`.  If you want to see these results yourself,
+    PhysicsNeMo does not depend on `line_profiler`.  If you want to see these results yourself,
     run `pip install line_profiler` and rerun the script.
 
 And of course, when presented like this, the issue is clear.  The dataloader is too slow!
@@ -478,7 +478,7 @@ Things are moving a litle faster now.  Let's look again at the python level prof
 .. code-block:: text
 
     Total time: 4.17338 s
-    File: /root/modulus/docs/test_scripts/profiling/fixed_data_loader/workload.py
+    File: /root/physicsnemo/docs/test_scripts/profiling/fixed_data_loader/workload.py
     Function: workload at line 30
 
     Line #      Hits         Time  Per Hit   % Time  Line Contents
@@ -551,7 +551,7 @@ we'll need different tools that have access to under-the-python-hood profiling t
 Pytorch Profiler
 ^^^^^^^^^^^^^^^^^
 
-A common and useful tool in AI profiling is the pytorch profiler.  Modulus wraps
+A common and useful tool in AI profiling is the pytorch profiler.  PhysicsNeMo wraps
 this profiler too, and we can enable it easily with a flip of a configuration switch:
 
 .. code-block:: python
@@ -562,7 +562,7 @@ this profiler too, and we can enable it easily with a flip of a configuration sw
 
 Or, set profile.torch to true in the config file.
 
-The output of the torch profiler will be in the `modulus_profiling_outputs/torch` directory.
+The output of the torch profiler will be in the `physicsnemo_profiling_outputs/torch` directory.
 The most useful output produced is a trace of the operations in the workload.  This can be
 viewed by copying the file to a system that has the chrome browser, and viewing the file
 at ui.perfetto.dev:
@@ -770,7 +770,7 @@ makes the torch profiler more challenging to use in some cases
 
 To understand what the latest version of this code is doing, let's use Nvidia's
 NSight tools to look at this.  Unlike the profiling tools we've used so far, nsight 
-wraps the application in a profiler.  But, the `annotate` decorator in modulus 
+wraps the application in a profiler.  But, the `annotate` decorator in physicsnemo 
 is directly tied to `nvtx` annotations and all the code annotations we've already
 inserted will show up as regions in the nsight trace.
 
@@ -826,19 +826,19 @@ Where to go from here?
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 We've spent some detail in this tutorial looking at profiling techniques for AI applications, and how
-to easily enable them in Modulus.  As a recap:
+to easily enable them in PhysicsNeMo.  As a recap:
 
-#. Modulus makes it easy to enable AI profiling with a simple interface, `Profiler()`, which you can
+#. PhysicsNeMo makes it easy to enable AI profiling with a simple interface, `Profiler()`, which you can
 modify to use different profiling tools.
 
-#. The `profile` decorator from modulus is a dynamic decorator that you can leave in your code,
+#. The `profile` decorator from physicsnemo is a dynamic decorator that you can leave in your code,
 and it will only perform functions when a profiling tool from `Profiler()` is enabled.
 
 #. The `annotate` decorator is a conviencence decorator that is directly tied to `nvtx` annotations.
 You can freely use them interchangeably.
 
 #. The `pytorch` and `nsight` profilers make it easy to profile your pytorch code.  Pytorch's profiler
-can be activated in Modulus with a configuration switch, and nsight can be activated with a simple
+can be activated in PhysicsNeMo with a configuration switch, and nsight can be activated with a simple
 bash command wrapping your script.
 
 #. The `torch.compile` decorator can be used to compile your model for even better performance, but can 
@@ -861,17 +861,17 @@ cases that can help guide you in the right direction:
 
     - If your model has a lot of small operations, `torch.compile` can be a good
       option to see if it can be fused.  Alternatively, you can try to capture the
-      kernels into a single kernal replay launch with cuda graphs - Modulus provides
-      easy to use tools to do this with `StaticCapture <https://docs.nvidia.com/deeplearning/modulus/modulus-core-v030/api/modulus.utils.html>`_.
+      kernels into a single kernal replay launch with cuda graphs - PhysicsNeMo provides
+      easy to use tools to do this with `StaticCapture <https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-core-v030/api/modulus.utils.html>`_.
 
     - If your model is dominated by just a few large, long running kernels, you can explore
       optimizations with custom fusion or kernel implementations.  Try `triton <https://openai.com/index/triton/>`_ and `NVIDIA Warp <https://github.com/NVIDIA/warp>`_
       to explore python-level kernel languages, which can provide 
       significant performance improvements when deployed appropriately.
 
-That's the end of the Modulus tutorial on profiling.  We hope this has been useful!  If there 
-are developments in python profiling that you'd like to see enabled natively in Modulus, please reach 
-out to the Modulus team via a github issue or submit a PR!
+That's the end of the PhysicsNeMo tutorial on profiling.  We hope this has been useful!  If there 
+are developments in python profiling that you'd like to see enabled natively in PhysicsNeMo, please reach 
+out to the PhysicsNeMo team via a github issue or submit a PR!
 
 
       

@@ -1,4 +1,4 @@
-Modulus Deploy
+PhysicsNeMo Deploy
 ==============
 
 .. autosummary::
@@ -6,7 +6,7 @@ Modulus Deploy
 
 ONNX
 ----
-.. automodule:: modulus.deploy.onnx.utils
+.. automodule:: physicsnemo.deploy.onnx.utils
     :members:
     :show-inheritance:
 

@@ -1,7 +1,7 @@
 Timer unit: 1e-09 s
 
 Total time: 0.0712444 s
-File: /root/modulus/docs/test_scripts/profiling/fixed_data_loader/attn.py
+File: /root/physicsnemo/docs/test_scripts/profiling/fixed_data_loader/attn.py
 Function: forward at line 31
 
 Line #      Hits         Time  Per Hit   % Time  Line Contents
@@ -27,7 +27,7 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
     49        32      31321.0    978.8      0.0          return x
 
 Total time: 0.00933511 s
-File: /root/modulus/docs/test_scripts/profiling/fixed_data_loader/attn.py
+File: /root/physicsnemo/docs/test_scripts/profiling/fixed_data_loader/attn.py
 Function: forward at line 65
 
 Line #      Hits         Time  Per Hit   % Time  Line Contents
@@ -43,7 +43,7 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
     73        32      13428.0    419.6      0.1          return x
 
 Total time: 0.0998171 s
-File: /root/modulus/docs/test_scripts/profiling/fixed_data_loader/attn.py
+File: /root/physicsnemo/docs/test_scripts/profiling/fixed_data_loader/attn.py
 Function: forward at line 104
 
 Line #      Hits         Time  Per Hit   % Time  Line Contents
@@ -55,7 +55,7 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
    108        32      16161.0    505.0      0.0          return x
 
 Total time: 4.07266 s
-File: /root/modulus/docs/test_scripts/profiling/fixed_data_loader/workload.py
+File: /root/physicsnemo/docs/test_scripts/profiling/fixed_data_loader/workload.py
 Function: workload at line 30
 
 Line #      Hits         Time  Per Hit   % Time  Line Contents
