@@ -23,9 +23,9 @@ import xarray as xr
 import zarr
 import pandas as pd
 import hydra
-from modulus.distributed import DistributedManager
+from physicsnemo.distributed import DistributedManager
 from omegaconf import DictConfig
-from modulus.models import Module
+from physicsnemo.models import Module
 
 from utils.nn import regression_model_forward, diffusion_model_forward
 from utils.data_loader_hrrr_era5 import HrrrEra5Dataset

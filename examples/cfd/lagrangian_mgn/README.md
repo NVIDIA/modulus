@@ -2,7 +2,7 @@
 
 This is an example of MeshGraphNet for particle-based simulation, based on the
 [Learning to Simulate](https://sites.google.com/view/learning-to-simulate/)
-work. It demonstrates how to use Modulus to train a Graph Neural Network (GNN)
+work. It demonstrates how to use PhysicsNeMo to train a Graph Neural Network (GNN)
 to simulate Lagrangian fluids, solids, and deformable materials.
 
 ## Problem overview

@@ -19,8 +19,8 @@ import torch
 import torch.distributed as dist
 from distributed_utils_for_testing import modify_environment
 
-from modulus.distributed import DistributedManager
-from modulus.distributed.fft import DistributedRFFT2
+from physicsnemo.distributed import DistributedManager
+from physicsnemo.distributed.fft import DistributedRFFT2
 
 
 def distributed_setup(rank, model_parallel_size, verbose):

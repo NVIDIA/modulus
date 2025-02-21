@@ -18,8 +18,8 @@ import pytest
 import torch
 from distributed_utils_for_testing import modify_environment
 
-from modulus.distributed import DistributedManager
-from modulus.distributed.autograd import (
+from physicsnemo.distributed import DistributedManager
+from physicsnemo.distributed.autograd import (
     all_gather_v,
     gather_v,
     indexed_all_to_all_v,

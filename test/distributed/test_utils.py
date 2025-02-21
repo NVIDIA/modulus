@@ -21,13 +21,13 @@ import torch
 import torch.nn as nn
 from distributed_utils_for_testing import modify_environment
 
-from modulus.distributed import (
+from physicsnemo.distributed import (
     DistributedManager,
     mark_module_as_shared,
     reduce_loss,
     unmark_module_as_shared,
 )
-from modulus.distributed.utils import _reduce
+from physicsnemo.distributed.utils import _reduce
 
 
 def test_modify_environment():

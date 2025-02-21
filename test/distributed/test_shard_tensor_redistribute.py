@@ -24,7 +24,7 @@ from test_shard_tensor_initialization import (
 )
 from torch.distributed.tensor.placement_types import Replicate, Shard
 
-from modulus.distributed import DistributedManager, ShardTensor
+from physicsnemo.distributed import DistributedManager, ShardTensor
 
 
 def shard_tensor_factory(mesh_names, mesh_sizes, requires_grad=False, uneven=True):

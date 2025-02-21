@@ -33,8 +33,8 @@ from omegaconf import DictConfig, OmegaConf
 
 import torch
 
-from modulus.datapipes.gnn.lagrangian_dataset import graph_update
-from modulus.launch.utils import load_checkpoint
+from physicsnemo.datapipes.gnn.lagrangian_dataset import graph_update
+from physicsnemo.launch.utils import load_checkpoint
 
 from loggers import get_gpu_info, init_python_logging
 
@@ -238,7 +238,7 @@ class MGNRollout:
         self.ax[0].scatter(1 - y_pred[:, 0], y_pred[:, 1], c=node_type)
         self.ax[0].set_xlim(self.bounds[0], self.bounds[1])
         self.ax[0].set_ylim(self.bounds[0], self.bounds[1])
-        self.ax[0].set_title("Modulus MeshGraphNet Prediction", color="black")
+        self.ax[0].set_title("PhysicsNeMo MeshGraphNet Prediction", color="black")
 
         self.ax[1].cla()
         self.ax[1].set_aspect("equal")
@@ -281,7 +281,7 @@ class MGNRollout:
         self.ax[0].set_xlim(self.bounds[0], self.bounds[1])
         self.ax[0].set_ylim(self.bounds[0], self.bounds[1])
         self.ax[0].set_zlim(self.bounds[0], self.bounds[1])
-        self.ax[0].set_title("Modulus MeshGraphNet Prediction", color="black")
+        self.ax[0].set_title("PhysicsNeMo MeshGraphNet Prediction", color="black")
 
         self.ax[1].cla()
         self.ax[1].set_aspect("equal")

@@ -19,8 +19,8 @@ import glob
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from modulus.distributed import DistributedManager
+from physicsnemo.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from physicsnemo.distributed import DistributedManager
 from datetime import datetime, timedelta
 import dask
 import xarray as xr

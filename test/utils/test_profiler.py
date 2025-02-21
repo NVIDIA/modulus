@@ -22,9 +22,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from modulus.utils.profiling import Profiler, _register_profilers, profile
-from modulus.utils.profiling.core import (
-    ModulusProfilerWrapper,
+from physicsnemo.utils.profiling import Profiler, _register_profilers, profile
+from physicsnemo.utils.profiling.core import (
+    PhysicsNeMoProfilerWrapper,
     ProfileRegistry,
     _Profiler_Singleton,
 )
@@ -44,7 +44,7 @@ class MockProfilerConfig:
 
 
 # Mock profiler class for testing
-class MockProfiler(ModulusProfilerWrapper, metaclass=_Profiler_Singleton):
+class MockProfiler(PhysicsNeMoProfilerWrapper, metaclass=_Profiler_Singleton):
 
     _is_context = True
     _is_decorator = True
