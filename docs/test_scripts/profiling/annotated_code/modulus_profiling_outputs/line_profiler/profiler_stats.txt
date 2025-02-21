@@ -1,7 +1,7 @@
 Timer unit: 1e-09 s
 
 Total time: 0.0635549 s
-File: /root/modulus/docs/test_scripts/profiling/annotated_code/attn.py
+File: /root/physicsnemo/docs/test_scripts/profiling/annotated_code/attn.py
 Function: forward at line 31
 
 Line #      Hits         Time  Per Hit   % Time  Line Contents
@@ -27,7 +27,7 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
     49         8       8381.0   1047.6      0.0          return x
 
 Total time: 0.00505685 s
-File: /root/modulus/docs/test_scripts/profiling/annotated_code/attn.py
+File: /root/physicsnemo/docs/test_scripts/profiling/annotated_code/attn.py
 Function: forward at line 65
 
 Line #      Hits         Time  Per Hit   % Time  Line Contents
@@ -43,7 +43,7 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
     73         8       4401.0    550.1      0.1          return x
 
 Total time: 0.0855953 s
-File: /root/modulus/docs/test_scripts/profiling/annotated_code/attn.py
+File: /root/physicsnemo/docs/test_scripts/profiling/annotated_code/attn.py
 Function: forward at line 104
 
 Line #      Hits         Time  Per Hit   % Time  Line Contents
@@ -55,7 +55,7 @@ Line #      Hits         Time  Per Hit   % Time  Line Contents
    108         8       5719.0    714.9      0.0          return x
 
 Total time: 4.54253 s
-File: /root/modulus/docs/test_scripts/profiling/annotated_code/workload.py
+File: /root/physicsnemo/docs/test_scripts/profiling/annotated_code/workload.py
 Function: workload at line 30
 
 Line #      Hits         Time  Per Hit   % Time  Line Contents

@@ -1,27 +1,27 @@
-NVIDIA Modulus Core (Latest Release)
+NVIDIA PhysicsNeMo Core (Latest Release)
 ========================================
 
 .. toctree::
    :maxdepth: 2
-   :caption: Modulus Tutorials
-   :name: Modulus Tutorials
+   :caption: PhysicsNeMo Tutorials
+   :name: PhysicsNeMo Tutorials
 
    tutorials/simple_training_example.rst
    tutorials/simple_logging_and_checkpointing.rst
 
 .. toctree::
    :maxdepth: 2
-   :caption: Modulus API
-   :name: Modulus API
+   :caption: PhysicsNeMo API
+   :name: PhysicsNeMo API
 
-   api/modulus.models.rst
-   api/modulus.datapipes.rst
-   api/modulus.metrics.rst
-   api/modulus.deploy.rst
-   api/modulus.distributed.rst
-   api/modulus.utils.rst
-   api/modulus.launch.logging.rst
-   api/modulus.launch.utils.rst
+   api/physicsnemo.models.rst
+   api/physicsnemo.datapipes.rst
+   api/physicsnemo.metrics.rst
+   api/physicsnemo.deploy.rst
+   api/physicsnemo.distributed.rst
+   api/physicsnemo.utils.rst
+   api/physicsnemo.launch.logging.rst
+   api/physicsnemo.launch.utils.rst
 
 .. toctree::
    :maxdepth: 1

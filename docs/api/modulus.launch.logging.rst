@@ -1,8 +1,8 @@
-Modulus Launch Logging
+PhysicsNeMo Launch Logging
 ======================
 
-.. automodule:: modulus.launch.logging
-.. currentmodule:: modulus.launch.logging
+.. automodule:: physicsnemo.launch.logging
+.. currentmodule:: physicsnemo.launch.logging
 
 .. autosummary::
    :toctree: generated
@@ -10,35 +10,35 @@ Modulus Launch Logging
 Launch Logger
 -------------
 
-.. automodule:: modulus.launch.logging.launch
+.. automodule:: physicsnemo.launch.logging.launch
     :members:
     :show-inheritance:
 
 Console Logger
 --------------
 
-.. automodule:: modulus.launch.logging.console
+.. automodule:: physicsnemo.launch.logging.console
     :members:
     :show-inheritance:
 
 MLflow Logger
 -------------
 
-.. automodule:: modulus.launch.logging.mlflow
+.. automodule:: physicsnemo.launch.logging.mlflow
     :members:
     :show-inheritance:
 
 Weights and Biases Logger
 -------------------------
 
-.. automodule:: modulus.launch.logging.wandb
+.. automodule:: physicsnemo.launch.logging.wandb
     :members:
     :show-inheritance:
 
 Logging utils
 -------------
 
-.. automodule:: modulus.launch.logging.utils
+.. automodule:: physicsnemo.launch.logging.utils
     :members:
     :show-inheritance:
 

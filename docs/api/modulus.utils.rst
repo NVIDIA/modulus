@@ -1,4 +1,4 @@
-Modulus Utils
+PhysicsNeMo Utils
 =============
 
 .. autosummary::
@@ -7,63 +7,63 @@ Modulus Utils
 Optimization utils
 ------------------
 
-.. automodule:: modulus.utils.capture
+.. automodule:: physicsnemo.utils.capture
     :members:
     :show-inheritance:
 
 GraphCast utils
 ---------------
 
-.. automodule:: modulus.utils.graphcast.data_utils
+.. automodule:: physicsnemo.utils.graphcast.data_utils
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.utils.graphcast.graph
+.. automodule:: physicsnemo.utils.graphcast.graph
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.utils.graphcast.graph_utils
+.. automodule:: physicsnemo.utils.graphcast.graph_utils
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.utils.graphcast.loss
+.. automodule:: physicsnemo.utils.graphcast.loss
     :members:
     :show-inheritance:
 
 Filesystem utils
 ----------------
 
-.. automodule:: modulus.utils.filesystem
+.. automodule:: physicsnemo.utils.filesystem
     :members:
     :show-inheritance:
 
 Generative utils
 ----------------
 
-.. automodule:: modulus.utils.generative.sampler
+.. automodule:: physicsnemo.utils.generative.sampler
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.utils.generative.utils
+.. automodule:: physicsnemo.utils.generative.utils
     :members:
     :show-inheritance:
 
 Geometry utils
 --------------
 
-.. automodule:: modulus.utils.neighbor_list
+.. automodule:: physicsnemo.utils.neighbor_list
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.utils.sdf
+.. automodule:: physicsnemo.utils.sdf
     :show-inheritance:
 
 Weather / Climate utils
 ------------------------
 
-.. automodule:: modulus.utils.insolation
+.. automodule:: physicsnemo.utils.insolation
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.utils.zenith_angle
+.. automodule:: physicsnemo.utils.zenith_angle
     :show-inheritance:

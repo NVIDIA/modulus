@@ -1,4 +1,4 @@
-Modulus Datapipes
+PhysicsNeMo Datapipes
 =================
 
 .. autosummary::
@@ -7,59 +7,59 @@ Modulus Datapipes
 Benchmark datapipes
 -------------------
 
-.. automodule:: modulus.datapipes.benchmarks.darcy
+.. automodule:: physicsnemo.datapipes.benchmarks.darcy
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.datapipes.benchmarks.kelvin_helmholtz
+.. automodule:: physicsnemo.datapipes.benchmarks.kelvin_helmholtz
     :members:
     :show-inheritance:
 
 Weather and climate datapipes
 -----------------------------
 
-.. automodule:: modulus.datapipes.climate.era5_hdf5
+.. automodule:: physicsnemo.datapipes.climate.era5_hdf5
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.datapipes.climate.climate
+.. automodule:: physicsnemo.datapipes.climate.climate
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.datapipes.climate.synthetic
+.. automodule:: physicsnemo.datapipes.climate.synthetic
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.datapipes.healpix.timeseries_dataset
+.. automodule:: physicsnemo.datapipes.healpix.timeseries_dataset
     :members:
     :show-inheritance:
 
 Graph datapipes
 ---------------
 
-.. automodule:: modulus.datapipes.gnn.vortex_shedding_dataset
+.. automodule:: physicsnemo.datapipes.gnn.vortex_shedding_dataset
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.datapipes.gnn.ahmed_body_dataset
+.. automodule:: physicsnemo.datapipes.gnn.ahmed_body_dataset
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.datapipes.gnn.drivaernet_dataset
+.. automodule:: physicsnemo.datapipes.gnn.drivaernet_dataset
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.datapipes.gnn.stokes_dataset
+.. automodule:: physicsnemo.datapipes.gnn.stokes_dataset
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.datapipes.gnn.utils
+.. automodule:: physicsnemo.datapipes.gnn.utils
     :members:
     :show-inheritance:
 
 CAE datapipes
 -------------
 
-.. automodule:: modulus.datapipes.cae.mesh_datapipe
+.. automodule:: physicsnemo.datapipes.cae.mesh_datapipe
     :members:
     :show-inheritance:

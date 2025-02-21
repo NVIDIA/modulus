@@ -17,8 +17,8 @@ from dataset import RandomNoiseDataset
 #  For the model code:
 from attn import Block
 
-# Import profiling hooks from modulus:
-from modulus.utils.profiling import Profiler, profile, annotate
+# Import profiling hooks from physicsnemo:
+from physicsnemo.utils.profiling import Profiler, profile, annotate
 
 def loss_fn(output_data):
     # All except the first dim:

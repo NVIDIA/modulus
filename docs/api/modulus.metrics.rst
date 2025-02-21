@@ -1,13 +1,13 @@
-Modulus Metrics
+PhysicsNeMo Metrics
 ===============
 
-.. automodule:: modulus.metrics
-.. currentmodule:: modulus.metrics
+.. automodule:: physicsnemo.metrics
+.. currentmodule:: physicsnemo.metrics
 
 Basics
 -------
 
-Modulus provides several general and domain-specific metric calculations you can
+PhysicsNeMo provides several general and domain-specific metric calculations you can
 leverage in your custom training and inference workflows. These metrics are optimized to
 operate on PyTorch tensors. 
 
@@ -22,35 +22,35 @@ Below is a summary of general purpose statistical methods and metrics that are a
 
    * - Metric
      - Description
-   * - `modulus.metrics.general.mse.mse <#modulus.metrics.general.mse.mse>`_
+   * - `physicsnemo.metrics.general.mse.mse <#physicsnemo.metrics.general.mse.mse>`_
      - Mean Squared error between two tensors
-   * - `modulus.metrics.general.mse.rmse <#modulus.metrics.general.mse.rmse>`_
+   * - `physicsnemo.metrics.general.mse.rmse <#physicsnemo.metrics.general.mse.rmse>`_
      - Root Mean Squared error between two tensors
-   * - `modulus.metrics.general.histogram.histogram <#modulus.metrics.general.histogram.histogram>`_
+   * - `physicsnemo.metrics.general.histogram.histogram <#physicsnemo.metrics.general.histogram.histogram>`_
      - Histogram of a set of tensors over the leading dimension
-   * - `modulus.metrics.general.histogram.cdf <#modulus.metrics.general.histogram.cdf>`_
+   * - `physicsnemo.metrics.general.histogram.cdf <#physicsnemo.metrics.general.histogram.cdf>`_
      - Cumulative density function of a set of tensors over the leading dimension
-   * - `modulus.metrics.general.histogram.normal_cdf <#modulus.metrics.general.histogram.normal_cdf>`_
+   * - `physicsnemo.metrics.general.histogram.normal_cdf <#physicsnemo.metrics.general.histogram.normal_cdf>`_
      - Cumulative density function of a normal variable with given mean and standard deviation
-   * - `modulus.metrics.general.histogram.normal_pdf <#modulus.metrics.general.histogram.normal_pdf>`_
+   * - `physicsnemo.metrics.general.histogram.normal_pdf <#physicsnemo.metrics.general.histogram.normal_pdf>`_
      - Probability density function of a normal variable with given mean and standard deviation
-   * - `modulus.metrics.general.calibration.find_rank <#modulus.metrics.general.calibration.find_rank>`_
+   * - `physicsnemo.metrics.general.calibration.find_rank <#physicsnemo.metrics.general.calibration.find_rank>`_
      - Find the rank of the observation with respect to the given counts and bins
-   * - `modulus.metrics.general.calibration.rank_probability_score <#modulus.metrics.general.calibration.rank_probability_score>`_
+   * - `physicsnemo.metrics.general.calibration.rank_probability_score <#physicsnemo.metrics.general.calibration.rank_probability_score>`_
      - Rank Probability Score for the passed ranks
-   * - `modulus.metrics.general.entropy.entropy_from_counts <#modulus.metrics.general.entropy.entropy_from_counts>`_
+   * - `physicsnemo.metrics.general.entropy.entropy_from_counts <#physicsnemo.metrics.general.entropy.entropy_from_counts>`_
      - Computes the statistical entropy of a random variable using a histogram.
-   * - `modulus.metrics.general.entropy.relative_entropy_from_counts <#modulus.metrics.general.entropy.relative_entropy_from_counts>`_
+   * - `physicsnemo.metrics.general.entropy.relative_entropy_from_counts <#physicsnemo.metrics.general.entropy.relative_entropy_from_counts>`_
      - Computes the relative statistical entropy, or KL Divergence of two random variables using their histograms.
-   * - `modulus.metrics.general.crps.crps <#modulus.metrics.general.crps.crps>`_
+   * - `physicsnemo.metrics.general.crps.crps <#physicsnemo.metrics.general.crps.crps>`_
      - Local Continuous Ranked Probability Score (CRPS) by computing a histogram and CDF of the predictions
-   * - `modulus.metrics.general.wasserstein.wasserstein <#modulus.metrics.general.wasserstein.wasserstein>`_
+   * - `physicsnemo.metrics.general.wasserstein.wasserstein <#physicsnemo.metrics.general.wasserstein.wasserstein>`_
      - 1-Wasserstein distance between two discrete CDF functions
-   * - `modulus.metrics.general.reduction.WeightedMean <#modulus.metrics.general.reduction.WeightedMean>`_
+   * - `physicsnemo.metrics.general.reduction.WeightedMean <#physicsnemo.metrics.general.reduction.WeightedMean>`_
      - Weighted Mean
-   * - `modulus.metrics.general.reduction.WeightedStatistic <#modulus.metrics.general.reduction.WeightedStatistic>`_
+   * - `physicsnemo.metrics.general.reduction.WeightedStatistic <#physicsnemo.metrics.general.reduction.WeightedStatistic>`_
      - Weighted Statistic
-   * - `modulus.metrics.general.reduction.WeightedVariance <#modulus.metrics.general.reduction.WeightedVariance>`_
+   * - `physicsnemo.metrics.general.reduction.WeightedVariance <#physicsnemo.metrics.general.reduction.WeightedVariance>`_
      - Weighted Variance
 
 Below shows some examples of how to use these metrics in your own workflows. 
@@ -61,7 +61,7 @@ To compute RMSE metric:
 .. code:: python
 
     >>> import torch
-    >>> from modulus.metrics.general.mse import rmse
+    >>> from physicsnemo.metrics.general.mse import rmse
     >>> pred_tensor = torch.randn(16, 32)
     >>> targ_tensor = torch.randn(16, 32)
     >>> rmse(pred_tensor, targ_tensor)
@@ -73,7 +73,7 @@ To compute the histogram of samples:
 .. code:: python
 
     >>> import torch
-    >>> from modulus.metrics.general import histogram
+    >>> from physicsnemo.metrics.general import histogram
     >>> x = torch.randn(1_000)
     >>> bins, counts = histogram.histogram(x, bins = 10)
     >>> bins
@@ -99,7 +99,7 @@ To use the histogram for statistical entropy calculations:
 
 .. code:: python
 
-    >> from modulus.metrics.general import entropy
+    >> from physicsnemo.metrics.general import entropy
     >>> entropy.entropy_from_counts(counts, bins)
     tensor(0.4146)
 
@@ -109,7 +109,7 @@ data, then we can compute the histogram over the collection:
 .. code:: python
 
     >>> import torch
-    >>> from modulus.metrics.general import histogram, entropy
+    >>> from physicsnemo.metrics.general import histogram, entropy
     >>> x = torch.randn((1_000, 3, 3))
     >>> bins, counts = histogram.histogram(x, bins = 10)
     >>> bins.shape, counts.shape
@@ -126,7 +126,7 @@ CRPS:
 
 .. code:: python
 
-    >>> from modulus.metrics.general import crps
+    >>> from physicsnemo.metrics.general import crps
     >>> x = torch.randn((1_000,1))
     >>> y = torch.randn((1,))
     >>> crps.crps(x, y)
@@ -136,7 +136,7 @@ Ranks:
 
 .. code:: python
 
-    >>> from modulus.metrics.general import histogram, calibration
+    >>> from physicsnemo.metrics.general import histogram, calibration
     >>> x = torch.randn((1_000,1))
     >>> y = torch.randn((1,))
     >>> bins, counts = histogram.histogram(x, bins = 10)
@@ -147,7 +147,7 @@ Wasserstein Metric:
 
 .. code:: python 
 
-    >>> from modulus.metrics.general import wasserstein, histogram
+    >>> from physicsnemo.metrics.general import wasserstein, histogram
     >>> x = torch.randn((1_000,1))
     >>> y = torch.randn((1_000,1))
     >>> bins, cdf_x = histogram.cdf(x)
@@ -159,11 +159,11 @@ Wasserstein Metric:
 
 Weighted Reductions
 ^^^^^^^^^^^^^^^^^^^
-Modulus currently offers classes for weighted mean and variance reductions.
+PhysicsNeMo currently offers classes for weighted mean and variance reductions.
 
 .. code:: python
 
-    >>> from modulus.metrics.general import reduction
+    >>> from physicsnemo.metrics.general import reduction
     >>> x = torch.randn((1_000,))
     >>> weights = torch.cos(torch.linspace(-torch.pi/4, torch.pi/4, 1_000))
     >>> wm = reduction.WeightedMean(weights)
@@ -176,13 +176,13 @@ Modulus currently offers classes for weighted mean and variance reductions.
 
 Online Statistical Methods
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
-Modulus current offers routines for computing online, or out-of-memory, means,
+PhysicsNeMo current offers routines for computing online, or out-of-memory, means,
 variances, and histograms.
 
 .. code:: python 
 
   >>> import torch
-  >>> from modulus.metrics.general import ensemble_metrics as em
+  >>> from physicsnemo.metrics.general import ensemble_metrics as em
   >>> x = torch.randn((1_000, 2)) # Interpret as 1_000 members of size (2,).
   >>> torch.mean(x, dim = 0) # Compute mean of entire data.
   tensor([-0.0545,  0.0267])
@@ -204,7 +204,7 @@ climate sciences:
 
     >>> import torch
     >>> import numpy as np
-    >>> from modulus.metrics.climate.acc import acc
+    >>> from physicsnemo.metrics.climate.acc import acc
     >>> channels = 1
     >>> img_shape = (32, 64)
     >>> time_means = np.pi / 2 * np.ones((channels, img_shape[0], img_shape[1]), dtype=np.float32)
@@ -227,50 +227,50 @@ climate sciences:
 General
 ---------
 
-.. automodule:: modulus.metrics.general.mse
+.. automodule:: physicsnemo.metrics.general.mse
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.metrics.general.histogram
+.. automodule:: physicsnemo.metrics.general.histogram
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.metrics.general.entropy
+.. automodule:: physicsnemo.metrics.general.entropy
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.metrics.general.calibration
+.. automodule:: physicsnemo.metrics.general.calibration
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.metrics.general.crps
+.. automodule:: physicsnemo.metrics.general.crps
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.metrics.general.ensemble_metrics
+.. automodule:: physicsnemo.metrics.general.ensemble_metrics
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.metrics.general.reduction
+.. automodule:: physicsnemo.metrics.general.reduction
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.metrics.general.wasserstein
+.. automodule:: physicsnemo.metrics.general.wasserstein
     :members:
     :show-inheritance:
 
 Weather and climate metrics
 ---------------------------
 
-.. automodule:: modulus.metrics.climate.acc
+.. automodule:: physicsnemo.metrics.climate.acc
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.metrics.climate.efi
+.. automodule:: physicsnemo.metrics.climate.efi
     :members:
     :show-inheritance:
 
-.. automodule:: modulus.metrics.climate.reduction
+.. automodule:: physicsnemo.metrics.climate.reduction
     :members:
     :show-inheritance:
 

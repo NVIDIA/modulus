@@ -1,9 +1,9 @@
 
-Modulus ``ShardTensor``
+PhysicsNeMo ``ShardTensor``
 ===========
 
 In scientific AI applications, the parallelization techniques to enable state of the art 
-models are different from those used in training large language models.  Modulus 
+models are different from those used in training large language models.  PhysicsNeMo 
 introduces a new parallelization primitive called a ``ShardTensor`` that is designed for 
 large-input AI applications to enable domain parallelization.
 
@@ -18,8 +18,8 @@ The example below shows how to create and work with ``ShardTensor``:
     import torch
     from torch.distributed.device_mesh import DeviceMesh 
     from torch.distributed.tensor.placement_types import Shard
-    from modulus.distributed import DistributedManager
-    from modulus.distributed.shard_tensor import ShardTensor, scatter_tensor
+    from physicsnemo.distributed import DistributedManager
+    from physicsnemo.distributed.shard_tensor import ShardTensor, scatter_tensor
 
     def main():
         # Initialize distributed environment
@@ -78,14 +78,14 @@ Operations work by:
 ``ShardTensor``
 -----------
 
-.. autoclass:: modulus.distributed.shard_tensor.ShardTensor
+.. autoclass:: physicsnemo.distributed.shard_tensor.ShardTensor
     :members:
     :show-inheritance:
 
 Utility Functions
 ----------------
 
-.. autofunction:: modulus.distributed.shard_tensor.scatter_tensor
+.. autofunction:: physicsnemo.distributed.shard_tensor.scatter_tensor
 
 
 Why do we need this?
@@ -102,14 +102,14 @@ For high resolution images, this can easily lead to out of memory errors as mode
 - Performing operations on smaller local portions
 - Coordinating the necessary communication between devices in the forward and backward passes
 
-``ShardTensor`` is built as an extension of PyTorch's DTensor, and gains substantial functionality by leveraging the utilities already implemented in the PyTorch distributed package.  However, some operations on sharded input data are not trivial to implement correctly, nor relevant to the model sharding problem.  In Modulus, we have implemented parallelized versions of several key operations, including (so far):
+``ShardTensor`` is built as an extension of PyTorch's DTensor, and gains substantial functionality by leveraging the utilities already implemented in the PyTorch distributed package.  However, some operations on sharded input data are not trivial to implement correctly, nor relevant to the model sharding problem.  In PhysicsNeMo, we have implemented parallelized versions of several key operations, including (so far):
 
 - Convolution (1D, 2D, 3D)
 - Neighborhood Attention (2D)
 
-These operations are implemented in the ``modulus.distributed.shard_utils`` module, and are enabled by dynamically intercepting calls to (for example) ``torch.nn.functional.conv2d``.  When the function is called with ShardTensor inputs, the operation is automatically parallelized across the mesh associated with the input.  When the function is called with non-ShardTensor inputs, the operation is executed in a non-parallelized manner, exactly as expected.
+These operations are implemented in the ``physicsnemo.distributed.shard_utils`` module, and are enabled by dynamically intercepting calls to (for example) ``torch.nn.functional.conv2d``.  When the function is called with ShardTensor inputs, the operation is automatically parallelized across the mesh associated with the input.  When the function is called with non-ShardTensor inputs, the operation is executed in a non-parallelized manner, exactly as expected.
 
-To enable these operations, you must import ``patch_operations`` from ``modulus.distributed.shard_utils``.  This will patch the relevant functions in the distributed package to support ``ShardTensor`` inputs.
+To enable these operations, you must import ``patch_operations`` from ``physicsnemo.distributed.shard_utils``.  This will patch the relevant functions in the distributed package to support ``ShardTensor`` inputs.
 
 We are continuing to add more operations, and contributions are welcome!
 

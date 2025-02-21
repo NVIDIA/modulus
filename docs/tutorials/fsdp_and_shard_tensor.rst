@@ -1,7 +1,7 @@
 Domain Decomposition, ``ShardTensor`` and ``FSDP`` Tutorial
 =============================
 
-This tutorial demonstrates how to use Modulus's ``ShardTensor`` functionality alongside PyTorch's ``FSDP``   (Fully Sharded Data Parallel) to train a simple convolutional neural network. We'll show how to:
+This tutorial demonstrates how to use PhysicsNeMo's ``ShardTensor`` functionality alongside PyTorch's ``FSDP``   (Fully Sharded Data Parallel) to train a simple convolutional neural network. We'll show how to:
 
 1. Create a simple CNN model
 2. Set up input data sharding across multiple GPUs
@@ -18,12 +18,12 @@ The preamble to the training script has an important patch to make sure that the
     import torch
 
     # This is necessary to patch Conv2d to work with ShardTensor
-    from modulus.distributed.shard_utils import patch_operations
+    from physicsnemo.distributed.shard_utils import patch_operations
 
     import torch.nn as nn
 
-    from modulus.distributed import DistributedManager
-    from modulus.distributed.shard_tensor import ShardTensor
+    from physicsnemo.distributed import DistributedManager
+    from physicsnemo.distributed.shard_tensor import ShardTensor
     from torch.distributed.tensor import distribute_module, distribute_tensor
     from torch.distributed.tensor.placement_types import Shard, Replicate
     from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -54,8 +54,8 @@ First, let's create a simple one-layer CNN model:
 
     import torch
     import torch.nn as nn
-    from modulus.distributed import DistributedManager
-    from modulus.distributed.shard_tensor import ShardTensor
+    from physicsnemo.distributed import DistributedManager
+    from physicsnemo.distributed.shard_tensor import ShardTensor
     from torch.distributed.tensor.placement_types import Shard
     from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
@@ -228,4 +228,4 @@ This example demonstrates basic usage - for production use cases, you'll want to
 - Error handling
 - Logging and metrics
 
-For more advanced usage and configuration options, refer to the Modulus documentation on ``ShardTensor`` and the PyTorch FSDP documentation.
+For more advanced usage and configuration options, refer to the PhysicsNeMo documentation on ``ShardTensor`` and the PyTorch FSDP documentation.
