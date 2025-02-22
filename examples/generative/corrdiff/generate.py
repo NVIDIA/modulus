@@ -88,8 +88,8 @@ def main(cfg: DictConfig) -> None:
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
 
     # Register dataset (if custom dataset)
-    register_dataset(dataset_cfg.dataset_name)
-    logger0.info(f"Using dataset: {dataset_cfg.dataset_name}")
+    register_dataset(dataset_cfg.dataset.type)
+    logger0.info(f"Using dataset: {dataset_cfg.dataset.type}")
 
     if "has_lead_time" in cfg.generation:
         has_lead_time = cfg.generation["has_lead_time"]
@@ -102,14 +102,11 @@ def main(cfg: DictConfig) -> None:
     img_out_channels = len(dataset.output_channels())
 
     # Parse the patch shape
-    if hasattr(cfg.generation, "patch_shape_x"):  # TODO better config handling
+    if cfg.generation.patching:
         patch_shape_x = cfg.generation.patch_shape_x
-    else:
-        patch_shape_x = None
-    if hasattr(cfg.generation, "patch_shape_y"):
         patch_shape_y = cfg.generation.patch_shape_y
     else:
-        patch_shape_y = None
+        patch_shape_x, patch_shape_y = None, None
     patch_shape = (patch_shape_y, patch_shape_x)
     use_patching, img_shape, patch_shape = set_patch_shape(
         img_shape, patch_shape)
@@ -117,8 +114,8 @@ def main(cfg: DictConfig) -> None:
         patching = DeterministicPatching(
             img_shape=img_shape,
             patch_shape=patch_shape,
-            boundary_pix=cfg.sampler.boundary_pix,
-            overlap_pix=cfg.sampler.overlap_pix
+            boundary_pix=cfg.generation.boundary_pix,
+            overlap_pix=cfg.generation.overlap_pix
         )
         logger0.info("Patch-based training enabled")
     else:

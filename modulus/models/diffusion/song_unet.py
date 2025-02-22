@@ -71,7 +71,8 @@ class SongUNet(Module):
     Parameters
     -----------
     img_resolution : Union[List[int], int]
-        The resolution of the input/output image, 1 value represents a square image.
+        The resolution of the input/output image. Can be a single int for square images
+        or a list [height, width] for rectangular images.
     in_channels : int
         Number of channels in the input image.
     out_channels : int
@@ -81,7 +82,7 @@ class SongUNet(Module):
     augment_dim : int, optional
         Dimensionality of augmentation labels; 0 means no augmentation. By default 0.
     model_channels : int, optional
-        Base multiplier for the number of channels across the network, by default 128.
+        Base multiplier for the number of channels across the network. By default 128.
     channel_mult : List[int], optional
         Per-resolution multipliers for the number of channels. By default [1,2,2,2].
     channel_mult_emb : int, optional
@@ -93,29 +94,29 @@ class SongUNet(Module):
     dropout : float, optional
         Dropout probability applied to intermediate activations. By default 0.10.
     label_dropout : float, optional
-       Dropout probability of class labels for classifier-free guidance. By default 0.0.
+        Dropout probability of class labels for classifier-free guidance. By default 0.0.
     embedding_type : str, optional
-        Timestep embedding type: 'positional' for DDPM++, 'fourier' for NCSN++, 'zero' for none
+        Timestep embedding type: 'positional' for DDPM++, 'fourier' for NCSN++, 'zero' for none.
         By default 'positional'.
     channel_mult_noise : int, optional
         Timestep embedding size: 1 for DDPM++, 2 for NCSN++. By default 1.
     encoder_type : str, optional
-        Encoder architecture: 'standard' for DDPM++, 'residual' for NCSN++. By default
-        'standard'.
+        Encoder architecture: 'standard' for DDPM++, 'residual' for NCSN++, 'skip' for skip connections.
+        By default 'standard'.
     decoder_type : str, optional
-        Decoder architecture: 'standard' for both DDPM++ and NCSN++. By default
-        'standard'.
-    resample_filter : List[int], optional (default=[1,1])
-        Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
-    checkpoint_level : int, optional (default=0)
-        How many layers should use gradient checkpointing, 0 is None
-    additive_pos_embed: bool = False,
-        Set to True to add a learned position embedding after the first conv (used in StormCast)
-
+        Decoder architecture: 'standard' or 'skip' for skip connections. By default 'standard'.
+    resample_filter : List[int], optional
+        Resampling filter coefficients: [1,1] for DDPM++, [1,3,3,1] for NCSN++. By default [1,1].
+    checkpoint_level : int, optional
+        Number of layers that should use gradient checkpointing (0 disables checkpointing).
+        Higher values trade memory for computation. By default 0.
+    additive_pos_embed : bool, optional
+        If True, adds a learned positional embedding after the first convolution layer.
+        Used in StormCast model. By default False.
 
     Reference
     ----------
-    Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
+    Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
     Poole, B., 2020. Score-based generative modeling through stochastic differential
     equations. arXiv preprint arXiv:2011.13456.
 
@@ -425,7 +426,8 @@ class SongUNetPosEmbd(SongUNet):
     Parameters
     -----------
     img_resolution : Union[List[int], int]
-        The resolution of the input/output image, 1 value represents a square image.
+        The resolution of the input/output image. Can be a single int for square images
+        or a list [height, width] for rectangular images.
     in_channels : int
         Number of channels in the input image.
     out_channels : int
@@ -435,39 +437,40 @@ class SongUNetPosEmbd(SongUNet):
     augment_dim : int, optional
         Dimensionality of augmentation labels; 0 means no augmentation. By default 0.
     model_channels : int, optional
-        Base multiplier for the number of channels across the network, by default 128.
+        Base multiplier for the number of channels across the network. By default 128.
     channel_mult : List[int], optional
-        Per-resolution multipliers for the number of channels. By default [1,2,2,2].
+        Per-resolution multipliers for the number of channels. By default [1,2,2,2,2].
     channel_mult_emb : int, optional
         Multiplier for the dimensionality of the embedding vector. By default 4.
     num_blocks : int, optional
         Number of residual blocks per resolution. By default 4.
     attn_resolutions : List[int], optional
-        Resolutions at which self-attention layers are applied. By default [16].
+        Resolutions at which self-attention layers are applied. By default [28].
     dropout : float, optional
         Dropout probability applied to intermediate activations. By default 0.13.
     label_dropout : float, optional
-       Dropout probability of class labels for classifier-free guidance. By default 0.0.
+        Dropout probability of class labels for classifier-free guidance. By default 0.0.
     embedding_type : str, optional
         Timestep embedding type: 'positional' for DDPM++, 'fourier' for NCSN++.
         By default 'positional'.
     channel_mult_noise : int, optional
         Timestep embedding size: 1 for DDPM++, 2 for NCSN++. By default 1.
     encoder_type : str, optional
-        Encoder architecture: 'standard' for DDPM++, 'residual' for NCSN++. By default
-        'standard'.
+        Encoder architecture: 'standard' for DDPM++, 'residual' for NCSN++, 'skip' for skip connections.
+        By default 'standard'.
     decoder_type : str, optional
-        Decoder architecture: 'standard' for both DDPM++ and NCSN++. By default
-        'standard'.
-    resample_filter : List[int], optional (default=[1,1])
-        Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
-
-
-    Reference
-    ----------
-    Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
-    Poole, B., 2020. Score-based generative modeling through stochastic differential
-    equations. arXiv preprint arXiv:2011.13456.
+        Decoder architecture: 'standard' or 'skip' for skip connections. By default 'standard'.
+    resample_filter : List[int], optional
+        Resampling filter coefficients: [1,1] for DDPM++, [1,3,3,1] for NCSN++. By default [1,1].
+    gridtype : str, optional
+        Type of positional grid to use: 'sinusoidal', 'learnable', 'linear', or 'test'.
+        Controls how positional information is encoded. By default 'sinusoidal'.
+    N_grid_channels : int, optional
+        Number of channels in the positional embedding grid. For 'sinusoidal' must be 4 or
+        multiple of 4. For 'linear' must be 2. By default 4.
+    checkpoint_level : int, optional
+        Number of layers that should use gradient checkpointing (0 disables checkpointing).
+        Higher values trade memory for computation. By default 0.
 
     Note
     -----
@@ -637,7 +640,8 @@ class SongUNetPosLtEmbd(SongUNet):
     Parameters
     -----------
     img_resolution : Union[List[int], int]
-        The resolution of the input/output image, 1 value represents a square image.
+        The resolution of the input/output image. Can be a single int for square images
+        or a list [height, width] for rectangular images.
     in_channels : int
         Number of channels in the input image.
     out_channels : int
@@ -647,43 +651,49 @@ class SongUNetPosLtEmbd(SongUNet):
     augment_dim : int, optional
         Dimensionality of augmentation labels; 0 means no augmentation. By default 0.
     model_channels : int, optional
-        Base multiplier for the number of channels across the network, by default 128.
+        Base multiplier for the number of channels across the network. By default 128.
     channel_mult : List[int], optional
-        Per-resolution multipliers for the number of channels. By default [1,2,2,2].
+        Per-resolution multipliers for the number of channels. By default [1,2,2,2,2].
     channel_mult_emb : int, optional
         Multiplier for the dimensionality of the embedding vector. By default 4.
     num_blocks : int, optional
         Number of residual blocks per resolution. By default 4.
     attn_resolutions : List[int], optional
-        Resolutions at which self-attention layers are applied. By default [16].
+        Resolutions at which self-attention layers are applied. By default [28].
     dropout : float, optional
         Dropout probability applied to intermediate activations. By default 0.13.
     label_dropout : float, optional
-       Dropout probability of class labels for classifier-free guidance. By default 0.0.
+        Dropout probability of class labels for classifier-free guidance. By default 0.0.
     embedding_type : str, optional
         Timestep embedding type: 'positional' for DDPM++, 'fourier' for NCSN++.
         By default 'positional'.
     channel_mult_noise : int, optional
         Timestep embedding size: 1 for DDPM++, 2 for NCSN++. By default 1.
     encoder_type : str, optional
-        Encoder architecture: 'standard' for DDPM++, 'residual' for NCSN++. By default
-        'standard'.
+        Encoder architecture: 'standard' for DDPM++, 'residual' for NCSN++, 'skip' for skip connections.
+        By default 'standard'.
     decoder_type : str, optional
-        Decoder architecture: 'standard' for both DDPM++ and NCSN++. By default
-        'standard'.
-    resample_filter : List[int], optional (default=[1,1])
-        Resampling filter: [1,1] for DDPM++, [1,3,3,1] for NCSN++.
-    lead_time_channels: int, optional
-        Length of lead time embedding vector
-    lead_time_steps: int, optional
-        Total number of lead times
-
-
-    Reference
-    ----------
-    Reference: Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S. and
-    Poole, B., 2020. Score-based generative modeling through stochastic differential
-    equations. arXiv preprint arXiv:2011.13456.
+        Decoder architecture: 'standard' or 'skip' for skip connections. By default 'standard'.
+    resample_filter : List[int], optional
+        Resampling filter coefficients: [1,1] for DDPM++, [1,3,3,1] for NCSN++. By default [1,1].
+    gridtype : str, optional
+        Type of positional grid to use: 'sinusoidal', 'learnable', 'linear', or 'test'.
+        Controls how positional information is encoded. By default 'sinusoidal'.
+    N_grid_channels : int, optional
+        Number of channels in the positional embedding grid. For 'sinusoidal' must be 4 or
+        multiple of 4. For 'linear' must be 2. By default 4.
+    lead_time_channels : int, optional
+        Number of channels in the lead time embedding. These are learned embeddings that
+        encode temporal forecast information. By default None.
+    lead_time_steps : int, optional
+        Number of discrete lead time steps to support. Each step gets its own learned
+        embedding vector. By default 9.
+    prob_channels : List[int], optional
+        Indices of probability output channels that should use softmax activation.
+        Used for classification outputs. By default empty list.
+    checkpoint_level : int, optional
+        Number of layers that should use gradient checkpointing (0 disables checkpointing).
+        Higher values trade memory for computation. By default 0.
 
     Note
     -----

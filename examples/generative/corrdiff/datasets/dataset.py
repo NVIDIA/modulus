@@ -86,7 +86,7 @@ def register_dataset(dataset_spec: str) -> None:
         )
 
     # Register the dataset
-    known_datasets[class_name] = dataset_class
+    known_datasets[dataset_spec] = dataset_class
     return
 
 

@@ -41,7 +41,7 @@ def set_patch_shape(img_shape, patch_shape):
             raise NotImplementedError("Rectangular patch not supported yet")
         if patch_shape_x % 32 != 0 or patch_shape_y % 32 != 0:
             raise ValueError("Patch shape needs to be a multiple of 32")
-    return (img_shape_y, img_shape_x), (patch_shape_y, patch_shape_x)
+    return use_patching, (img_shape_y, img_shape_x), (patch_shape_y, patch_shape_x)
 
 
 def set_seed(rank):

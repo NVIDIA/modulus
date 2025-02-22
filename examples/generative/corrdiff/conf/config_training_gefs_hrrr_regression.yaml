@@ -17,7 +17,7 @@
 hydra:
     job:
           chdir: true
-          name: taiwan_diffusion
+          name: gefs_hrrr_regression
     run:
           dir: ./output/${hydra:job.name}
     searchpath:
@@ -26,7 +26,7 @@ hydra:
 # Base parameters for dataset, model, training, and validation
 defaults:
 
-    - dataset: cwb
+    - dataset: gefs_hrrr
     # The dataset type for training.
     # Accepted values:
     #   `gefs_hrrr`: full GEFS-HRRR dataset for continental US.
@@ -34,7 +34,7 @@ defaults:
     #   `cwb`: full CWB dataset for Taiwan.
     #   `custom`: user-defined dataset. Parameters need to be specified below.
 
-    - model: diffusion
+    - model: lt_aware_ce_regression
     # The model type.
     # Accepted values:
     #     `regression`: a regression UNet for deterministic predictions
@@ -59,31 +59,10 @@ defaults:
 # Modify or add below parameters that should be passed as argument to the
 # user-defined dataset class.
 dataset:
-    data_path: /code/2023-01-24-cwb-4years.zarr
-
-model:
-    scale_cond_input: True
-    # If true, also scales the input conditioning. True for backward
-    # compatibility.
-    hr_mean_conditioning: false
-  # High-res mean (regression's output) as additional condition
-
-# Training parameters
-training:
-    hp:
-        training_duration: 200000000
-        # Training duration based on the number of processed samples (counted
-        # in kilo images)
-        lr_rampup: 10000000
-        # Rampup for learning rate, in number of samples
-    io:
-        regression_checkpoint_path: <path/to/checkpoint.mdlus>
-        # Path to load the regression checkpoint
-
-# Additional parameters for validation
-validation:
-    train: false
-    all_times: false    
+    data_path: /data
+    # Path to .nc data file
+    stats_path: /data/stats.json
+    # Path to json stats file
 
 # Parameters for wandb logging
 wanbd:

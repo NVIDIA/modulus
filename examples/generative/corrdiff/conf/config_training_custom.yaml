@@ -17,16 +17,16 @@
 hydra:
     job:
           chdir: true
-          name: taiwan_diffusion
+          name: <my_job_name> # Change `my_job_name`
     run:
-          dir: ./output/${hydra:job.name}
+          dir: ./<my_output_dir>/${hydra:job.name} # Change `my_output_dir`
     searchpath:
           - pkg://conf/base # Do not modify
 
 # Base parameters for dataset, model, training, and validation
 defaults:
 
-    - dataset: cwb
+    - dataset: custom
     # The dataset type for training.
     # Accepted values:
     #   `gefs_hrrr`: full GEFS-HRRR dataset for continental US.
@@ -59,31 +59,48 @@ defaults:
 # Modify or add below parameters that should be passed as argument to the
 # user-defined dataset class.
 dataset:
-    data_path: /code/2023-01-24-cwb-4years.zarr
-
-model:
-    scale_cond_input: True
-    # If true, also scales the input conditioning. True for backward
-    # compatibility.
-    hr_mean_conditioning: false
-  # High-res mean (regression's output) as additional condition
+    type: <path/to/dataset.py::DatasetClass>
+    # Path to the user-defined dataset class. The user-defined dataset class is
+    # automatically loaded from the path. The user-defined class "DatasetClass"
+    # must be defined in the path "path/to/dataset.py".
+    data_path: <path_to_data_file>
+    # Path to .nc data file
+    stats_path: <path_to_stats_file>
+    # Path to json stats file
+    input_variables: []
+    # Names or indices of input channels
+    output_variables: []
+    # Names or indices of output channels
+    invariant_variables: null
+    # Names or indices of invariant channels. Optional.
 
 # Training parameters
 training:
     hp:
-        training_duration: 200000000
+        training_duration: 200000
         # Training duration based on the number of processed samples (counted
         # in kilo images)
-        lr_rampup: 10000000
+        total_batch_size: 256
+        # Total batch size
+        batch_size_per_gpu: "auto"
+        # Batch size per GPU. Set to "auto" to automatically determine the batch
+        # size based on the number of GPUs.
+        patch_shape_x: 448
+        patch_shape_y: 448
+        # Patch size. Only used for `model: patched_diffusion` or `model:
+        # lt_aware_patched_diffusion`. For custom dataset, this should be
+        # determined based on an autocorrelation plot.
+        patch_num: 10
+        # Number of patches from a single sample. Total number of patches is
+        # patch_num * total_batch_size. Only used for `model: patched_diffusion`
+        # or `model: lt_aware_patched_diffusion`.
+        lr: 0.0002
+        # Learning rate
+        lr_rampup: 0
         # Rampup for learning rate, in number of samples
     io:
         regression_checkpoint_path: <path/to/checkpoint.mdlus>
         # Path to load the regression checkpoint
-
-# Additional parameters for validation
-validation:
-    train: false
-    all_times: false    
 
 # Parameters for wandb logging
 wanbd:

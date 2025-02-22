@@ -17,7 +17,7 @@
 hydra:
     job:
           chdir: true
-          name: taiwan_diffusion
+          name: hrrr_mini_diffusion
     run:
           dir: ./output/${hydra:job.name}
     searchpath:
@@ -26,7 +26,7 @@ hydra:
 # Base parameters for dataset, model, training, and validation
 defaults:
 
-    - dataset: cwb
+    - dataset: hrrr_mini 
     # The dataset type for training.
     # Accepted values:
     #   `gefs_hrrr`: full GEFS-HRRR dataset for continental US.
@@ -45,7 +45,7 @@ defaults:
     #     `lt_aware_patched_diffusion`: similar to `patched_diffusion` but
     #       with lead time conditioning
 
-    - model_size: normal
+    - model_size: mini
     # The model size configuration.
     # Accepted values:
     #     `normal`: normal model size
@@ -59,31 +59,21 @@ defaults:
 # Modify or add below parameters that should be passed as argument to the
 # user-defined dataset class.
 dataset:
-    data_path: /code/2023-01-24-cwb-4years.zarr
-
-model:
-    scale_cond_input: True
-    # If true, also scales the input conditioning. True for backward
-    # compatibility.
-    hr_mean_conditioning: false
-  # High-res mean (regression's output) as additional condition
+    data_path: /data/corrdiff-mini/hrrr_mini_train.nc
+    # Path to .nc data file
+    stats_path: /data/corrdiff-mini/stats.json
+    # Path to json stats file
 
 # Training parameters
 training:
     hp:
-        training_duration: 200000000
+        training_duration: 8000000
         # Training duration based on the number of processed samples (counted
         # in kilo images)
-        lr_rampup: 10000000
-        # Rampup for learning rate, in number of samples
     io:
+        print_progress_freq: 10000
         regression_checkpoint_path: <path/to/checkpoint.mdlus>
         # Path to load the regression checkpoint
-
-# Additional parameters for validation
-validation:
-    train: false
-    all_times: false    
 
 # Parameters for wandb logging
 wanbd:

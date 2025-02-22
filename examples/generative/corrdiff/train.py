@@ -84,8 +84,8 @@ def main(cfg: DictConfig) -> None:
     dataset_cfg = OmegaConf.to_container(cfg.dataset)  # TODO needs better handling
 
     # Register custom dataset if specified in config
-    register_dataset(dataset_cfg.dataset_name)
-    logger0.info(f"Using dataset: {dataset_cfg.dataset_name}")
+    register_dataset(dataset_cfg.dataset.type)
+    logger0.info(f"Using dataset: {dataset_cfg.dataset.type}")
 
     if hasattr(cfg, "validation"):
         train_test_split = True
@@ -186,45 +186,25 @@ def main(cfg: DictConfig) -> None:
         "img_resolution": list(img_shape),
         "use_fp16": fp16,
     }
-    # TODO: move these parameters that are fixed to yaml configs
-    # (lots of redundancy)
     standard_model_cfgs = {  # default parameters for different network types
         "regression": {
-            "img_channels": 4,
-            "N_grid_channels": 4,
-            "embedding_type": "zero",
             "checkpoint_level": songunet_checkpoint_level,
         },
         "lt_aware_ce_regression": {
-            "img_channels": 4,
-            "N_grid_channels": 4,
-            "embedding_type": "zero",
-            "lead_time_channels": 4,
-            "lead_time_steps": 9,
             "prob_channels": prob_channels,
             "checkpoint_level": songunet_checkpoint_level,
-            "model_type": "SongUNetPosLtEmbd",
         },
         "diffusion": {
             "img_channels": img_out_channels,
-            "gridtype": "sinusoidal",
-            "N_grid_channels": 4,
             "checkpoint_level": songunet_checkpoint_level,
         },
         "patched_diffusion": {
             "img_channels": img_out_channels,
-            "gridtype": "learnable",
-            "N_grid_channels": 100,
             "checkpoint_level": songunet_checkpoint_level,
         },
         "lt_aware_patched_diffusion": {
             "img_channels": img_out_channels,
-            "gridtype": "learnable",
-            "N_grid_channels": 100,
-            "lead_time_channels": 20,
-            "lead_time_steps": 9,
             "checkpoint_level": songunet_checkpoint_level,
-            "model_type": "SongUNetPosLtEmbd",
         },
     }
     model_args.update(standard_model_cfgs[cfg.model.name])
