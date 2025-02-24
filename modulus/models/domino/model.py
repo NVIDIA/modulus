@@ -23,7 +23,7 @@ the config.yaml file)
 
 # from dataclasses import dataclass
 
-import torch
+import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -32,6 +32,13 @@ from modulus.models.layers.ball_query import BallQueryLayer
 # from modulus.models.meta import ModelMetaData
 # from modulus.models.module import Module
 
+def fourier_encode(coords, num_freqs):
+    """Function to caluculate fourier features"""
+    # Create a range of frequencies
+    freqs = torch.exp(torch.linspace(0, math.pi, num_freqs))
+    # Generate sine and cosine features
+    features = [torch.sin(coords * f) for f in freqs] + [torch.cos(coords * f) for f in freqs]
+    return torch.cat(features, dim=-1) 
 
 def calculate_pos_encoding(nx, d=8):
     """Function to caluculate positional encoding"""

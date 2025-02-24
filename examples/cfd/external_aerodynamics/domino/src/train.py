@@ -325,12 +325,14 @@ def lift_loss_fn(output, target, area, normals, padded_value=-10):
     wz_true = output_true[:, :, -1]
     wz_pred = output_pred[:, :, -1]
 
-    masked_pred = torch.sum(pres_pred + wz_pred, (1)) / (
-        torch.sum(area) * (vel_inlet) ** 2.0
-    )
-    masked_truth = torch.sum(pres_true + wz_true, (1)) / (
-        torch.sum(area) * (vel_inlet) ** 2.0
-    )
+    # masked_pred = torch.sum(pres_pred + wz_pred, (1)) / (
+    #     torch.sum(area) * (vel_inlet) ** 2.0
+    # )
+    # masked_truth = torch.sum(pres_true + wz_true, (1)) / (
+    #     torch.sum(area) * (vel_inlet) ** 2.0
+    # )
+    masked_pred = torch.mean(pres_pred + wz_pred, (1))
+    masked_truth = torch.mean(pres_true + wz_true, (1))
 
     loss = (masked_pred - masked_truth) ** 2.0
     loss = torch.mean(loss)
@@ -350,12 +352,14 @@ def drag_loss_fn(output, target, area, normals, padded_value=-10):
     wx_true = output_true[:, :, 1]
     wx_pred = output_pred[:, :, 1]
 
-    masked_pred = torch.sum(pres_pred + wx_pred, (1)) / (
-        torch.sum(area) * (vel_inlet) ** 2.0
-    )
-    masked_truth = torch.sum(pres_true + wx_true, (1)) / (
-        torch.sum(area) * (vel_inlet) ** 2.0
-    )
+    # masked_pred = torch.sum(pres_pred + wx_pred, (1)) / (
+    #     torch.sum(area) * (vel_inlet) ** 2.0
+    # )
+    # masked_truth = torch.sum(pres_true + wx_true, (1)) / (
+    #     torch.sum(area) * (vel_inlet) ** 2.0
+    # )
+    masked_pred = torch.mean(pres_pred + wx_pred, (1))
+    masked_truth = torch.mean(pres_true + wx_true, (1))
 
     loss = (masked_pred - masked_truth) ** 2.0
     loss = torch.mean(loss)
@@ -427,19 +431,19 @@ def validation_step(
                             surface_normals,
                             padded_value=-10,
                         )
-                    ) * 0.0
+                    ) * integral_scaling_factor #* 0.0
 
                 if prediction_surf is not None and prediction_vol is not None:
                     vloss = (
                         loss_norm_vol
                         + 0.5 * loss_norm_surf
-                        + 0.0*loss_integral
+                        + 1.0 * loss_integral
                         + 0.5 * loss_norm_surf_area
                     )
                 elif prediction_vol is not None:
                     vloss = loss_norm_vol
                 elif prediction_surf is not None:
-                    vloss = 0.5 * loss_norm_surf + 0.0*loss_integral + 0.5 * loss_norm_surf_area
+                    vloss = 0.5 * loss_norm_surf + 1.0 * loss_integral + 0.5 * loss_norm_surf_area
 
             running_vloss += vloss
 
@@ -518,20 +522,20 @@ def train_epoch(
                         surface_normals,
                         padded_value=-10,
                     )
-                ) * 0.0
+                ) * integral_scaling_factor #* 0.0
 
             if prediction_vol is not None and prediction_surf is not None:
                 loss_norm = (
                     loss_norm_vol
                     + 0.5 * loss_norm_surf
-                    + 0.0* loss_integral
+                    + 1.0 * loss_integral
                     + 0.5 * loss_norm_surf_area
                 )
             elif prediction_vol is not None:
                 loss_norm = loss_norm_vol
             elif prediction_surf is not None:
                 loss_norm = (
-                    0.5 * loss_norm_surf + 0.0 * loss_integral + 0.5 * loss_norm_surf_area
+                    0.5 * loss_norm_surf + 1.0 * loss_integral + 0.5 * loss_norm_surf_area
                 )
 
         loss = loss_norm
@@ -954,6 +958,7 @@ def main(cfg: DictConfig) -> None:
     best_vloss = min(numbers) if numbers else 1_000_000.0
 
     initial_integral_factor_orig = cfg.model.integral_loss_scaling_factor
+    
 
     for epoch in range(init_epoch, cfg.train.epochs):
         start_time = time.time()
@@ -963,6 +968,11 @@ def main(cfg: DictConfig) -> None:
         val_sampler.set_epoch(epoch)
 
         initial_integral_factor = initial_integral_factor_orig
+
+        if epoch > 250:
+            surface_scaling_loss = 2 * cfg.model.surf_loss_scaling
+        else:
+            surface_scaling_loss = cfg.model.surf_loss_scaling
 
         model.train(True)
         avg_loss = train_epoch(
@@ -976,7 +986,7 @@ def main(cfg: DictConfig) -> None:
             integral_scaling_factor=initial_integral_factor,
             loss_fn_type=cfg.model.loss_function,
             vol_loss_scaling=cfg.model.vol_loss_scaling,
-            surf_loss_scaling=cfg.model.surf_loss_scaling,
+            surf_loss_scaling=surface_scaling_loss,
         )
 
         model.eval()
@@ -988,8 +998,8 @@ def main(cfg: DictConfig) -> None:
             use_surface_normals=cfg.model.use_surface_normals,
             integral_scaling_factor=initial_integral_factor,
             loss_fn_type=cfg.model.loss_function,
-            vol_loss_scaling=cfg.mode.vol_loss_scaling,
-            surf_loss_scaling=cfg.mode.surf_loss_scaling,
+            vol_loss_scaling=cfg.model.vol_loss_scaling,
+            surf_loss_scaling=surface_scaling_loss,
         )
 
         scheduler.step()
