@@ -68,8 +68,7 @@ dataset:
 training:
     hp:
         training_duration: 2000000
-        # Training duration based on the number of processed samples (counted
-        # in kilo images)
+        # Training duration based on the number of processed samples
     io:
         print_progress_freq: 10000
 

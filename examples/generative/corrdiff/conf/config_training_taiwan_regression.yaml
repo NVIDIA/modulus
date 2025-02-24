@@ -65,8 +65,7 @@ dataset:
 training:
     hp:
         training_duration: 200000000
-        # Training duration based on the number of processed samples (counted
-        # in kilo images)
+        # Training duration based on the number of processed samples
         lr_rampup: 10000000
         # Rampup for learning rate, in number of samples
 

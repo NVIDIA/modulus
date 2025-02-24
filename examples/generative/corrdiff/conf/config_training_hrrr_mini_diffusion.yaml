@@ -68,8 +68,7 @@ dataset:
 training:
     hp:
         training_duration: 8000000
-        # Training duration based on the number of processed samples (counted
-        # in kilo images)
+        # Training duration based on the number of processed samples
     io:
         print_progress_freq: 10000
         regression_checkpoint_path: <path/to/checkpoint.mdlus>

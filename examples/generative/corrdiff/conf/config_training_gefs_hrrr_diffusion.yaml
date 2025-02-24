@@ -72,6 +72,8 @@ model:
 # Training parameters
 training:
     hp:
+        training_duration: 10000000
+        # Training duration based on the number of processed samples
         patch_shape_x: 448
         patch_shape_y: 448
         # Patch size. Patch training is used if these dimensions differ from

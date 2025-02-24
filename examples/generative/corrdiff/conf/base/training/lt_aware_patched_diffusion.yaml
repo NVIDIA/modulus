@@ -20,8 +20,7 @@ defaults:
 # Hyperparameters
 hp:
     training_duration: 10000000
-    # Training duration based on the number of processed images, measured in
-    # kilo images (thousands of images)
+    # Training duration based on the number of processed images
     total_batch_size: 1
     # Total batch size
     batch_size_per_gpu: 1

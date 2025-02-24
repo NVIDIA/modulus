@@ -64,6 +64,13 @@ dataset:
     stats_path: /data/stats.json
     # Path to json stats file
 
+
+# Training parameters
+training:
+    hp:
+        training_duration: 1000000
+        # Training duration based on the number of processed samples
+
 # Parameters for wandb logging
 wanbd:
     mode: online
