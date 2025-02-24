@@ -270,6 +270,7 @@ class GeometryRep(nn.Module):
         self.bq_warp = nn.ModuleList()
         self.geo_processors = nn.ModuleList()
         for j, p in enumerate(radii):
+        for j, p in enumerate(radii):
             self.bq_warp.append(
                 BQWarp(
                     input_features=input_features,
@@ -281,6 +282,16 @@ class GeometryRep(nn.Module):
                 GeoProcessor(
                     input_filters=geometry_rep.geo_conv.base_neurons_out,
                     model_parameters=geometry_rep.geo_processor,
+                )
+            )
+
+        self.geo_conv_out = nn.ModuleList()
+        for j, p in enumerate(radii):
+            self.geo_conv_out.append(
+                GeoConvOut(
+                    input_features=input_features,
+                    model_parameters=geometry_rep.geo_conv,
+                    grid_resolution=model_parameters.interp_res,
                 )
             )
 
@@ -308,7 +319,9 @@ class GeometryRep(nn.Module):
         # Calculate multi-scale geoemtry dependency
         x_encoding = []
         for j, p in enumerate(self.radii):
+        for j, p in enumerate(self.radii):
             mapping, k_short = self.bq_warp[j](x, p_grid)
+            x_encoding_inter = self.geo_conv_out[j](k_short)
             x_encoding_inter = self.geo_conv_out[j](k_short)
             # Propagate information in the geometry enclosed BBox
             for _ in range(self.hops):
@@ -803,6 +816,9 @@ class DoMINO(nn.Module):
                 geo_encoding = torch.reshape(
                     encoding_g[:, j], (batch_size, 1, nx * ny * nz)
                 )
+                geo_encoding = torch.reshape(
+                    encoding_g[:, j], (batch_size, 1, nx * ny * nz)
+                )
                 geo_encoding = geo_encoding.expand(
                     batch_size, volume_mesh_centers.shape[1], geo_encoding.shape[2]
                 )
@@ -812,6 +828,7 @@ class DoMINO(nn.Module):
             encoding_g_inner = torch.cat(encoding_g_inner, axis=2)
             encoding_g_inner = point_conv[p](encoding_g_inner)
             encoding_outer.append(encoding_g_inner)
+
 
         encoding_g = torch.cat(encoding_outer, axis=-1)
 
@@ -889,6 +906,7 @@ class DoMINO(nn.Module):
                 if p == 0:
                     volume_m_c = surface_mesh_centers
                 else:
+                    volume_m_c = surface_mesh_neighbors[:, :, p - 1] + 1e-6
                     volume_m_c = surface_mesh_neighbors[:, :, p - 1] + 1e-6
                     noise = surface_mesh_centers - volume_m_c
                     dist = torch.sqrt(
