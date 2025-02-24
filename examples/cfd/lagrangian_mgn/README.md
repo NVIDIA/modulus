@@ -155,7 +155,8 @@ Use the `resume_dir` parameter to specify the location of the model checkpoints.
 This will save the predictions for the test dataset as animated `.gif` files in the
 `/data/models/lmgn/water/inference/animations` directory.
 
-The script will also generate an `error.png` file, which displays a visualization of the rollout error.
+The script will also generate an `error.png` file,
+which displays a visualization of the rollout error.
 
 The results may resemble one of the following, depending on the
 material selected for training the model:
