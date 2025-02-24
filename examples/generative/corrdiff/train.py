@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import os, time, psutil, hydra, torch
+import fsspec.utils
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
@@ -67,8 +68,8 @@ def main(cfg: DictConfig) -> None:
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
 
     checkpoint_dir = str(cfg.training.io.get("checkpoint_dir", "."))
-    url = urllib.parse.urlparse(checkpoint_dir)
-    if url.scheme == "msc":
+    protocol = fsspec.utils.get_protocol(checkpoint_dir)
+    if protocol == "msc":
         if not checkpoint_dir.endswith("/"):
             checkpoint_dir += "/"
         checkpoint_dir += f"checkpoints_{cfg.model.name}"
