@@ -76,7 +76,6 @@ fignet = [
 ]
 
 storage = [
-    "fsspec>=2023.9.1",
     "moto[s3]>=5.0.28",
     "multi-storage-client[boto3]>=0.14.0",
 ]
