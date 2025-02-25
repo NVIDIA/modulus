@@ -57,6 +57,7 @@ dev = [
     "interrogate==1.5.0",
     "coverage==6.5.0",
     "ruff==0.0.290",
+    "moto[s3]>=5.0.28",
 ]
 
 makani = [
@@ -76,7 +77,6 @@ fignet = [
 ]
 
 storage = [
-    "moto[s3]>=5.0.28",
     "multi-storage-client[boto3]>=0.14.0",
 ]
 

@@ -89,8 +89,7 @@ def _get_checkpoint_filename(
 
     # Determine input file name. Get absolute file path if Posix path.
     # pathlib does not support custom schemes (eg: msc://...) so only perform resolve() for Posix.
-    protocol = fsspec.utils.get_protocol(path)
-    fs = fsspec.filesystem(protocol)
+    fs = fsspec.filesystem(fsspec.utils.get_protocol(path))
     if protocol == "file":
         path = str(Path(path).resolve())
     checkpoint_filename = f"{path}/{base_name}.{model_parallel_rank}"
@@ -113,12 +112,12 @@ def _get_checkpoint_filename(
             # This is the most likely line to error since it will fail with
             # invalid checkpoint names
             
-            # Remove msc prefix if present to allow generic matching
-            path_no_prefix = path.removeprefix("msc://")
+            # Remove protocol prefix if present to allow generic matching
+            _, path_without_protocol = fsspec.core.split_protocol(path)
             file_idx = [
                 int(
                     re.sub(
-                        f"^{path_no_prefix}/{base_name}.{model_parallel_rank}.|"
+                        f"^{path_without_protocol}/{base_name}.{model_parallel_rank}.|"
                         + file_extension,
                         "",
                         fname,
@@ -217,8 +216,7 @@ def save_checkpoint(
     metadata : Optional[Dict[str, Any]], optional
         Additional metadata to save, by default None
     """
-    protocol = fsspec.utils.get_protocol(path)
-    fs = fsspec.filesystem(protocol)
+    fs = fsspec.filesystem(fsspec.utils.get_protocol(path))
     # Create checkpoint directory if it does not exist.
     # Only applicable to Posix filesystems ("file" protocol), not object stores.
     if protocol == "file" and not Path(path).is_dir():

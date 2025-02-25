@@ -75,8 +75,13 @@ def test_model_checkpointing(
 ):
     """Test checkpointing util for model"""
 
+    # Set up the mock with IAM credentials for access. These should match those in
+    # the MSC Config file (./msc_config_checkpoint.yaml).
     os.environ["AWS_ACCESS_KEY_ID"] = "access-key-id"
     os.environ["AWS_SECRET_ACCESS_KEY"] = "secret-access-key"
+
+    # Ensure default region is set to match the MSC Config file.
+    os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
     current_file = Path(__file__).resolve()
     current_dir = current_file.parent
