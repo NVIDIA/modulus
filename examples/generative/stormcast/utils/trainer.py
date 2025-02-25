@@ -61,8 +61,8 @@ def training_loop(cfg):
     else:
         local_batch_size = cfg.training.batch_size_per_gpu
     assert batch_size % (local_batch_size * dist.world_size) == 0
+    # gradient accumulation rounds per step
     num_accumulation_rounds = batch_size // (local_batch_size * dist.world_size)
-    print("num_accumulation_rounds", num_accumulation_rounds)
 
     use_regression_net = cfg.model.use_regression_net
     previous_step_conditioning = cfg.model.previous_step_conditioning
@@ -84,6 +84,10 @@ def training_loop(cfg):
     torch.backends.cudnn.allow_tf32 = False
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+    fp_optimizations = cfg.training.perf.fp_optimizations
+    enable_amp = fp_optimizations.startswith("amp")
+    amp_dtype = torch.float16 if fp_optimizations == "amp-fp16" else torch.bfloat16
+
     total_train_steps = cfg.training.total_train_steps
 
     # Load dataset.
@@ -221,9 +225,13 @@ def training_loop(cfg):
                 train_regression_unet=train_regression_unet,
             )
 
-            loss = loss_fn(
-                net=ddp, images=target, condition=condition, augment_pipe=augment_pipe
-            )
+            with torch.autocast("cuda", dtype=amp_dtype, enabled=enable_amp):
+                loss = loss_fn(
+                    net=ddp,
+                    images=target,
+                    condition=condition,
+                    augment_pipe=augment_pipe,
+                )
             if log_to_wandb:
                 channelwise_loss = loss.mean(dim=(0, 2, 3))
                 channelwise_loss_dict = {
