@@ -89,7 +89,8 @@ def _get_checkpoint_filename(
 
     # Determine input file name. Get absolute file path if Posix path.
     # pathlib does not support custom schemes (eg: msc://...) so only perform resolve() for Posix.
-    fs = fsspec.filesystem(fsspec.utils.get_protocol(path))
+    protocol = fsspec.utils.get_protocol(path)
+    fs = fsspec.filesystem(protocol)
     if protocol == "file":
         path = str(Path(path).resolve())
     checkpoint_filename = f"{path}/{base_name}.{model_parallel_rank}"
