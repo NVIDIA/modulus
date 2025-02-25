@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated utils in `modulus.launch.logging` to avoid unnecessary `wandb` and `mlflow` imports
 - Moved to experiment-based Hydra config in Lagrangian-MGN example
 - Make data caching optional in `MeshDatapipe`
+- General purpose patching API for CorrDiff patch-based diffusion
+- Simplified CorrDiff config files, updated default values 
 
 ### Deprecated
 
