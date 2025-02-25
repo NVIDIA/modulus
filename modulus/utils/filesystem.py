@@ -23,6 +23,7 @@ import urllib.request
 import zipfile
 
 import fsspec
+import fsspec.utils
 import fsspec.implementations.cached
 import requests
 import s3fs
@@ -46,7 +47,7 @@ def _get_fs(path):
     if path.startswith("s3://"):
         return s3fs.S3FileSystem(client_kwargs=dict(endpoint_url="https://pbss.s8k.io"))
     else:
-        return fsspec.filesystem("file")
+        return fsspec.filesystem(fsspec.utils.get_protocol(path))
 
 
 def _download_ngc_model_file(path: str, out_path: str, timeout: int = 300) -> str:
