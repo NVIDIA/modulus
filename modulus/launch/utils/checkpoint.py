@@ -216,7 +216,8 @@ def save_checkpoint(
     metadata : Optional[Dict[str, Any]], optional
         Additional metadata to save, by default None
     """
-    fs = fsspec.filesystem(fsspec.utils.get_protocol(path))
+    protocol = fsspec.utils.get_protocol(path)
+    fs = fsspec.filesystem(protocol)
     # Create checkpoint directory if it does not exist.
     # Only applicable to Posix filesystems ("file" protocol), not object stores.
     if protocol == "file" and not Path(path).is_dir():
