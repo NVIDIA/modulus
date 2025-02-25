@@ -33,6 +33,7 @@ validation_freq: 5 # how often to record the validation loss, measured in number
 
 # Optimization hyperparameters
 batch_size: 1 # Total training batch size -- must be >= (and divisble by) number of GPUs being used
+batch_size_per_gpu: "auto" # Batch size on each GPU, set to an int to force smaller local batch with gradient accumulation
 lr: 4E-4 # Initial learning rate
 lr_rampup_steps: 1000 # Number of training steps over which to perform linear LR warmup
 total_train_steps: 20 # Number of total training steps

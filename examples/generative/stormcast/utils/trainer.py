@@ -56,7 +56,14 @@ def training_loop(cfg):
 
     # Shorthand for config items
     batch_size = cfg.training.batch_size
-    local_batch_size = batch_size // dist.world_size
+    if cfg.training.batch_size_per_gpu == "auto":
+        local_batch_size = batch_size // dist.world_size
+    else:
+        local_batch_size = cfg.training.batch_size_per_gpu
+    assert batch_size % (local_batch_size * dist.world_size) == 0
+    num_accumulation_rounds = batch_size // (local_batch_size * dist.world_size)
+    print("num_accumulation_rounds", num_accumulation_rounds)
+
     use_regression_net = cfg.model.use_regression_net
     previous_step_conditioning = cfg.model.previous_step_conditioning
     resume_checkpoint = cfg.training.resume_checkpoint
@@ -198,33 +205,35 @@ def training_loop(cfg):
     avg_train_loss = 0
     train_steps = 0
     while not done:
-        # Format input batch
-        batch = next(dataset_iterator)
-        background = batch["background"].to(device=device, dtype=torch.float32)
-        state = [s.to(device=device, dtype=torch.float32) for s in batch["state"]]
-        (condition, target, reg_out) = build_network_condition_and_target(
-            background,
-            state,
-            invariant_tensor,
-            regression_net=regression_net,
-            train_regression_unet=train_regression_unet,
-        )
-
-        # Accumulate gradients.
+        # Compute & accumulate gradients.
         optimizer.zero_grad(set_to_none=True)
-        loss = loss_fn(
-            net=ddp, images=target, condition=condition, augment_pipe=augment_pipe
-        )
-        if log_to_wandb:
-            channelwise_loss = loss.mean(dim=(0, 2, 3))
-            channelwise_loss_dict = {
-                f"ChLoss/{ch}": channelwise_loss[i].item()
-                for (i, ch) in enumerate(state_channels)
-            }
-            wandb_logs["channelwise_loss"] = channelwise_loss_dict
 
-        loss_value = loss.sum() / len(state_channels)
-        loss_value.backward()
+        for _ in range(num_accumulation_rounds):
+            # Format input batch
+            batch = next(dataset_iterator)
+            background = batch["background"].to(device=device, dtype=torch.float32)
+            state = [s.to(device=device, dtype=torch.float32) for s in batch["state"]]
+            (condition, target, reg_out) = build_network_condition_and_target(
+                background,
+                state,
+                invariant_tensor,
+                regression_net=regression_net,
+                train_regression_unet=train_regression_unet,
+            )
+
+            loss = loss_fn(
+                net=ddp, images=target, condition=condition, augment_pipe=augment_pipe
+            )
+            if log_to_wandb:
+                channelwise_loss = loss.mean(dim=(0, 2, 3))
+                channelwise_loss_dict = {
+                    f"ChLoss/{ch}": channelwise_loss[i].item()
+                    for (i, ch) in enumerate(state_channels)
+                }
+                wandb_logs["channelwise_loss"] = channelwise_loss_dict
+
+            loss_value = loss.sum() / len(state_channels)
+            loss_value.backward()
 
         if cfg.training.clip_grad_norm > 0:
             clip_grad_norm_(net.parameters(), cfg.training.clip_grad_norm)
