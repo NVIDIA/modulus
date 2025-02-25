@@ -47,9 +47,26 @@ To train and test the DoMINO model on AWS dataset, follow these steps:
 4. Run `train.py` to start the training. Modify data, train and model keys in config file.
 
 5. Run `test.py` to test on `.vtp` / `.vtu`. Predictions are written to the same file.
- Modify eval key in config file.
+ Modify eval key in config file to specify checkpoint, input and output directory.
 
 6. Download the validation results (saved in form of point clouds in `.vtp` / `.vtu` format),
+   and visualize in Paraview.
+
+## Retraining recipe for DoMINO model
+
+To enable retraining the DoMINO model from a pre-trained checkpoint, follow the steps:
+
+1. Add the pre-trained checkpoints in the resume_dir defined in `conf/config.yaml`.
+
+2. Add the volume and surface scaling factors to the output dir defined in  `conf/config.yaml`.
+
+3. Run `retraining.py` for specified number of epochs to retrain model at a small
+ learning rate starting from checkpoint.
+
+4. Run `test.py` to test on `.vtp` / `.vtu`. Predictions are written to the same file.
+ Modify eval key in config file to specify checkpoint, input and output directory.
+
+5. Download the validation results (saved in form of point clouds in `.vtp` / `.vtu` format),
    and visualize in Paraview.
 
 ## Guidelines for training DoMINO model
@@ -57,14 +74,19 @@ To train and test the DoMINO model on AWS dataset, follow these steps:
 1. The DoMINO model allows for training both volume and surface fields using a single model
  but currently the recommendation is to train the volume and surface models separately. This
   can be controlled through the config file.
-2. MSE loss for the volume model and RMSE for surface model gives the best results.
+2. MSE loss for both volume and surface model gives the best results.
 3. The surface and volume variable names can change but currently the code only
  supports the variables in that specific order. For example, Pressure, wall-shear
   and turb-visc for surface and velocity, pressure and turb-visc for volume.
 4. Bounding box is configurable and will depend on the usecase. The presets are
  suitable for the AWS DriveAer-ML dataset.
+5. Integral loss factor is currently set to 0.0 as it adversely impacts the training.
 
 The DoMINO model architecture is used to support the Real Time Wind Tunnel OV Blueprint
 demo presented at Supercomputing' 24. Some of the results are shown below.
 
 ![Results from DoMINO for RTWT SC demo](../../../../docs/img/domino_result_rtwt.jpg)
+
+## References
+
+1. [DoMINO: A Decomposable Multi-scale Iterative Neural Operator for Modeling Large Scale Engineering Simulations](https://arxiv.org/abs/2501.13350)

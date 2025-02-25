@@ -20,8 +20,7 @@ from typing import Sequence
 
 import pytest
 import torch
-
-from modulus.models.domino.model import DoMINO
+from pytest_utils import import_or_fail
 
 # from . import common
 from .common.fwdaccuracy import save_output
@@ -58,9 +57,13 @@ def validate_domino(
         return compare_output(output, output_target, rtol, atol)
 
 
+@import_or_fail("warp")
 @pytest.mark.parametrize("device", ["cuda:0"])
-def test_domino_forward(device):
+def test_domino_forward(device, pytestconfig):
     """Test domino forward pass"""
+
+    from modulus.models.domino.model import DoMINO
+
     torch.manual_seed(0)
 
     @dataclass
@@ -106,6 +109,11 @@ def test_domino_forward(device):
         class position_encoder:
             base_neurons: int = 128
 
+        @dataclass
+        class parameter_model:
+            base_layer: int = 128
+            scaling_params: Sequence = (30.0, 1.226)
+
         model_type: str = "combined"
         interp_res: Sequence = (128, 64, 48)
         use_sdf_in_basis_func: bool = True
@@ -114,6 +122,7 @@ def test_domino_forward(device):
         num_surface_neighbors: int = 21
         use_surface_normals: bool = True
         use_only_normals: bool = True
+        encode_parameters: bool = False
         geometry_rep = geometry_rep
         nn_basis_functions = nn_basis_functions
         aggregation_model = aggregation_model
@@ -149,6 +158,8 @@ def test_domino_forward(device):
     volume_coordinates = torch.randn(bsize, 100, 3).to(device)
     vol_grid_max_min = torch.randn(bsize, 2, 3).to(device)
     surf_grid_max_min = torch.randn(bsize, 2, 3).to(device)
+    stream_velocity = torch.randn(bsize, 1).to(device)
+    air_density = torch.randn(bsize, 1).to(device)
     input_dict = {
         "pos_volume_closest": pos_normals_closest_vol,
         "pos_volume_center_of_mass": pos_normals_com_vol,
@@ -168,6 +179,8 @@ def test_domino_forward(device):
         "volume_mesh_centers": volume_coordinates,
         "volume_min_max": vol_grid_max_min,
         "surface_min_max": surf_grid_max_min,
+        "stream_velocity": stream_velocity,
+        "air_density": air_density,
     }
 
     # assert common.validate_forward_accuracy(

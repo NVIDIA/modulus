@@ -20,10 +20,7 @@ from typing import Optional
 import pytest
 import torch
 
-from modulus.models.diffusion import EDMPrecondSR, UNet
-from modulus.utils.corrdiff import diffusion_step, regression_step
-from modulus.utils.generative import deterministic_sampler, stochastic_sampler
-from modulus.utils.patching import DeterministicPatching
+from pytest_utils import import_or_fail
 
 
 # Mock network class
@@ -47,8 +44,13 @@ class MockNet:
         return x * 0.9
 
 
+@import_or_fail("cftime")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_regression_step(device):
+def test_regression_step(device, pytestconfig):
+
+    from modulus.models.diffusion import UNet
+    from modulus.utils.corrdiff import regression_step
+
     # define the net
     mock_unet = UNet(
         img_resolution=[16, 16],
@@ -70,8 +72,14 @@ def test_regression_step(device):
     assert output.shape == (2, 2, 16, 16), "Output shape mismatch"
 
 
+@import_or_fail("cftime")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_diffusion_step(device):
+def test_diffusion_step(device, pytestconfig):
+
+    from modulus.models.diffusion import EDMPrecondSR
+    from modulus.utils.corrdiff import diffusion_step
+    from modulus.utils.generative import deterministic_sampler, stochastic_sampler
+
     # Define the preconditioner
     mock_precond = EDMPrecondSR(
         img_resolution=[16, 16],
@@ -129,8 +137,12 @@ def test_diffusion_step(device):
     assert output.shape == (1, 2, 16, 16), "Output shape mismatch"
 
 
+@import_or_fail("cftime")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_diffusion_step_rectangle(device):
+    from modulus.utils.generative import stochastic_sampler
+    from modulus.utils.corrdiff import diffusion_step
+    from modulus.utils.patching import DeterministicPatching
 
     img_shape_y, img_shape_x = 32, 16
     seed_batch_size = 4

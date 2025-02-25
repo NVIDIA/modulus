@@ -14,150 +14,127 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
-import time
+
 import hydra
-from hydra.utils import to_absolute_path
+from hydra.utils import instantiate, to_absolute_path
 
 import dgl
 from dgl.dataloading import GraphDataLoader
-import matplotlib.pyplot as plt
+
+import matplotlib
 from matplotlib import animation
-from matplotlib import tri as mtri
-from matplotlib.patches import Rectangle
-import matplotlib  #
+from matplotlib import pyplot as plt
 
 matplotlib.use("TkAgg")  # for plotting
 
-import numpy as np
-from networkx import radius
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
+
 import torch
 
-from modulus.models.meshgraphnet import MeshGraphNet
-from modulus.datapipes.gnn.lagrangian_dataset import LagrangianDataset, graph_update
-from modulus.launch.logging import PythonLogger
+from modulus.datapipes.gnn.lagrangian_dataset import graph_update
 from modulus.launch.utils import load_checkpoint
+
+from loggers import get_gpu_info, init_python_logging
+
+
+logger = logging.getLogger("lmgn")
 
 
 class MGNRollout:
-    def __init__(self, cfg: DictConfig, logger: PythonLogger):
-        self.num_test_samples = cfg.num_test_samples
-        self.num_test_time_steps = cfg.num_test_time_steps
-        self.dim = cfg.num_output_features
-        self.frame_skip = cfg.frame_skip
-        self.num_history = 5
-        self.num_node_type = 6
+    def __init__(self, cfg: DictConfig):
+        self.num_steps = cfg.data.test.num_steps
+        self.dim = cfg.dim
+        self.frame_skip = cfg.inference.frame_skip
+        self.num_history = cfg.data.test.num_history
+        self.num_node_type = cfg.data.test.num_node_types
         self.plotting_index = 0
-        self.radius = cfg.radius
 
         # set device
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = cfg.test.device
         logger.info(f"Using {self.device} device")
 
         # instantiate dataset
-        self.dataset = LagrangianDataset(
-            name="Water",
-            data_dir=to_absolute_path(cfg.data_dir),
-            split="valid",
-            num_samples=cfg.num_test_samples,
-            num_steps=cfg.num_test_time_steps,
-            radius=cfg.radius,
-        )
-        self.dim = self.dataset.dim
-        self.dt = self.dataset.dt
-        self.bound = self.dataset.bound
+        logger.info("Loading the test dataset...")
+        self.dataset = instantiate(cfg.data.test)
+        logger.info(f"Using {len(self.dataset)} test samples.")
 
-        self.dataset.set_normalizer_device(device=self.device)
+        self.dim = self.dataset.dim
+        self.radius = self.dataset.radius
+        self.dt = self.dataset.dt
+        self.bounds = self.dataset.bounds
+
         self.time_integrator = self.dataset.time_integrator
         self.compute_boundary_feature = self.dataset.compute_boundary_feature
         self.boundary_clamp = self.dataset.boundary_clamp
 
-        self.gravity = torch.zeros(self.dim, device=self.device)
-        self.gravity[-1] = -9.8 * self.dt**2
-        self.gravity = self.dataset.normalize_acceleration(self.gravity)
-
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
             self.dataset,
-            batch_size=1,
-            shuffle=False,
-            drop_last=False,
+            **cfg.test.dataloader,
         )
 
         # instantiate the model
-        self.model = MeshGraphNet(
-            cfg.num_input_features,
-            cfg.num_edge_features,
-            cfg.num_output_features,
-            cfg.processor_size,
-            mlp_activation_fn=cfg.activation,
-            do_concat_trick=cfg.do_concat_trick,
-            num_processor_checkpoint_segments=cfg.num_processor_checkpoint_segments,
-            recompute_activation=cfg.recompute_activation,
-        )
-        if cfg.jit:
-            self.model = torch.jit.script(self.model).to(self.device)
-        else:
-            self.model = self.model.to(self.device)
+        logger.info("Creating the model...")
+        # instantiate the model
+        self.model = instantiate(cfg.model)
+
+        if cfg.compile.enabled:
+            self.model = torch.compile(self.model, **cfg.compile.args)
+        self.model = self.model.to(self.device)
 
         # enable train mode
         self.model.eval()
 
         # load checkpoint
         load_checkpoint(
-            to_absolute_path(cfg.ckpt_path),
+            to_absolute_path(cfg.resume_dir),
             models=self.model,
             device=self.device,
         )
 
+    @torch.inference_mode()
     def predict(self):
         self.pred = []
         self.exact = []
         self.node_type = []
 
-        for i, (graph, mask) in enumerate(self.dataloader):
-
+        for i, graph in enumerate(self.dataloader):
             graph = graph.to(self.device)
             if graph.ndata["t"][0].item() == 0:
                 # initialize
                 self.pred = []
                 self.exact = []
                 self.node_type = []
-                position = graph.ndata["mesh_pos"][..., : self.dim]
-                position_zero = torch.zeros_like(position)
+                position = graph.ndata["pos"][..., : self.dim]
                 history = graph.ndata["x"][
                     ..., self.dim : self.dim + self.dim * self.num_history
                 ]
                 node_type = graph.ndata["x"][..., -self.num_node_type :].clone()
-                # boundary_mask = mask.reshape(-1, 1).repeat(1, self.dim).to(self.device)
 
             # inference step
             boundary_feature = self.compute_boundary_feature(
-                position, radius=self.radius, bound=self.bound
+                position, radius=self.radius, bounds=self.bounds
             )
             graph.ndata["x"] = torch.cat(
                 [position, history, boundary_feature, node_type], dim=-1
             )
             acceleration = self.model(
                 graph.ndata["x"], graph.edata["x"], graph
-            ).detach()  # predict
-            # acceleration = acceleration + self.gravity
+            )  # predict
 
             # update the inputs using the prediction from previous iteration
             position, velocity = self.time_integrator(
                 position=position,
-                velocity=history[..., : self.dim],
+                velocity=history[..., -self.dim :],
                 acceleration=acceleration,
                 dt=self.dt,
             )
-            position = self.boundary_clamp(position, bound=self.bound)
-            graph.ndata["mesh_pos"] = position
+            position = self.boundary_clamp(position, bounds=self.bounds)
+            graph.ndata["pos"] = position
             velocity = self.dataset.normalize_velocity(velocity)
-            history = torch.cat([velocity, history[..., : -self.dim]], dim=-1)
-
-            # do not update the "wall_boundary"  nodes
-            # pred_i = torch.where(boundary_mask, pred_i, 0)
+            history = torch.cat([history[..., self.dim :], velocity], dim=-1)
 
             self.pred.append(position.cpu())
             self.exact.append(graph.ndata["y"][..., : self.dim].cpu())
@@ -190,13 +167,13 @@ class MGNRollout:
         history = torch.zeros(num_nodes, self.dim * self.num_history, dtype=torch.float)
         history[:, ::2] = 10  # initial velocity
         boundary_feature = self.compute_boundary_feature(
-            position, radius=self.radius, bound=self.bound
+            position, radius=self.radius, bounds=self.bounds
         )
         node_type = torch.ones((num_nodes,), dtype=torch.long) * 5
         node_type = torch.nn.functional.one_hot(node_type, num_classes=6)
         graph = dgl.graph(([], []), num_nodes=num_nodes)
         print(position.shape, history.shape, boundary_feature.shape, node_type.shape)
-        graph.ndata["mesh_pos"] = position
+        graph.ndata["pos"] = position
         graph.ndata["x"] = torch.cat(
             [position, history, boundary_feature, node_type], dim=-1
         )
@@ -219,12 +196,12 @@ class MGNRollout:
                 acceleration=acceleration,
                 dt=self.dt,
             )
-            position = self.boundary_clamp(position, bound=self.bound)
-            graph.ndata["mesh_pos"] = position
+            position = self.boundary_clamp(position, bounds=self.bounds)
+            graph.ndata["pos"] = position
             velocity = self.dataset.normalize_velocity(velocity)
             history = torch.cat([velocity, history[..., : -self.dim]], dim=-1)
             boundary_feature = self.compute_boundary_feature(
-                position, radius=self.radius, bound=self.bound
+                position, radius=self.radius, bounds=self.bounds
             )
             graph.ndata["x"] = torch.cat(
                 [position, history, boundary_feature, node_type], dim=-1
@@ -248,7 +225,7 @@ class MGNRollout:
 
     def animate2d(self, num):
         num *= self.frame_skip
-        num = num + self.plotting_index * self.num_test_time_steps
+        num = num + self.plotting_index * self.num_steps
         node_type = self.node_type[num]
         node_type = (
             torch.argmax(node_type, dim=1).numpy() / self.num_node_type
@@ -259,15 +236,15 @@ class MGNRollout:
         self.ax[0].cla()
         self.ax[0].set_aspect("equal")
         self.ax[0].scatter(1 - y_pred[:, 0], y_pred[:, 1], c=node_type)
-        self.ax[0].set_xlim(self.bound[0], self.bound[1])
-        self.ax[0].set_ylim(self.bound[0], self.bound[1])
+        self.ax[0].set_xlim(self.bounds[0], self.bounds[1])
+        self.ax[0].set_ylim(self.bounds[0], self.bounds[1])
         self.ax[0].set_title("Modulus MeshGraphNet Prediction", color="black")
 
         self.ax[1].cla()
         self.ax[1].set_aspect("equal")
         self.ax[1].scatter(1 - y_exact[:, 0], y_exact[:, 1], c=node_type)
-        self.ax[1].set_xlim(self.bound[0], self.bound[1])
-        self.ax[1].set_ylim(self.bound[0], self.bound[1])
+        self.ax[1].set_xlim(self.bounds[0], self.bounds[1])
+        self.ax[1].set_ylim(self.bounds[0], self.bounds[1])
         self.ax[1].set_title("Ground Truth", color="black")
 
         self.fig.subplots_adjust(
@@ -290,7 +267,7 @@ class MGNRollout:
 
     def animate3d(self, num):
         num *= self.frame_skip
-        num = num + self.plotting_index * self.num_test_time_steps
+        num = num + self.plotting_index * self.num_steps
         node_type = self.node_type[num]
         node_type = (
             torch.argmax(node_type, dim=1).numpy() / self.num_node_type
@@ -301,17 +278,17 @@ class MGNRollout:
         self.ax[0].cla()
         self.ax[0].set_aspect("equal")
         self.ax[0].scatter(y_pred[:, 2], y_pred[:, 0], y_pred[:, 1], c=node_type)
-        self.ax[0].set_xlim(self.bound[0], self.bound[1])
-        self.ax[0].set_ylim(self.bound[0], self.bound[1])
-        self.ax[0].set_zlim(self.bound[0], self.bound[1])
+        self.ax[0].set_xlim(self.bounds[0], self.bounds[1])
+        self.ax[0].set_ylim(self.bounds[0], self.bounds[1])
+        self.ax[0].set_zlim(self.bounds[0], self.bounds[1])
         self.ax[0].set_title("Modulus MeshGraphNet Prediction", color="black")
 
         self.ax[1].cla()
         self.ax[1].set_aspect("equal")
         self.ax[1].scatter(y_exact[:, 2], y_exact[:, 0], y_exact[:, 1], c=node_type)
-        self.ax[1].set_xlim(self.bound[0], self.bound[1])
-        self.ax[1].set_ylim(self.bound[0], self.bound[1])
-        self.ax[1].set_zlim(self.bound[0], self.bound[1])
+        self.ax[1].set_xlim(self.bounds[0], self.bounds[1])
+        self.ax[1].set_ylim(self.bounds[0], self.bounds[1])
+        self.ax[1].set_zlim(self.bounds[0], self.bounds[1])
         self.ax[1].set_title("Ground Truth", color="black")
 
         self.fig.subplots_adjust(
@@ -328,35 +305,39 @@ class MGNRollout:
         loss = torch.mean(loss, dim=1)
         plt.figure(figsize=(10, 6))
         plt.plot(loss.numpy(), marker="o", linestyle="-", color="b")
-        plt.title("Lagranigian MeshGraphNet")
+        plt.title("Lagrangian MeshGraphNet")
         plt.xlabel("time steps")
-        plt.ylabel("MSE error")
+        plt.ylabel("Position MSE error")
         plt.grid(True)
         return plt
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="config_2d")
+@hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    logger = PythonLogger("main")  # General python logger
-    logger.file_logging()
+    init_python_logging(cfg, base_filename="inference")
+    logger.info(f"Config summary:\n{OmegaConf.to_yaml(cfg, sort_keys=True)}")
+    logger.info(get_gpu_info())
+
     logger.info("Rollout started...")
-    rollout = MGNRollout(cfg, logger)
+    rollout = MGNRollout(cfg)
 
     # test on dataset
     rollout.predict()
 
     # unit test
-    # rollout.unit_test_example(t=cfg.num_test_time_steps)
+    # rollout.unit_test_example(t=cfg.num_steps)
 
     # compute the roll out loss
     pred = torch.stack([tensor.reshape(-1) for tensor in rollout.pred], dim=0)
     target = torch.stack([tensor.reshape(-1) for tensor in rollout.exact], dim=0)
     loss = torch.nn.functional.mse_loss(pred, target)
-    print(f"the rollout loss is {loss}")
+    logger.info(f"The rollout loss is {loss:.5f}")
 
     # plot the roll out loss
     error_plt = rollout.plot_error(pred, target)
-    error_plt.savefig("animations/error.png")
+    out_dir = os.path.join(cfg.output, "animations")
+    os.makedirs(out_dir, exist_ok=True)
+    error_plt.savefig(os.path.join(out_dir, "error.png"))
 
     # plot
     if cfg.dim == 2:
@@ -364,19 +345,19 @@ def main(cfg: DictConfig) -> None:
         ani = animation.FuncAnimation(
             rollout.fig,
             rollout.animate2d,
-            frames=(cfg.num_test_time_steps - 5) // cfg.frame_skip,
-            interval=cfg.frame_interval,
+            frames=(rollout.num_steps - rollout.num_history - 1) // rollout.frame_skip,
+            interval=cfg.inference.frame_interval,
         )
     elif cfg.dim == 3:
         rollout.init_animation3d(index=0)
         ani = animation.FuncAnimation(
             rollout.fig,
             rollout.animate3d,
-            frames=(cfg.num_test_time_steps - 5) // cfg.frame_skip,
-            interval=cfg.frame_interval,
+            frames=(cfg.data.test.num_steps - 5) // cfg.inference.frame_skip,
+            interval=cfg.inference.frame_interval,
         )
 
-    ani.save("animations/animation.gif")
+    ani.save(os.path.join(out_dir, "animation.gif"))
     logger.info(f"Created animation")
 
 

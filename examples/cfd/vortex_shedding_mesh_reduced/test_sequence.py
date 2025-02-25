@@ -27,8 +27,8 @@ from modulus.distributed.manager import DistributedManager
 from modulus.launch.logging import (
     PythonLogger,
     RankZeroLoggingWrapper,
-    initialize_wandb,
 )
+from modulus.launch.logging.wandb import initialize_wandb
 from modulus.launch.utils import load_checkpoint
 from modulus.models.mesh_reduced.mesh_reduced import Mesh_Reduced
 from train_sequence import Sequence_Trainer
