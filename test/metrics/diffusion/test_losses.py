@@ -205,9 +205,7 @@ def test_regressionlossce_initialization():
     assert loss_func.prob_channels == [1, 2, 3, 4]
 
 
-def leadtime_fake_net(
-    input, y_lr, sigma, labels, lead_time_label=None, augment_labels=None
-):
+def leadtime_fake_net(input, y_lr, lead_time_label=None, augment_labels=None):
     return torch.zeros(1, 4, 29, 29)
 
 
@@ -274,7 +272,9 @@ def test_residualloss_initialization():
     assert loss_func.hr_mean_conditioning is True
 
 
-def fake_residual_net(x, img_lr, sigma, labels=None, augment_labels=None):
+def fake_residual_net(
+    x, img_lr, sigma, labels=None, global_index=None, augment_labels=None
+):
     return torch.zeros_like(x)
 
 

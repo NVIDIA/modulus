@@ -610,6 +610,8 @@ class ResidualLoss:
             global_index = patching.global_index(batch_size=batch_size)
             y = y_patched
             y_lr = y_lr_patched
+        else:
+            global_index = None
 
         # Noise
         rnd_normal = torch.randn([y.shape[0], 1, 1, 1], device=img_clean.device)
@@ -885,17 +887,15 @@ class RegressionLossCE:
 
         if lead_time_label is not None:
             D_yn = net(
-                x=input,
-                img_lr=y_lr,
-                force_fp32=False,
+                input,
+                y_lr,
                 lead_time_label=lead_time_label,
                 augment_labels=augment_labels,
             )
         else:
             D_yn = net(
-                x=input,
-                img_lr=y_lr,
-                force_fp32=False,
+                input,
+                y_lr,
                 lead_time_label=lead_time_label,
                 augment_labels=augment_labels,
             )

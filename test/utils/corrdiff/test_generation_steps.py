@@ -138,7 +138,7 @@ def test_diffusion_step(device, pytestconfig):
 
 @import_or_fail("cftime")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_diffusion_step_rectangle(device):
+def test_diffusion_step_rectangle(device, pytestconfig):
     from modulus.utils.corrdiff import diffusion_step
     from modulus.utils.generative import stochastic_sampler
     from modulus.utils.patching import DeterministicPatching
