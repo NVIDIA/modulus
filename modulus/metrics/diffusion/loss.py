@@ -357,7 +357,7 @@ class RegressionLoss:
     Parameters
     ----------
     sigma_data: float, optional
-        Standard deviation for data. Depreceated and ignored. By default 0.5.
+        Standard deviation for data. Deprecated and ignored. By default 0.5.
 
     Note
     ----
