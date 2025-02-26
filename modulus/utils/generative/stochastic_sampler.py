@@ -19,6 +19,7 @@ from typing import Any, Callable, Optional
 
 import torch
 from torch import Tensor
+
 from modulus.utils.patching import DeterministicPatching
 
 
@@ -109,19 +110,14 @@ def stochastic_sampler(
     sigma_max = min(sigma_max, net.sigma_max)
 
     # Safety check on type of patching
-    if (
-        patching is not None
-        and not isinstance(patching, DeterministicPatching)
-    ):
-        raise ValueError(
-            "patching must be an instance of DeterministicPatching."
-        )
+    if patching is not None and not isinstance(patching, DeterministicPatching):
+        raise ValueError("patching must be an instance of DeterministicPatching.")
 
     # Safety check: if patching is used then img_lr and latents must have same
     # height and width, otherwise there is mismatch in the number
     # of patches extracted to form the final batch_size.
     if patching:
-        if (img_lr.shape[-2:] != latents.shape[-2:]):
+        if img_lr.shape[-2:] != latents.shape[-2:]:
             raise ValueError(
                 f"img_lr and latents must have the same height and width, "
                 f"but found {img_lr.shape[-2:]} vs {latents.shape[-2:]}. "
@@ -135,8 +131,7 @@ def stochastic_sampler(
         )
 
     # Time step discretization.
-    step_indices = torch.arange(
-        num_steps, dtype=torch.float64, device=latents.device)
+    step_indices = torch.arange(num_steps, dtype=torch.float64, device=latents.device)
     t_steps = (
         sigma_max ** (1 / rho)
         + step_indices
@@ -157,47 +152,36 @@ def stochastic_sampler(
                 f"mean_hr and img_lr must have the same height and width, "
                 f"but found {mean_hr.shape[-2:]} vs {img_lr.shape[-2:]}."
             )
-        x_lr = torch.cat(
-            (mean_hr.expand(x_lr.shape[0], -1, -1, -1), x_lr),
-            dim=1
-        )
+        x_lr = torch.cat((mean_hr.expand(x_lr.shape[0], -1, -1, -1), x_lr), dim=1)
 
     # input and position padding + patching
     if patching:
         # Patched conditioning [x_lr, mean_hr]
         # (batch_size * patch_num, C_in + C_out, patch_shape_y, patch_shape_x)
-        x_lr = patching.apply(
-            input=x_lr,
-            additional_input=img_lr
-        )
+        x_lr = patching.apply(input=x_lr, additional_input=img_lr)
         # Patched global grid coordinates
         # (batch_size * patch_num, 2, patch_shape_y, patch_shape_x)
-        global_index = patching.global_index(
-            batch_size=batch_size
-        ).to(latents.device)
+        global_index = patching.global_index(batch_size=batch_size).to(latents.device)
     else:
         global_index = None
 
     # Main sampling loop.
     x_next = latents.to(torch.float64) * t_steps[0]
-    for i, (t_cur, t_next) in enumerate(
-        zip(t_steps[:-1], t_steps[1:])
-    ):  # 0, ..., N-1
+    for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):  # 0, ..., N-1
         x_cur = x_next
         # Increase noise temporarily.
         gamma = S_churn / num_steps if S_min <= t_cur <= S_max else 0
         t_hat = net.round_sigma(t_cur + gamma * t_cur)
 
-        x_hat = x_cur + (t_hat**2 - t_cur**2).sqrt() \
-            * S_noise * randn_like(x_cur)
+        x_hat = x_cur + (t_hat**2 - t_cur**2).sqrt() * S_noise * randn_like(x_cur)
 
         # Euler step. Perform patching operation on score tensor if patch-based
         # generation is used denoised = net(x_hat, t_hat,
         # class_labels,lead_time_label=lead_time_label).to(torch.float64)
 
-        x_hat_batch = (
-            patching.apply(input=x_hat) if patching else x_hat
-        ).to(latents.device)
+        x_hat_batch = (patching.apply(input=x_hat) if patching else x_hat).to(
+            latents.device
+        )
         x_lr = x_lr.to(latents.device)
 
         if global_index is not None:
@@ -223,10 +207,7 @@ def stochastic_sampler(
         if patching:
             # Un-patch the denoised image
             # (batch_size, C_out, img_shape_y, img_shape_x)
-            denoised = patching.fuse(
-                input=denoised,
-                batch_size=batch_size
-            )
+            denoised = patching.fuse(input=denoised, batch_size=batch_size)
 
         d_cur = (x_hat - denoised) / t_hat
         x_next = x_hat + (t_next - t_hat) * d_cur
@@ -235,9 +216,9 @@ def stochastic_sampler(
         if i < num_steps - 1:
             # Patched input
             # (batch_size * patch_num, C_out, patch_shape_y, patch_shape_x)
-            x_next_batch = (
-                patching.apply(input=x_next) if patching else x_next
-            ).to(latents.device)
+            x_next_batch = (patching.apply(input=x_next) if patching else x_next).to(
+                latents.device
+            )
 
             if lead_time_label is not None:
                 denoised = net(

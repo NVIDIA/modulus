@@ -16,7 +16,7 @@
 
 import importlib
 from dataclasses import dataclass
-from typing import Union, Tuple, Literal
+from typing import Literal, Tuple, Union
 
 import torch
 
@@ -115,8 +115,8 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         sigma_max: float = float("inf"),
         sigma_data: float = 0.5,
         model_type: Literal[
-            "SongUNetPosEmbd", "SongUNetPosLtEmbd",
-            "SongUNet", "DhariwalUNet"] = "SongUNetPosEmbd",
+            "SongUNetPosEmbd", "SongUNetPosLtEmbd", "SongUNet", "DhariwalUNet"
+        ] = "SongUNetPosEmbd",
         **model_kwargs: dict,
     ):
         super().__init__(meta=MetaData)

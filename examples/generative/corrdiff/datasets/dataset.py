@@ -65,13 +65,11 @@ def register_dataset(dataset_spec: str) -> None:
     file_path = Path(file_path)
     if not file_path.exists():
         raise ValueError(f"Dataset file not found: {file_path}")
-    if not file_path.suffix == '.py':
+    if not file_path.suffix == ".py":
         raise ValueError(f"Dataset file must be a Python file: {file_path}")
 
     # Import the module and get the class
-    spec = importlib.util.spec_from_file_location(
-        file_path.stem, str(file_path)
-    )
+    spec = importlib.util.spec_from_file_location(file_path.stem, str(file_path))
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not load spec for {file_path}")
 
@@ -81,9 +79,7 @@ def register_dataset(dataset_spec: str) -> None:
     try:
         dataset_class = getattr(module, class_name)
     except AttributeError:
-        raise ImportError(
-            f"Could not find dataset class '{class_name}' in {file_path}"
-        )
+        raise ImportError(f"Could not find dataset class '{class_name}' in {file_path}")
 
     # Register the dataset
     known_datasets[dataset_spec] = dataset_class

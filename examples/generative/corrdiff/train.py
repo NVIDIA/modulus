@@ -25,13 +25,13 @@ from modulus.distributed import DistributedManager
 from modulus.metrics.diffusion import RegressionLoss, ResidualLoss, RegressionLossCE
 from modulus.utils.patching import RandomPatching
 from modulus.launch.logging import (
-    PythonLogger, RankZeroLoggingWrapper, initialize_wandb)
+    PythonLogger,
+    RankZeroLoggingWrapper,
+    initialize_wandb,
+)
 import wandb
 from modulus.launch.utils import load_checkpoint, save_checkpoint
-from datasets.dataset import (
-    init_train_valid_datasets_from_config,
-    register_dataset
-)
+from datasets.dataset import init_train_valid_datasets_from_config, register_dataset
 from helpers.train_helpers import (
     set_patch_shape,
     set_seed,
@@ -49,7 +49,7 @@ def checkpoint_list(path, suffix=".mdlus"):
         if file.endswith(suffix):
             # Split the filename and extract the index
             try:
-                index = int(file.split('.')[-2])
+                index = int(file.split(".")[-2])
                 checkpoints.append((index, file))
             except ValueError:
                 continue
@@ -57,6 +57,7 @@ def checkpoint_list(path, suffix=".mdlus"):
     # Sort by index and return filenames
     checkpoints.sort(key=lambda x: x[0])
     return [file for _, file in checkpoints]
+
 
 # Train the CorrDiff model using the configurations in "conf/config_training.yaml"
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_training")
@@ -155,14 +156,13 @@ def main(cfg: DictConfig) -> None:
         patch_shape_x = None
         patch_shape_y = None
     patch_shape = (patch_shape_y, patch_shape_x)
-    use_patching, img_shape, patch_shape = set_patch_shape(
-        img_shape, patch_shape)
+    use_patching, img_shape, patch_shape = set_patch_shape(img_shape, patch_shape)
     if use_patching:
         # Utility to perform patches extraction and batching
         patching = RandomPatching(
             img_shape=img_shape,
             patch_shape=patch_shape,
-            patch_num=getattr(cfg.training.hp, "patch_num", 1)
+            patch_num=getattr(cfg.training.hp, "patch_num", 1),
         )
         logger0.info("Patch-based training enabled")
     else:
@@ -346,7 +346,7 @@ def main(cfg: DictConfig) -> None:
                 "img_lr": img_lr,
                 "labels": labels,
                 "augment_pipe": None,
-                "patching": patching
+                "patching": patching,
             }
             if lead_time_label:
                 lead_time_label = lead_time_label[0].to(dist.device).contiguous()
@@ -376,10 +376,12 @@ def main(cfg: DictConfig) -> None:
             writer.add_scalar(
                 "training_loss_running_mean", average_loss_running_mean, cur_nimg
             )
-            wandb.log({
-                "training_loss": average_loss,
-                "training_loss_running_mean": average_loss_running_mean,
-            })
+            wandb.log(
+                {
+                    "training_loss": average_loss,
+                    "training_loss_running_mean": average_loss_running_mean,
+                }
+            )
 
         ptt = is_time_for_periodic_task(
             cur_nimg,
@@ -463,9 +465,11 @@ def main(cfg: DictConfig) -> None:
                         writer.add_scalar(
                             "validation_loss", average_valid_loss, cur_nimg
                         )
-                        wandb.log({
-                            "validation_loss": average_valid_loss,
-                        })
+                        wandb.log(
+                            {
+                                "validation_loss": average_valid_loss,
+                            }
+                        )
 
         if is_time_for_periodic_task(
             cur_nimg,

@@ -108,14 +108,13 @@ def main(cfg: DictConfig) -> None:
     else:
         patch_shape_x, patch_shape_y = None, None
     patch_shape = (patch_shape_y, patch_shape_x)
-    use_patching, img_shape, patch_shape = set_patch_shape(
-        img_shape, patch_shape)
+    use_patching, img_shape, patch_shape = set_patch_shape(img_shape, patch_shape)
     if use_patching:
         patching = DeterministicPatching(
             img_shape=img_shape,
             patch_shape=patch_shape,
             boundary_pix=cfg.generation.boundary_pix,
-            overlap_pix=cfg.generation.overlap_pix
+            overlap_pix=cfg.generation.overlap_pix,
         )
         logger0.info("Patch-based training enabled")
     else:
@@ -175,10 +174,7 @@ def main(cfg: DictConfig) -> None:
             solver=cfg.sampler.solver,
         )
     elif cfg.sampler.type == "stochastic":
-        sampler_fn = partial(
-            stochastic_sampler,
-            patching=patching
-        )
+        sampler_fn = partial(stochastic_sampler, patching=patching)
     else:
         raise ValueError(f"Unknown sampling method {cfg.sampling.type}")
 

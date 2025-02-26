@@ -16,10 +16,10 @@
 
 
 import math
-from typing import Optional, Tuple
 import random
-from abc import ABC, abstractmethod
 import warnings
+from abc import ABC, abstractmethod
+from typing import Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -49,9 +49,7 @@ class BasePatching(ABC):
     """
 
     def __init__(
-        self,
-        img_shape: Tuple[int, int],
-        patch_shape: Tuple[int, int]
+        self, img_shape: Tuple[int, int], patch_shape: Tuple[int, int]
     ) -> None:
         # Make sure patches fit within the image
         if any(p > i for p, i in zip(self.patch_shape, self.img_shape)):
@@ -61,9 +59,7 @@ class BasePatching(ABC):
                 f"Patches will be cropped to fit within the image."
             )
         self.img_shape = img_shape
-        self.patch_shape = (
-            min(p, i) for p, i in zip(self.patch_shape, self.img_shape)
-        )
+        self.patch_shape = (min(p, i) for p, i in zip(self.patch_shape, self.img_shape))
 
     @abstractmethod
     def apply(self, input: Tensor, **kwargs) -> Tensor:
@@ -107,9 +103,7 @@ class BasePatching(ABC):
         NotImplementedError
             If the subclass does not implement this method.
         """
-        raise NotImplementedError(
-            "'fuse' method must be implemented in subclasses."
-        )
+        raise NotImplementedError("'fuse' method must be implemented in subclasses.")
 
     def global_index(self, batch_size: int) -> Tensor:
         """
@@ -176,10 +170,7 @@ class RandomPatching(BasePatching):
     """
 
     def __init__(
-        self,
-        img_shape: Tuple[int, int],
-        patch_shape: Tuple[int, int],
-        patch_num: int
+        self, img_shape: Tuple[int, int], patch_shape: Tuple[int, int], patch_num: int
     ) -> None:
         """
         Initialize the RandomPatching object with the provided image shape,
@@ -217,8 +208,9 @@ class RandomPatching(BasePatching):
         self.patch_indices = [
             (
                 random.randint(0, self.img_shape_y - self.patch_shape_y),
-                random.randint(0, self.img_shape_x - self.patch_shape_x)
-            ) for _ in range(self.patch_num)
+                random.randint(0, self.img_shape_x - self.patch_shape_x),
+            )
+            for _ in range(self.patch_num)
         ]
         return
 
@@ -258,38 +250,38 @@ class RandomPatching(BasePatching):
         B = input.shape[0]
         out = torch.zeros(
             B * self.patch_num,
-            (input.shape[1] + (additional_input.shape[1]
-                               if additional_input is not None else 0)),
+            (
+                input.shape[1]
+                + (additional_input.shape[1] if additional_input is not None else 0)
+            ),
             self.patch_shape[0],
             self.patch_shape[1],
-            device=input.device
+            device=input.device,
         )
         if additional_input is not None:
             add_input_interp = torch.nn.functional.interpolate(
-                input=additional_input,
-                size=self.patch_shape,
-                mode="bilinear"
+                input=additional_input, size=self.patch_shape, mode="bilinear"
             )
         for i, (py, px) in enumerate(self.patch_indices):
             if additional_input is not None:
-                out[B * i: B * (i + 1),] = torch.cat(
+                out[B * i : B * (i + 1),] = torch.cat(
                     (
                         input[
                             :,
                             :,
-                            py: py + self.patch_shape[0],
-                            px: px + self.patch_shape[1],
+                            py : py + self.patch_shape[0],
+                            px : px + self.patch_shape[1],
                         ],
                         add_input_interp,
                     ),
                     dim=1,
                 )
             else:
-                out[B * i: B * (i + 1),] = input[
+                out[B * i : B * (i + 1),] = input[
                     :,
                     :,
-                    py: py + self.patch_shape[0],
-                    px: px + self.patch_shape[1],
+                    py : py + self.patch_shape[0],
+                    px : px + self.patch_shape[1],
                 ]
         return out
 
@@ -333,15 +325,17 @@ class DeterministicPatching(BasePatching):
         img_shape: Tuple[int, int],
         patch_shape: Tuple[int, int],
         overlap_pix: int = 0,
-        boundary_pix: int = 0
+        boundary_pix: int = 0,
     ):
         super().__init__(img_shape, patch_shape)
         self.overlap_pix = overlap_pix
         self.boundary_pix = boundary_pix
         patch_num_x = math.ceil(
-            img_shape[1] / (patch_shape[1] - overlap_pix - boundary_pix))
+            img_shape[1] / (patch_shape[1] - overlap_pix - boundary_pix)
+        )
         patch_num_y = math.ceil(
-            img_shape[0] / (patch_shape[0] - overlap_pix - boundary_pix))
+            img_shape[0] / (patch_shape[0] - overlap_pix - boundary_pix)
+        )
         self.patch_num = patch_num_x * patch_num_y
 
     def apply(
@@ -380,9 +374,7 @@ class DeterministicPatching(BasePatching):
         """
         if additional_input is not None:
             add_input_interp = torch.nn.functional.interpolate(
-                input=additional_input,
-                size=self.patch_shape,
-                mode="bilinear"
+                input=additional_input, size=self.patch_shape, mode="bilinear"
             )
         else:
             add_input_interp = None
@@ -392,15 +384,11 @@ class DeterministicPatching(BasePatching):
             patch_shape_x=self.patch_shape[1],
             overlap_pix=self.overlap_pix,
             boundary_pix=self.boundary_pix,
-            input_interp=add_input_interp
+            input_interp=add_input_interp,
         )
         return out
 
-    def fuse(
-        self,
-        input: Tensor,
-        batch_size: int
-    ) -> Tensor:
+    def fuse(self, input: Tensor, batch_size: int) -> Tensor:
         """
         Fuse patches back into a complete image.
 
@@ -433,7 +421,7 @@ class DeterministicPatching(BasePatching):
             patch_shape_x=self.patch_shape[1],
             batch_size=batch_size,
             overlap_pix=self.overlap_pix,
-            boundary_pix=self.boundary_pix
+            boundary_pix=self.boundary_pix,
         )
         return out
 
@@ -494,10 +482,8 @@ def image_batching(
             f"1 + overlap_pix ({overlap_pix}) + boundary_pix ({boundary_pix})"
         )
 
-    patch_num_x = math.ceil(
-        img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
-    patch_num_y = math.ceil(
-        img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
+    patch_num_x = math.ceil(img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
+    patch_num_y = math.ceil(img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
     padded_shape_x = (
         (patch_shape_x - overlap_pix - boundary_pix) * (patch_num_x - 1)
         + patch_shape_x
@@ -529,10 +515,7 @@ def image_batching(
         ).to(input.device)
     else:
         output = torch.zeros(
-            patch_num * batch_size,
-            input.shape[1],
-            patch_shape_y,
-            patch_shape_x
+            patch_num * batch_size, input.shape[1], patch_shape_y, patch_shape_x
         ).to(input.device)
     for x_index in range(patch_num_x):
         for y_index in range(patch_num_y):
@@ -541,15 +524,15 @@ def image_batching(
             if input_interp is not None:
                 output[
                     (x_index * patch_num_y + y_index)
-                    * batch_size: (x_index * patch_num_y + y_index + 1)
+                    * batch_size : (x_index * patch_num_y + y_index + 1)
                     * batch_size,
                 ] = torch.cat(
                     (
                         input_padded[
                             :,
                             :,
-                            y_start: y_start + patch_shape_y,
-                            x_start: x_start + patch_shape_x,
+                            y_start : y_start + patch_shape_y,
+                            x_start : x_start + patch_shape_x,
                         ],
                         input_interp,
                     ),
@@ -558,13 +541,13 @@ def image_batching(
             else:
                 output[
                     (x_index * patch_num_y + y_index)
-                    * batch_size: (x_index * patch_num_y + y_index + 1)
+                    * batch_size : (x_index * patch_num_y + y_index + 1)
                     * batch_size,
                 ] = input_padded[
                     :,
                     :,
-                    y_start:y_start + patch_shape_y,
-                    x_start:x_start + patch_shape_x,
+                    y_start : y_start + patch_shape_y,
+                    x_start : x_start + patch_shape_x,
                 ]
     return output
 
@@ -611,10 +594,8 @@ def image_fuse(
     # Infer sizes from input image shape
     patch_shape_y, patch_shape_x = input.shape[2], input.shape[3]
 
-    patch_num_x = math.ceil(
-        img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
-    patch_num_y = math.ceil(
-        img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
+    patch_num_x = math.ceil(img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
+    patch_num_y = math.ceil(img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
     padded_shape_x = (
         (patch_shape_x - overlap_pix - boundary_pix) * (patch_num_x - 1)
         + patch_shape_x
@@ -630,14 +611,9 @@ def image_fuse(
     residual_x = patch_shape_x - pad_x_right  # residual pixels in the last patch
     residual_y = patch_shape_y - pad_y_right  # residual pixels in the last patch
     output = torch.zeros(
-        batch_size,
-        input.shape[1],
-        img_shape_y,
-        img_shape_x,
-        device=input.device
+        batch_size, input.shape[1], img_shape_y, img_shape_x, device=input.device
     )
-    one_map = torch.ones(
-        1, 1, input.shape[2], input.shape[3], device=input.device)
+    one_map = torch.ones(1, 1, input.shape[2], input.shape[3], device=input.device)
     count_map = torch.zeros(
         1, 1, img_shape_y, img_shape_x, device=input.device
     )  # to count the overlapping times
@@ -647,89 +623,80 @@ def image_fuse(
             y_start = y_index * (patch_shape_y - overlap_pix - boundary_pix)
             if (x_index == patch_num_x - 1) and (y_index != patch_num_y - 1):
                 output[
-                    :,
-                    :,
-                    y_start: y_start + patch_shape_y - 2 * boundary_pix,
-                    x_start:
+                    :, :, y_start : y_start + patch_shape_y - 2 * boundary_pix, x_start:
                 ] += input[
                     (x_index * patch_num_y + y_index)
-                    * batch_size: (x_index * patch_num_y + y_index + 1)
+                    * batch_size : (x_index * patch_num_y + y_index + 1)
                     * batch_size,
                     :,
-                    boundary_pix: patch_shape_y - boundary_pix,
-                    boundary_pix: residual_x + boundary_pix,
+                    boundary_pix : patch_shape_y - boundary_pix,
+                    boundary_pix : residual_x + boundary_pix,
                 ]
                 count_map[
-                    :,
-                    :,
-                    y_start: y_start + patch_shape_y - 2 * boundary_pix,
-                    x_start:
+                    :, :, y_start : y_start + patch_shape_y - 2 * boundary_pix, x_start:
                 ] += one_map[
                     :,
                     :,
-                    boundary_pix: patch_shape_y - boundary_pix,
-                    boundary_pix: residual_x + boundary_pix,
+                    boundary_pix : patch_shape_y - boundary_pix,
+                    boundary_pix : residual_x + boundary_pix,
                 ]
             elif (y_index == patch_num_y - 1) and ((x_index != patch_num_x - 1)):
                 output[
-                    :,
-                    :,
-                    y_start:,
-                    x_start: x_start + patch_shape_x - 2 * boundary_pix
+                    :, :, y_start:, x_start : x_start + patch_shape_x - 2 * boundary_pix
                 ] += input[
                     (x_index * patch_num_y + y_index)
-                    * batch_size: (x_index * patch_num_y + y_index + 1)
+                    * batch_size : (x_index * patch_num_y + y_index + 1)
                     * batch_size,
                     :,
-                    boundary_pix: residual_y + boundary_pix,
-                    boundary_pix: patch_shape_x - boundary_pix,
+                    boundary_pix : residual_y + boundary_pix,
+                    boundary_pix : patch_shape_x - boundary_pix,
                 ]
                 count_map[
-                    :, :, y_start:, x_start: x_start + patch_shape_x - 2 * boundary_pix
+                    :, :, y_start:, x_start : x_start + patch_shape_x - 2 * boundary_pix
                 ] += one_map[
                     :,
                     :,
-                    boundary_pix: residual_y + boundary_pix,
-                    boundary_pix: patch_shape_x - boundary_pix,
+                    boundary_pix : residual_y + boundary_pix,
+                    boundary_pix : patch_shape_x - boundary_pix,
                 ]
             elif x_index == patch_num_x - 1 and y_index == patch_num_y - 1:
                 output[:, :, y_start:, x_start:] += input[
                     (x_index * patch_num_y + y_index)
-                    * batch_size: (x_index * patch_num_y + y_index + 1)
+                    * batch_size : (x_index * patch_num_y + y_index + 1)
                     * batch_size,
                     :,
-                    boundary_pix: residual_y + boundary_pix,
-                    boundary_pix: residual_x + boundary_pix,
+                    boundary_pix : residual_y + boundary_pix,
+                    boundary_pix : residual_x + boundary_pix,
                 ]
                 count_map[:, :, y_start:, x_start:] += one_map[
                     :,
                     :,
-                    boundary_pix: residual_y + boundary_pix,
-                    boundary_pix: residual_x + boundary_pix,
+                    boundary_pix : residual_y + boundary_pix,
+                    boundary_pix : residual_x + boundary_pix,
                 ]
             else:
                 output[
                     :,
                     :,
-                    y_start: y_start + patch_shape_y - 2 * boundary_pix,
-                    x_start: x_start + patch_shape_x - 2 * boundary_pix,
+                    y_start : y_start + patch_shape_y - 2 * boundary_pix,
+                    x_start : x_start + patch_shape_x - 2 * boundary_pix,
                 ] += input[
                     (x_index * patch_num_y + y_index)
-                    * batch_size: (x_index * patch_num_y + y_index + 1)
+                    * batch_size : (x_index * patch_num_y + y_index + 1)
                     * batch_size,
                     :,
-                    boundary_pix: patch_shape_y - boundary_pix,
-                    boundary_pix: patch_shape_x - boundary_pix,
+                    boundary_pix : patch_shape_y - boundary_pix,
+                    boundary_pix : patch_shape_x - boundary_pix,
                 ]
                 count_map[
                     :,
                     :,
-                    y_start: y_start + patch_shape_y - 2 * boundary_pix,
-                    x_start: x_start + patch_shape_x - 2 * boundary_pix,
+                    y_start : y_start + patch_shape_y - 2 * boundary_pix,
+                    x_start : x_start + patch_shape_x - 2 * boundary_pix,
                 ] += one_map[
                     :,
                     :,
-                    boundary_pix: patch_shape_y - boundary_pix,
-                    boundary_pix: patch_shape_x - boundary_pix,
+                    boundary_pix : patch_shape_y - boundary_pix,
+                    boundary_pix : patch_shape_x - boundary_pix,
                 ]
     return output / count_map

@@ -27,8 +27,9 @@ def test_image_fuse_basic():
         overlap_pix = 0
         boundary_pix = 0
 
-        input_tensor = torch.arange(1, 17).view(
-            1, 1, img_shape_y, img_shape_x).cuda().float()
+        input_tensor = (
+            torch.arange(1, 17).view(1, 1, img_shape_y, img_shape_x).cuda().float()
+        )
         fused_image = image_fuse(
             input_tensor,
             img_shape_y,
@@ -161,12 +162,13 @@ def test_image_batching_with_input_interp():
     boundary_pix = 0
 
     for img_shape_y, img_shape_x in ((4, 4), (16, 8)):
-        batch_size = (img_shape_y // patch_shape_y) * \
-            (img_shape_x // patch_shape_x)
-        input_tensor = torch.arange(1, 17).view(
-            1, 1, img_shape_y, img_shape_x).cuda().float()
-        input_interp = torch.ones(
-            1, 1, img_shape_y, img_shape_x).cuda().float()  # All ones for easy validation
+        batch_size = (img_shape_y // patch_shape_y) * (img_shape_x // patch_shape_x)
+        input_tensor = (
+            torch.arange(1, 17).view(1, 1, img_shape_y, img_shape_x).cuda().float()
+        )
+        input_interp = (
+            torch.ones(1, 1, img_shape_y, img_shape_x).cuda().float()
+        )  # All ones for easy validation
         batched_images = image_batching(
             input_tensor,
             patch_shape_y,
@@ -175,8 +177,7 @@ def test_image_batching_with_input_interp():
             boundary_pix,
             input_interp=input_interp,
         )
-        assert batched_images.shape == (
-            batch_size, 2, patch_shape_x, patch_shape_y)
+        assert batched_images.shape == (batch_size, 2, patch_shape_x, patch_shape_y)
         expected_output = torch.cat((input_tensor, input_interp), dim=1)
         assert torch.allclose(
             batched_images, expected_output, atol=1e-5

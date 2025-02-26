@@ -114,9 +114,7 @@ def test_unet_checkpoint(device):
 
     input_image = torch.ones([1, inc, res, res]).to(device)
     lr_image = torch.randn([1, outc, res, res]).to(device)
-    assert common.validate_checkpoint(
-        model_1, model_2, (*[input_image, lr_image],)
-    )
+    assert common.validate_checkpoint(model_1, model_2, (*[input_image, lr_image],))
 
     # Construct StormCastUNet models
     res, inc, outc = 64, 2, 3

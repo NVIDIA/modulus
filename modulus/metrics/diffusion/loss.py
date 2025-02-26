@@ -18,14 +18,14 @@
 """Loss functions used in the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
-import random
-from typing import Callable, Optional, Union, Tuple
+from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 import torch
 from torch import Tensor
 
 from modulus.utils.patching import RandomPatching
+
 
 class VPLoss:
     """
@@ -341,7 +341,7 @@ class EDMLossSR:
             augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
         )
         y = y_tot[:, : img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1]:, :, :]
+        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
         n = torch.randn_like(y) * sigma
         D_yn = net(y + n, y_lr, sigma, labels, augment_labels=augment_labels)
@@ -367,9 +367,7 @@ class RegressionLoss:
     arXiv preprint arXiv:2309.15214.
     """
 
-    def __init__(
-        self, sigma_data: float = 0.5
-    ):
+    def __init__(self, sigma_data: float = 0.5):
         self.sigma_data = sigma_data
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
@@ -412,18 +410,14 @@ class RegressionLoss:
 
         img_tot = torch.cat((img_clean, img_lr), dim=1)
         y_tot, augment_labels = (
-            augment_pipe(img_tot)
-            if augment_pipe is not None else (img_tot, None)
+            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
         )
-        y = y_tot[:, :img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1]:, :, :]
+        y = y_tot[:, : img_clean.shape[1], :, :]
+        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
         zero_input = torch.zeros_like(y, device=img_clean.device)
         D_yn = net(
-            x=zero_input,
-            img_lr=y_lr,
-            force_fp32=False,
-            augment_labels=augment_labels
+            x=zero_input, img_lr=y_lr, force_fp32=False, augment_labels=augment_labels
         )
         loss = weight * ((D_yn - y) ** 2)
 
@@ -507,9 +501,7 @@ class ResidualLoss:
         patching: Optional[RandomPatching] = None,
         labels: Optional[Tensor] = None,
         lead_time_label: Optional[Tensor] = None,
-        augment_pipe: Optional[
-            Callable[[Tensor], Tuple[Tensor, Tensor]]
-        ] = None,
+        augment_pipe: Optional[Callable[[Tensor], Tuple[Tensor, Tensor]]] = None,
     ):
         """
         Calculate and return the loss for denoising score matching.
@@ -554,33 +546,29 @@ class ResidualLoss:
 
         # Safety check: enforce patching object
         if patching and not isinstance(patching, RandomPatching):
-            raise ValueError(
-                "patching must be a 'RandomPatching' object."
-            )
+            raise ValueError("patching must be a 'RandomPatching' object.")
         # Safety check: enforce shapes
-        if (img_clean.shape[0] != img_lr.shape[0] or img_clean.shape[2:] != img_lr.shape[2:]):
+        if (
+            img_clean.shape[0] != img_lr.shape[0]
+            or img_clean.shape[2:] != img_lr.shape[2:]
+        ):
             raise ValueError(
                 f"Shape mismatch between img_clean {img_clean.shape} and "
                 f"img_lr {img_lr.shape}. "
                 f"Batch size, height and width must match."
             )
 
-        rnd_normal = torch.randn(
-            [img_clean.shape[0], 1, 1, 1],
-            device=img_clean.device
-        )
+        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-        weight = (sigma**2 + self.sigma_data**2) / \
-            (sigma * self.sigma_data) ** 2
+        weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
 
         # augment for conditional generation
         img_tot = torch.cat((img_clean, img_lr), dim=1)
         y_tot, augment_labels = (
-            augment_pipe(img_tot)
-            if augment_pipe is not None else (img_tot, None)
+            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
         )
-        y = y_tot[:, :img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1]:, :, :]
+        y = y_tot[:, : img_clean.shape[1], :, :]
+        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
         y_lr_res = y_lr
         batch_size = y.shape[0]
 
@@ -624,13 +612,9 @@ class ResidualLoss:
             y_lr = y_lr_patched
 
         # Noise
-        rnd_normal = torch.randn(
-            [y.shape[0], 1, 1, 1], device=img_clean.device
-        )
+        rnd_normal = torch.randn([y.shape[0], 1, 1, 1], device=img_clean.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-        weight = (sigma**2 + self.sigma_data**2) / (
-            sigma * self.sigma_data
-        ) ** 2
+        weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
 
         # Input + noise
         latent = y + torch.randn_like(y) * sigma
@@ -892,11 +876,10 @@ class RegressionLossCE:
 
         img_tot = torch.cat((img_clean, img_lr), dim=1)
         y_tot, augment_labels = (
-            augment_pipe(img_tot)
-            if augment_pipe is not None else (img_tot, None)
+            augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
         )
-        y = y_tot[:, :img_clean.shape[1], :, :]
-        y_lr = y_tot[:, img_clean.shape[1]:, :, :]
+        y = y_tot[:, : img_clean.shape[1], :, :]
+        y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
         input = torch.zeros_like(y, device=img_clean.device)
 
@@ -916,14 +899,12 @@ class RegressionLossCE:
                 lead_time_label=lead_time_label,
                 augment_labels=augment_labels,
             )
-        loss1 = weight * (
-            D_yn[:, scalar_channels] - y[:, scalar_channels]
-        ) ** 2
+        loss1 = weight * (D_yn[:, scalar_channels] - y[:, scalar_channels]) ** 2
         loss2 = (
             weight
-            * self.entropy(
-                D_yn[:, self.prob_channels], y[:, self.prob_channels]
-            )[:, None]
+            * self.entropy(D_yn[:, self.prob_channels], y[:, self.prob_channels])[
+                :, None
+            ]
         )
         loss = torch.cat((loss1, loss2), dim=1)
         return loss

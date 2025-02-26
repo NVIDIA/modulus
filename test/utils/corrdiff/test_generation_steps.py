@@ -19,7 +19,6 @@ from typing import Optional
 
 import pytest
 import torch
-
 from pytest_utils import import_or_fail
 
 
@@ -140,8 +139,8 @@ def test_diffusion_step(device, pytestconfig):
 @import_or_fail("cftime")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_diffusion_step_rectangle(device):
-    from modulus.utils.generative import stochastic_sampler
     from modulus.utils.corrdiff import diffusion_step
+    from modulus.utils.generative import stochastic_sampler
     from modulus.utils.patching import DeterministicPatching
 
     img_shape_y, img_shape_x = 32, 16
@@ -150,9 +149,11 @@ def test_diffusion_step_rectangle(device):
     mock_precond = MockNet()
 
     # Define the input parameters
-    img_lr = torch.randn(
-        1, 4, img_shape_y, img_shape_x
-    ).expand(seed_batch_size, -1, -1, -1).to(device)
+    img_lr = (
+        torch.randn(1, 4, img_shape_y, img_shape_x)
+        .expand(seed_batch_size, -1, -1, -1)
+        .to(device)
+    )
 
     # Stochastic sampler without patching
     sampler_fn = partial(
@@ -176,16 +177,21 @@ def test_diffusion_step_rectangle(device):
 
     # Assertions
     assert output.shape == (
-        seed_batch_size, 2, img_shape_y, img_shape_x
+        seed_batch_size,
+        2,
+        img_shape_y,
+        img_shape_x,
     ), "Output shape mismatch"
 
     # Test with mean_hr conditioning
 
     # Define the input parameters
     mean_hr = torch.randn(1, 2, img_shape_y, img_shape_x).to(device)
-    img_lr = torch.randn(
-        1, 4, img_shape_y, img_shape_x
-    ).expand(seed_batch_size, -1, -1, -1).to(device)
+    img_lr = (
+        torch.randn(1, 4, img_shape_y, img_shape_x)
+        .expand(seed_batch_size, -1, -1, -1)
+        .to(device)
+    )
 
     # Stochastic sampler without patching
     sampler_fn = partial(
@@ -209,31 +215,32 @@ def test_diffusion_step_rectangle(device):
 
     # Assertions
     assert output.shape == (
-        seed_batch_size, 2, img_shape_y, img_shape_x
+        seed_batch_size,
+        2,
+        img_shape_y,
+        img_shape_x,
     ), "Output shape mismatch"
 
     # Test with mean_hr conditioning and rectangular patching
 
     # Define the input parameters
     mean_hr = torch.randn(1, 2, img_shape_y, img_shape_x).to(device)
-    img_lr = torch.randn(
-        1, 4, img_shape_y, img_shape_x
-    ).expand(seed_batch_size, -1, -1, -1).to(device)
+    img_lr = (
+        torch.randn(1, 4, img_shape_y, img_shape_x)
+        .expand(seed_batch_size, -1, -1, -1)
+        .to(device)
+    )
 
     # Define patching utility
     patching = DeterministicPatching(
         img_shape=(img_shape_y, img_shape_x),
         patch_shape=(16, 8),
         overlap_pix=4,
-        boundary_pix=2
+        boundary_pix=2,
     )
 
     # Stochastic sampler with rectangular patching
-    sampler_fn = partial(
-        stochastic_sampler,
-        num_steps=2,
-        patching=patching
-    )
+    sampler_fn = partial(stochastic_sampler, num_steps=2, patching=patching)
 
     # Call the function
     output = diffusion_step(
@@ -251,5 +258,8 @@ def test_diffusion_step_rectangle(device):
 
     # Assertions
     assert output.shape == (
-        seed_batch_size, 2, img_shape_y, img_shape_x
+        seed_batch_size,
+        2,
+        img_shape_y,
+        img_shape_x,
     ), "Output shape mismatch"

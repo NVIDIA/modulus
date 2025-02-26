@@ -14,16 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import pytest
+import torch
 
 from modulus.metrics.diffusion import (
     EDMLoss,
     RegressionLossCE,
+    ResidualLoss,
     VELoss,
     VELoss_dfsr,
     VPLoss,
-    ResidualLoss,
 )
 from modulus.utils.patching import RandomPatching
 
@@ -201,9 +201,7 @@ def test_regressionlossce_initialization():
     loss_func = RegressionLossCE()
     assert loss_func.prob_channels == [4, 5, 6, 7, 8]
 
-    loss_func = RegressionLossCE(
-       prob_channels=[1, 2, 3, 4]
-    )
+    loss_func = RegressionLossCE(prob_channels=[1, 2, 3, 4])
     assert loss_func.prob_channels == [1, 2, 3, 4]
 
 
@@ -246,12 +244,10 @@ def test_call_method():
 def test_residualloss_initialization():
     # Mock regression network
     regression_net = torch.nn.Linear(1, 1)
-    
+
     # Test default parameters
     loss_func = ResidualLoss(
-        regression_net=regression_net,
-        img_shape_y=32,
-        img_shape_x=16
+        regression_net=regression_net, img_shape_y=32, img_shape_x=16
     )
     assert loss_func.P_mean == 0.0
     assert loss_func.P_std == 1.2
@@ -268,7 +264,7 @@ def test_residualloss_initialization():
         P_mean=1.0,
         P_std=2.0,
         sigma_data=0.3,
-        hr_mean_conditioning=True
+        hr_mean_conditioning=True,
     )
     assert loss_func.P_mean == 1.0
     assert loss_func.P_std == 2.0
@@ -290,9 +286,7 @@ def test_residualloss_call_method():
 
     regression_net = DummyRegNet()
     loss_func = ResidualLoss(
-        regression_net=regression_net,
-        img_shape_y=32,
-        img_shape_x=32
+        regression_net=regression_net, img_shape_y=32, img_shape_x=32
     )
 
     # Create test inputs
@@ -311,10 +305,7 @@ def test_residualloss_call_method():
         return imgs, None
 
     loss_value_with_augmentation = loss_func(
-        fake_residual_net,
-        img_clean,
-        img_lr,
-        augment_pipe=mock_augment_pipe
+        fake_residual_net, img_clean, img_lr, augment_pipe=mock_augment_pipe
     )
     assert isinstance(loss_value_with_augmentation, torch.Tensor)
     assert loss_value_with_augmentation.shape == (batch_size, channels, 32, 32)
@@ -323,15 +314,10 @@ def test_residualloss_call_method():
     patch_num = 4
     patch_shape = (16, 16)
     patching = RandomPatching(
-        img_shape=(32, 32),
-        patch_shape=patch_shape,
-        patch_num=patch_num
+        img_shape=(32, 32), patch_shape=patch_shape, patch_num=patch_num
     )
     loss_value_with_patching = loss_func(
-        fake_residual_net,
-        img_clean,
-        img_lr,
-        patching=patching
+        fake_residual_net, img_clean, img_lr, patching=patching
     )
     assert isinstance(loss_value_with_patching, torch.Tensor)
     # Shape should be (batch_size * patch_num, channels, patch_shape_y, patch_shape_x)
@@ -341,11 +327,9 @@ def test_residualloss_call_method():
     # Test error on invalid patching object
     with pytest.raises(ValueError):
         loss_func(
-            fake_residual_net,
-            img_clean,
-            img_lr,
-            patching="invalid patching object"
+            fake_residual_net, img_clean, img_lr, patching="invalid patching object"
         )
+
 
 # MixtureLoss tests
 

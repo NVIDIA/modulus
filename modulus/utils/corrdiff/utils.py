@@ -64,16 +64,9 @@ def regression_step(
     # Perform regression on a single batch element
     with torch.inference_mode():
         if lead_time_label is not None:
-            x = net(
-                x=x_hat[0:1],
-                img_lr=img_lr,
-                lead_time_label=lead_time_label
-            )
+            x = net(x=x_hat[0:1], img_lr=img_lr, lead_time_label=lead_time_label)
         else:
-            x = net(
-                x=x_hat[0:1],
-                img_lr=img_lr
-            )
+            x = net(x=x_hat[0:1], img_lr=img_lr)
 
     # If the batch size is greater than 1, repeat the prediction
     if x_hat.shape[0] > 1:
