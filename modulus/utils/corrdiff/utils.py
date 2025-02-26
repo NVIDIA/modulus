@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import datetime
+from typing import Optional
 
 import cftime
 import nvtx
@@ -32,7 +33,7 @@ def regression_step(
     net: torch.nn.Module,
     img_lr: torch.Tensor,
     latents_shape: torch.Size,
-    lead_time_label: torch.Tensor = None,
+    lead_time_label: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
     Given a low-res input, performs a regression step to produce ensemble mean.
@@ -41,9 +42,10 @@ def regression_step(
 
     Args:
         net (torch.nn.Module): U-Net model for regression.
-        img_lr (torch.Tensor): Low-resolution input.
+        img_lr (torch.Tensor): Low-resolution input to `net`. Must have a batch
+        dimension  of 1.
         latents_shape (torch.Size): Shape of the latent representation. Typically
-        (batch_size, out_channels, image_shape_x, image_shape_y).
+        (batch_size, out_channels, image_shape_y, image_shape_x).
 
 
     Returns:
@@ -51,14 +53,20 @@ def regression_step(
     """
     # Create a tensor of zeros with the given shape and move it to the appropriate device
     x_hat = torch.zeros(latents_shape, dtype=torch.float64, device=net.device)
-    t_hat = torch.tensor(1.0, dtype=torch.float64, device=net.device)
+
+    # Safety check: avoid silently ignoring batch elements in img_lr
+    if img_lr.shape[0] > 1:
+        raise ValueError(
+            f"Expected img_lr to have a batch size of 1, "
+            f"but found {img_lr.shape[0]}."
+        )
 
     # Perform regression on a single batch element
     with torch.inference_mode():
         if lead_time_label is not None:
-            x = net(x_hat[0:1], img_lr, t_hat, lead_time_label=lead_time_label)
+            x = net(x=x_hat[0:1], img_lr=img_lr, lead_time_label=lead_time_label)
         else:
-            x = net(x_hat[0:1], img_lr, t_hat)
+            x = net(x=x_hat[0:1], img_lr=img_lr)
 
     # If the batch size is greater than 1, repeat the prediction
     if x_hat.shape[0] > 1:
@@ -77,7 +85,7 @@ def diffusion_step(  # TODO generalize the module and add defaults
     img_lr: torch.Tensor,
     rank: int,
     device: torch.device,
-    hr_mean: torch.Tensor = None,
+    mean_hr: torch.Tensor = None,
     lead_time_label: torch.Tensor = None,
 ) -> torch.Tensor:
 
@@ -104,11 +112,10 @@ def diffusion_step(  # TODO generalize the module and add defaults
 
     # Handling of the high-res mean
     additional_args = {}
-    if hr_mean is not None:
-        additional_args["mean_hr"] = hr_mean
+    if mean_hr is not None:
+        additional_args["mean_hr"] = mean_hr
     if lead_time_label is not None:
         additional_args["lead_time_label"] = lead_time_label
-    additional_args["img_shape"] = img_shape
 
     # Loop over batches
     all_images = []

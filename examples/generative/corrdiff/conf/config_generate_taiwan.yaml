@@ -17,7 +17,7 @@
 hydra:
     job:
           chdir: true
-          name: generate_gefs_hrrr
+          name: generate_taiwan
     run:
           dir: ./outputs/${hydra:job.name}
     searchpath:
@@ -26,7 +26,7 @@ hydra:
 # Base parameters for dataset, model, and generation
 defaults:
 
-    - dataset: gefs_hrrr
+    - dataset: cwb
     # The dataset type for training.
     # Accepted values:
     #   `gefs_hrrr`: full GEFS-HRRR dataset for continental US.
@@ -34,7 +34,7 @@ defaults:
     #   `cwb`: full CWB dataset for Taiwan.
     #   `custom`: user-defined dataset. Parameters need to be specified below.
 
-    - generation: patched
+    - generation: non_patched
     # The base generation parameters.
     # Accepted values:
     #     `patched`: base parameters for a patch-based model
@@ -45,36 +45,28 @@ defaults:
 # Modify or add below parameters that should be passed as argument to the
 # user-defined dataset class.
 dataset:
-    data_path: /data
-    # Path to .nc data file
-    stats_path: /data/stats.json
-    # Path to json stats file
+    data_path: /code/2023-01-24-cwb-4years.zarr
+    train: False
+    all_times: True
 
 
 # Generation parameters to specialize
 generation:
-    num_ensembles: 1
+    num_ensembles: 64
     # int, number of ensembles to generate per input
     seed_batch_size: 1
     # int, size of the batched inference
-    patch_shape_x: 448
-    patch_shape_y: 448
-    # int, patch size. Only used for `generation: patched`. For custom dataset,
-    # this should be determined based on an autocorrelation plot.
+    hr_mean_conditioning: false
+    # Whether to use hr_mean_conditioning
     times:
-        - "2024011212f00"
-        - "2024011212f03"
-        - "2024011212f06"
-        - "2024011212f09"
-        - "2024011212f12"
-        - "2024011212f15"
-        - "2024011212f18"
-        - "2024011212f21"
-        - "2024011212f24"
+        - 2021-02-02T00:00:00
+        - 2021-03-02T00:00:00
+        - 2021-04-02T00:00:00
+        # hurricane
+        - 2021-09-12T00:00:00
+        - 2021-09-12T12:00:00
     # List[str], time stamps in ISO 8601 format. Replace and list desired target
     # time stamps.
-    has_lead_time: True
-
     io:
         res_ckpt_filename: <diffusion_checkpoint.mdlus> 
         # Path to checkpoint file for the diffusion model  
