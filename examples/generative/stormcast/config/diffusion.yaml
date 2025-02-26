@@ -43,3 +43,4 @@ model:
 
 training:
   loss: 'edm'
+  total_train_steps: 450000 # use more training samples for diffusion training; follows StormCast paper
