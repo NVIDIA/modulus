@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: HrrrEra5Dataset # Dataset class name, in any module in `datasets` folder
+name: hrrr_era5.HrrrEra5Dataset # Dataset class module and name, in any module in `datasets` folder
 
 # Main dataset
 location: 'data' # Path to the dataset

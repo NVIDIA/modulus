@@ -21,7 +21,7 @@ from .dataset import StormCastDataset
 
 
 # Find StormCastDataset implementations found in files in the datasets directory
-# and list them by name in the dataset_classes dict
+# and list them by module and name in the dataset_classes dict
 dataset_modules = pkgutil.iter_modules(["datasets"])
 dataset_modules = [mod.name for mod in dataset_modules if mod.name != "dataset"]
 dataset_classes = {}
@@ -33,4 +33,4 @@ for mod_name in dataset_modules:
             and isinstance(member, type)
             and issubclass(member, StormCastDataset)
         ):
-            dataset_classes[name] = member
+            dataset_classes[f"{mod_name}.{name}"] = member
