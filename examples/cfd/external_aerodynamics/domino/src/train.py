@@ -825,6 +825,9 @@ def main(cfg: DictConfig) -> None:
         vol_factors = None
         surf_factors = None
 
+    print("Vol factors:", vol_factors)
+    print("Surf factors:", surf_factors)
+
     train_dataset = DoMINODataPipe(
         input_path,
         phase="train",

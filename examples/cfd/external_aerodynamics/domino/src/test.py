@@ -131,11 +131,6 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                 geo_centers_surf, s_grid, sdf_surf_grid
             )
 
-        # geo_encoding = 0.5 * encoding_g_surf
-        # # Average the encodings
-        # if output_features_vol is not None:
-        #     geo_encoding += 0.5 * encoding_g_vol
-
         if output_features_vol is not None:
             # First calculate volume predictions if required
             volume_mesh_centers = data_dict["volume_mesh_centers"]
@@ -208,11 +203,11 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                 * stream_velocity[0, 0].cpu().numpy() ** 2.0
                 * air_density[0, 0].cpu().numpy()
             )
-            # prediction_vol[:, :, 4] = (
-            #     prediction_vol[:, :, 4]
-            #     * stream_velocity[0, 0].cpu().numpy()
-            #     * length_scale[0].cpu().numpy()
-            # )
+            prediction_vol[:, :, 4] = (
+                prediction_vol[:, :, 4]
+                * stream_velocity[0, 0].cpu().numpy()
+                * length_scale[0].cpu().numpy()
+            )
         else:
             prediction_vol = None
 
@@ -237,9 +232,6 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
             prediction_surf = np.zeros_like(target_surf.cpu().numpy())
 
             start_time = time.time()
-
-            # surface_areas = torch.unsqueeze(surface_areas, -1)
-            # surface_neighbors_areas = torch.unsqueeze(surface_neighbors_areas, -1)
 
             for p in range(subdomain_points + 1):
                 start_idx = p * point_batch_size
@@ -362,6 +354,9 @@ def main(cfg: DictConfig):
         surf_factors = np.load(surf_save_path)
     else:
         surf_factors = None
+
+    print("Vol factors:", vol_factors)
+    print("Surf factors:", surf_factors)
 
     model = DoMINO(
         input_features=3,
@@ -750,7 +745,7 @@ def main(cfg: DictConfig):
             surfParam_vtk.SetName(f"{surface_variable_names[1]}Pred")
             celldata_all.GetCellData().AddArray(surfParam_vtk)
 
-            # write_to_vtp(celldata_all, vtp_pred_save_path)
+            write_to_vtp(celldata_all, vtp_pred_save_path)
 
         if prediction_vol is not None:
 
@@ -762,11 +757,11 @@ def main(cfg: DictConfig):
             volParam_vtk.SetName(f"{volume_variable_names[1]}Pred")
             polydata_vol.GetPointData().AddArray(volParam_vtk)
 
-            # volParam_vtk = numpy_support.numpy_to_vtk(prediction_vol[:, 4:5])
-            # volParam_vtk.SetName(f"{volume_variable_names[2]}Pred")
-            # polydata_vol.GetPointData().AddArray(volParam_vtk)
+            volParam_vtk = numpy_support.numpy_to_vtk(prediction_vol[:, 4:5])
+            volParam_vtk.SetName(f"{volume_variable_names[2]}Pred")
+            polydata_vol.GetPointData().AddArray(volParam_vtk)
 
-            # write_to_vtu(polydata_vol, vtu_pred_save_path)
+            write_to_vtu(polydata_vol, vtu_pred_save_path)
 
 
 if __name__ == "__main__":

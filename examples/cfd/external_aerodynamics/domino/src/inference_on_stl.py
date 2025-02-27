@@ -58,13 +58,16 @@ except ImportError:
 
 def combine_stls(stl_path, stl_files):
     meshes = []
+    combined_mesh = pv.PolyData()
     for file in stl_files:
-        if ".stl" in file:
+        if ".stl" in file and "single_solid" not in file:
             stl_file_path = os.path.join(stl_path, file)
             reader = pv.get_reader(stl_file_path)
             mesh_stl = reader.read()
-            meshes.append(mesh_stl)
-    combined_mesh = pv.merge(meshes)
+            combined_mesh = combined_mesh.merge(mesh_stl)
+            # meshes.append(mesh_stl)
+            break
+    # combined_mesh = pv.merge(meshes)
     return combined_mesh
 
 
@@ -307,6 +310,7 @@ class inferenceDataPipe:
         return grid
 
     def process_surface_mesh(self, bounding_box=None, bounding_box_surface=None):
+        # Use coarse mesh to calculate SDF
         surface_vertices = self.surface_vertices
         surface_indices = self.surface_indices
         surface_areas = self.surface_areas
@@ -362,11 +366,6 @@ class inferenceDataPipe:
         )
         surf_sdf_grid = torch.reshape(surf_sdf_grid, (nx, ny, nz))
 
-        # Sample surface_vertices
-        geometry_points = self.geom_points_sample
-        surface_vertices = shuffle_array_torch(
-            surface_vertices, geometry_points, device=self.device
-        )
         if self.normalize_coordinates:
             grid = 2.0 * (grid - c_min) / (c_max - c_min) - 1.0
             s_grid = 2.0 * (s_grid - surf_min) / (surf_max - surf_min) - 1.0
@@ -414,7 +413,7 @@ class inferenceDataPipe:
         nx, ny, nz = self.grid_resolution
 
         idx = np.arange(stl_centers.shape[0])
-        np.random.shuffle(idx)
+        # np.random.shuffle(idx)
         if num_points is not None:
             idx = idx[:num_points]
 
@@ -752,14 +751,9 @@ class dominoInference:
     def load_volume_scaling_factors(self):
         vol_factors = np.array(
             [
-                [2.1508515, 1.0027921, 1.0663894, 1.1288369, 0.05063211, 0.00381244],
+                [2.2642279,  2.2397292,  1.8689916,  0.7547227],
                 [
-                    -1.9028450e00,
-                    -1.0032533e00,
-                    -1.0505041e00,
-                    -1.4412953e00,
-                    1.5563720e-18,
-                    -2.7427445e-20,
+                    -1.2899836, -2.2787743, -1.866153 , -2.7116761
                 ],
             ],
             dtype=np.float32,
@@ -772,8 +766,8 @@ class dominoInference:
     def load_surface_scaling_factors(self):
         surf_factors = np.array(
             [
-                [0.98881036, 0.00550783, 0.00854675, 0.00452144],
-                [-2.4203062, -0.00740275, -0.00848471, -0.00448634],
+                [0.8215038 ,  0.01063187,  0.01514608,  0.01327803],
+                [-2.1505525 , -0.01865184, -0.01514422, -0.0121509],
             ],
             dtype=np.float32,
         )
@@ -784,6 +778,8 @@ class dominoInference:
     def read_stl(self):
         stl_files = get_filenames(self.stl_path)
         mesh_stl = combine_stls(self.stl_path, stl_files)
+        if self.cfg.eval.refine_stl:
+            mesh_stl = mesh_stl.subdivide(nsub=2, subfilter='linear')#.smooth(n_iter=20)
         stl_vertices = mesh_stl.points
         length_scale = np.amax(np.amax(stl_vertices, 0) - np.amin(stl_vertices, 0))
         stl_centers = mesh_stl.cell_centers().points
@@ -808,6 +804,7 @@ class dominoInference:
             np.int32(mesh_indices_flattened)
         ).to(self.device)
         self.length_scale = length_scale
+        self.mesh_stl = mesh_stl
 
     def read_stl_trimesh(
         self, stl_vertices, stl_faces, stl_centers, surface_normals, surface_areas
@@ -999,7 +996,7 @@ class dominoInference:
             inner_time = time.time()
             start_event.record()
             if num_sample_points == None:
-                point_batch_size = 1_256_000
+                point_batch_size = 512_000
                 num_points = surface_coordinates_all.shape[1]
                 subdomain_points = int(np.floor(num_points / point_batch_size))
                 surface_solutions = torch.zeros(1, num_points, self.num_surf_vars).to(
@@ -1024,7 +1021,7 @@ class dominoInference:
                     )
                     surface_solutions[:, start_idx:end_idx] = surface_solutions_batch
             else:
-                point_batch_size = 1_256_000
+                point_batch_size = 512_000
                 num_points = num_sample_points
                 subdomain_points = int(np.floor(num_points / point_batch_size))
                 surface_solutions = torch.zeros(1, num_points, self.num_surf_vars).to(
@@ -1099,42 +1096,44 @@ class dominoInference:
         j = 0
 
         # Compute volume
-        with autocast(enabled=True):
-            inner_time = time.time()
-            start_event.record()
-            (
-                volume_mesh_centers,
-                pos_normals_com,
-                pos_normals_closest,
-                sdf_nodes,
-                scaling_factors,
-            ) = self.ifp.sample_points_in_volume(
-                num_points_vol=num_sample_points,
-                max_min=self.bounding_box_min_max,
-                center_of_mass=self.center_of_mass,
-            )
-            end_event.record()
-            end_event.synchronize()
-            cur_time = start_event.elapsed_time(end_event) / 1000.0
-            print(f"sample_points_in_volume time (s): {cur_time:.4f}")
-            volume_coordinates_all = volume_mesh_centers
+        point_batch_size = 512_000
+        num_points = num_sample_points
+        subdomain_points = int(np.floor(num_points / point_batch_size))
+        volume_solutions = torch.zeros(1, num_points, self.num_vol_vars).to(self.device)
+        volume_coordinates = torch.zeros(1, num_points, 3).to(self.device)
 
-            start_event.record()
-            point_batch_size = 1_256_000
-            num_points = num_sample_points
-            subdomain_points = int(np.floor(num_points / point_batch_size))
-            volume_solutions = torch.zeros(1, num_points, self.num_vol_vars).to(
-                self.device
-            )
-            for p in range(subdomain_points + 1):
-                start_idx = p * point_batch_size
-                end_idx = (p + 1) * point_batch_size
+        for p in range(subdomain_points + 1):
+            start_idx = p * point_batch_size
+            end_idx = (p + 1) * point_batch_size
+            if end_idx > num_points:
+                point_batch_size = num_points - start_idx
+                end_idx = num_points
+
+            with autocast(enabled=True):
+                inner_time = time.time()
+                start_event.record()
+                volume_mesh_centers, pos_normals_com, pos_normals_closest, sdf_nodes, scaling_factors = (
+                    self.ifp.sample_points_in_volume(
+                        num_points_vol=point_batch_size,
+                        max_min=self.bounding_box_min_max,
+                        center_of_mass=self.center_of_mass,
+                    )
+                )
+                end_event.record()
+                end_event.synchronize()
+                cur_time = start_event.elapsed_time(end_event) / 1000.0
+                print(f"sample_points_in_volume time (s): {cur_time:.4f}")
+
+                volume_coordinates[:, start_idx:end_idx] = volume_mesh_centers
+
+                start_event.record()
+                
                 volume_solutions_batch = self.compute_solution_in_volume(
                     geo_encoding,
-                    volume_mesh_centers[:, start_idx:end_idx],
-                    sdf_nodes[:, start_idx:end_idx],
-                    pos_normals_closest[:, start_idx:end_idx],
-                    pos_normals_com[:, start_idx:end_idx],
+                    volume_mesh_centers,
+                    sdf_nodes,
+                    pos_normals_closest,
+                    pos_normals_com,
                     self.grid,
                     self.model,
                     use_sdf_basis=self.cfg.model.use_sdf_in_basis_func,
@@ -1142,17 +1141,24 @@ class dominoInference:
                     air_density=self.air_density,
                 )
                 volume_solutions[:, start_idx:end_idx] = volume_solutions_batch
-            end_event.record()
-            end_event.synchronize()
-            cur_time = start_event.elapsed_time(end_event) / 1000.0
-            print(f"compute_solution time (s): {cur_time:.4f}")
-            total_time += float(time.time() - inner_time)
-            volume_solutions_all = volume_solutions
-            print(
-                "Time taken for compute solution in volume for =%f, %f"
-                % (time.time() - inner_time, torch.cuda.utilization(self.device))
-            )
-        print("Total time measured = %f" % total_time)
+                end_event.record()
+                end_event.synchronize()
+                cur_time = start_event.elapsed_time(end_event) / 1000.0
+                print(f"compute_solution time (s): {cur_time:.4f}")
+                total_time += float(time.time() - inner_time)
+                # volume_solutions_all = volume_solutions
+                print(
+                    "Time taken for compute solution in volume for =%f"
+                    % (time.time() - inner_time)
+                )
+                # print("Points processed:", end_idx)
+            print("Total time measured = %f" % total_time)
+            print("Points processed:", end_idx)
+
+        cmax = scaling_factors[0]
+        cmin = scaling_factors[1]
+        volume_coordinates_all = volume_coordinates
+        volume_solutions_all = volume_solutions
 
         cmax = scaling_factors[0]
         cmin = scaling_factors[1]
@@ -1180,14 +1186,14 @@ class dominoInference:
             * self.stream_velocity**2.0
             * self.air_density
         )
-        self.out_dict["turbulent-kinetic-energy"] = (
-            volume_solutions_all[:, :, 4:5]
-            * self.stream_velocity**2.0
-            * self.air_density
-        )
-        self.out_dict["turbulent-viscosity"] = (
-            volume_solutions_all[:, :, 5:] * self.stream_velocity * self.length_scale
-        )
+        # self.out_dict["turbulent-kinetic-energy"] = (
+        #     volume_solutions_all[:, :, 4:5]
+        #     * self.stream_velocity**2.0
+        #     * self.air_density
+        # )
+        # self.out_dict["turbulent-viscosity"] = (
+        #     volume_solutions_all[:, :, 5:] * self.stream_velocity * self.length_scale
+        # )
         self.out_dict["bounding_box_dims"] = torch.vstack(self.bounding_box_min_max)
 
         if plot_solutions:
@@ -1209,14 +1215,14 @@ class dominoInference:
                 * self.stream_velocity**2.0
                 * self.air_density
             )
-            volume_solutions_all[:, :, 4:5] = (
-                volume_solutions_all[:, :, 4:5]
-                * self.stream_velocity**2.0
-                * self.air_density
-            )
-            volume_solutions_all[:, :, 5] = (
-                volume_solutions_all[:, :, 5] * self.stream_velocity * self.length_scale
-            )
+            # volume_solutions_all[:, :, 4:5] = (
+            #     volume_solutions_all[:, :, 4:5]
+            #     * self.stream_velocity**2.0
+            #     * self.air_density
+            # )
+            # volume_solutions_all[:, :, 5] = (
+            #     volume_solutions_all[:, :, 5] * self.stream_velocity * self.length_scale
+            # )
             volume_coordinates_all = volume_coordinates_all.cpu().numpy()
             volume_solutions_all = volume_solutions_all.cpu().numpy()
 
@@ -1261,22 +1267,22 @@ class dominoInference:
                 axes_titles=axes_titles,
                 plot_error=False,
             )
-            plot(
-                prediction_grid[:, int(ny / 4), :, 4],
-                prediction_grid[:, int(ny / 2), :, 4],
-                var="tke",
-                save_path=plot_save_path + f"tke-midplane_{self.stream_velocity}.png",
-                axes_titles=axes_titles,
-                plot_error=False,
-            )
-            plot(
-                prediction_grid[:, int(ny / 4), :, 5],
-                prediction_grid[:, int(ny / 2), :, 5],
-                var="nut",
-                save_path=plot_save_path + f"nut-midplane_{self.stream_velocity}.png",
-                axes_titles=axes_titles,
-                plot_error=False,
-            )
+            # plot(
+            #     prediction_grid[:, int(ny / 4), :, 4],
+            #     prediction_grid[:, int(ny / 2), :, 4],
+            #     var="tke",
+            #     save_path=plot_save_path + f"tke-midplane_{self.stream_velocity}.png",
+            #     axes_titles=axes_titles,
+            #     plot_error=False,
+            # )
+            # plot(
+            #     prediction_grid[:, int(ny / 4), :, 5],
+            #     prediction_grid[:, int(ny / 2), :, 5],
+            #     var="nut",
+            #     save_path=plot_save_path + f"nut-midplane_{self.stream_velocity}.png",
+            #     axes_titles=axes_titles,
+            #     plot_error=False,
+            # )
 
     def cold_start(self, cached_geom_path=None):
         print("Cold start")
@@ -1296,20 +1302,27 @@ class dominoInference:
 
         geo_centers_vol = 2.0 * (geo_centers - vol_min) / (vol_max - vol_min) - 1
         if self.dist.world_size == 1:
-            encoding_g_vol = model.geo_rep(geo_centers_vol, p_grid, sdf_grid)
+            encoding_g_vol = model.geo_rep_volume(geo_centers_vol, p_grid, sdf_grid)
         else:
-            encoding_g_vol = model.module.geo_rep(geo_centers_vol, p_grid, sdf_grid)
+            encoding_g_vol = model.module.geo_rep_volume(geo_centers_vol, p_grid, sdf_grid)
 
         geo_centers_surf = 2.0 * (geo_centers - surf_min) / (surf_max - surf_min) - 1
 
         if self.dist.world_size == 1:
-            encoding_g_surf = model.geo_rep(geo_centers_surf, s_grid, sdf_surf_grid)
+            encoding_g_surf = model.geo_rep_surface(geo_centers_surf, s_grid, sdf_surf_grid)
         else:
-            encoding_g_surf = model.module.geo_rep(
+            encoding_g_surf = model.module.geo_rep_surface(
                 geo_centers_surf, s_grid, sdf_surf_grid
             )
 
-        geo_encoding = 0.5 * encoding_g_surf + 0.5 * encoding_g_vol
+        if self.dist.world_size == 1:
+            encoding_g_surf1 = model.geo_rep_surface1(geo_centers_surf, s_grid, sdf_surf_grid)
+        else:
+            encoding_g_surf1 = model.module.geo_rep_surface1(
+                geo_centers_surf, s_grid, sdf_surf_grid
+            )
+
+        geo_encoding = 0.5 * encoding_g_surf1 + 0.5 * encoding_g_vol
         geo_encoding_surface = 0.5 * encoding_g_surf
         return geo_encoding, geo_encoding_surface
 
@@ -1331,15 +1344,17 @@ class dominoInference:
     ):
 
         if self.dist.world_size == 1:
-            geo_encoding_local = model.geo_encoding_local_surface(
-                geo_encoding, surface_mesh_centers, s_grid
+            geo_encoding_local = model.geo_encoding_local(
+                geo_encoding, surface_mesh_centers, s_grid, mode="surface"
             )
         else:
-            geo_encoding_local = model.module.geo_encoding_local_surface(
-                geo_encoding, surface_mesh_centers, s_grid
+            geo_encoding_local = model.module.geo_encoding_local(
+                geo_encoding, surface_mesh_centers, s_grid, mode="surface"
             )
 
         pos_encoding = pos_normals_com
+        surface_areas = torch.unsqueeze(surface_areas, -1)
+        surface_neighbors_areas = torch.unsqueeze(surface_neighbors_areas, -1)
 
         if self.dist.world_size == 1:
             pos_encoding = model.position_encoder(pos_encoding, eval_mode="surface")
@@ -1391,11 +1406,11 @@ class dominoInference:
 
         if self.dist.world_size == 1:
             geo_encoding_local = model.geo_encoding_local(
-                geo_encoding, volume_mesh_centers, p_grid
+                geo_encoding, volume_mesh_centers, p_grid, mode="volume"
             )
         else:
             geo_encoding_local = model.module.geo_encoding_local(
-                geo_encoding, volume_mesh_centers, p_grid
+                geo_encoding, volume_mesh_centers, p_grid, mode="volume"
             )
         if use_sdf_basis:
             pos_encoding = torch.cat(
@@ -1450,14 +1465,14 @@ if __name__ == "__main__":
 
     domino = dominoInference(cfg, dist, False)
     domino.initialize_model(
-        model_path="/lustre/rranade/domino_automotive_aero_nim/automotive-aerodynamics-nim/nims/domino-automotive-aero/factory/triton/model/1/checkpoints/DoMINO.0.618.pt"
+        model_path="/lustre/rranade/modulus_dev/modulus_forked/modulus/examples/cfd/external_aerodynamics/domino/outputs/AWS_Dataset/19/models/DoMINO.0.201.pt"
     )
 
     for count, dirname in enumerate(dirnames_per_gpu):
         # print(f"Processing file {dirname}")
         filepath = os.path.join(input_path, dirname)
 
-        STREAM_VELOCITY = 38.889
+        STREAM_VELOCITY = 30.0
         AIR_DENSITY = 1.205
 
         # Neighborhood points sampled for evaluation, tradeoff between accuracy and speed
@@ -1494,3 +1509,21 @@ if __name__ == "__main__":
             "Lift:",
             out_dict["lift_force"],
         )
+        vtp_path = f"/lustre/rranade/modulus_dev/modulus_forked/modulus/examples/cfd/external_aerodynamics/domino/pred_{dirname}_4.vtp"
+        domino.mesh_stl.save(vtp_path)
+        # vtp_path = f"/lustre/rranade/modulus_dev/modulus_demo/modulus_rishi/modulus/examples/cfd/external_aerodynamics/domino_gtc_demo/sensitivity_pred_{dirname}.vtp"
+        reader = vtk.vtkXMLPolyDataReader()
+        reader.SetFileName(f"{vtp_path}")
+        reader.Update()
+        polydata_surf = reader.GetOutput()
+
+        surfParam_vtk = numpy_support.numpy_to_vtk(out_dict["pressure_surface"][0].cpu().numpy())
+        surfParam_vtk.SetName(f"Pressure")
+        polydata_surf.GetCellData().AddArray(surfParam_vtk)
+
+        surfParam_vtk = numpy_support.numpy_to_vtk(out_dict["wall-shear-stress"][0].cpu().numpy())
+        surfParam_vtk.SetName(f"Wall-shear-stress")
+        polydata_surf.GetCellData().AddArray(surfParam_vtk)
+
+        write_to_vtp(polydata_surf, vtp_path)
+        exit()

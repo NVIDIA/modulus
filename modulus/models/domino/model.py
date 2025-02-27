@@ -340,10 +340,16 @@ class NNBasisFunctions(nn.Module):
 
     def __init__(self, input_features, model_parameters=None):
         super(NNBasisFunctions, self).__init__()
-        self.input_features = input_features
-
         base_layer = model_parameters.base_layer
-        self.fc1 = nn.Linear(self.input_features, base_layer)
+        self.fourier_features = model_parameters.fourier_features
+        self.num_modes = model_parameters.num_modes
+
+        if self.fourier_features:
+            input_features_calculated = input_features + input_features * self.num_modes * 2
+        else:
+            input_features_calculated = input_features
+
+        self.fc1 = nn.Linear(input_features_calculated, base_layer)
         self.fc2 = nn.Linear(base_layer, int(base_layer))
         self.fc3 = nn.Linear(int(base_layer), int(base_layer))
         self.bn1 = nn.BatchNorm1d(base_layer)
@@ -353,7 +359,10 @@ class NNBasisFunctions(nn.Module):
         self.activation = F.relu
 
     def forward(self, x, padded_value=-10):
-        facets = x
+        if self.fourier_features:
+            facets = torch.cat((x, fourier_encode(x, self.num_modes)), axis=-1)
+        else:
+            facets = x
         facets = self.activation(self.fc1(facets))
         facets = self.activation(self.fc2(facets))
         facets = self.fc3(facets)
@@ -558,12 +567,12 @@ class DoMINO(nn.Module):
         self.grid_resolution = model_parameters.interp_res
         self.surface_neighbors = model_parameters.surface_neighbors
         self.use_surface_normals = model_parameters.use_surface_normals
-        self.use_only_normals = model_parameters.use_only_normals
+        self.use_surface_area = model_parameters.use_surface_area
         self.encode_parameters = model_parameters.encode_parameters
         self.param_scaling_factors = model_parameters.parameter_model.scaling_params
 
         if self.use_surface_normals:
-            if self.use_only_normals:
+            if not self.use_surface_area:
                 input_features_surface = input_features + 3
             else:
                 input_features_surface = input_features + 4
@@ -810,6 +819,7 @@ class DoMINO(nn.Module):
                 geo_encoding_sampled = torch.gather(geo_encoding, 2, mapping) * mask
                 encoding_g_inner.append(geo_encoding_sampled)
 
+            encoding_g_inner = torch.cat(encoding_g_inner, axis=2)
             encoding_g_inner = point_conv[p](encoding_g_inner)
             encoding_outer.append(encoding_g_inner)
 
@@ -857,7 +867,7 @@ class DoMINO(nn.Module):
             param_encoding = self.parameter_model(params)
 
         if self.use_surface_normals:
-            if self.use_only_normals:
+            if not self.use_surface_area:
                 surface_mesh_centers = torch.cat(
                     (surface_mesh_centers, surface_normals),
                     axis=-1,

@@ -20,7 +20,7 @@ by sampling random neighboring points within the same sub-region. The local-geom
 encoding and the computational stencil are aggregrated to predict the solutions on the
 discrete points.
 
-A preprint describing additional details about the model architecture can be found here 
+A preprint describing additional details about the model architecture can be found here
 [paper](https://arxiv.org/abs/2501.13350).
 
 ## Dataset
@@ -74,16 +74,18 @@ To enable retraining the DoMINO model from a pre-trained checkpoint, follow the 
 
 ## DoMINO model inference on STLs
 
-The DoMINO model can be evaluated directly on unknown STLs using the pre-trained checkpoint. 
+The DoMINO model can be evaluated directly on unknown STLs using the pre-trained
+ checkpoint. Follow the steps outlined below:
 
 1. Run the `inference_on_stl.py` script to perform inference on an STL.
 
-2. Specify the STL paths, velocity inlets, stencil size and model checkpoint path in the script.
+2. Specify the STL paths, velocity inlets, stencil size and model checkpoint
+ path in the script.
 
 3. The volume predictions are carried out on points sampled in a bounding box around STL.
 
-4. The surface predictions are carried out on the STL surface. The drag and lift accuracy 
-will depend on the resolution of the STL.
+4. The surface predictions are carried out on the STL surface. The drag and lift
+ accuracy will depend on the resolution of the STL.
 
 ## Guidelines for training DoMINO model
 
