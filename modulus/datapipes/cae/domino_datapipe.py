@@ -233,6 +233,15 @@ class DoMINODataPipe(Dataset):
                     volume_coordinates = volume_coordinates[ids_in_bbox]
                     volume_fields = volume_fields[ids_in_bbox]
 
+                # volume_fields[:, :3] = volume_fields[:, :3] / STREAM_VELOCITY
+                # volume_fields[:, 3:4] = volume_fields[:, 3:4] / (
+                #     AIR_DENSITY * STREAM_VELOCITY**2.0
+                # )
+
+                # volume_fields[:, 4:] = volume_fields[:, 4:] / (
+                #     STREAM_VELOCITY * length_scale
+                # )
+
                 dx, dy, dz = (
                     (c_max[0] - c_min[0]) / nx,
                     (c_max[1] - c_min[1]) / ny,
@@ -356,10 +365,12 @@ class DoMINODataPipe(Dataset):
                     & (surface_coordinates[:, 2] > c_min[2])
                     & (surface_coordinates[:, 2] < c_max[2])
                 )
-                surface_coordinates = surface_coordinates[ids_in_bbox]
-                surface_normals = surface_normals[ids_in_bbox]
-                surface_sizes = surface_sizes[ids_in_bbox]
-                surface_fields = surface_fields[ids_in_bbox]
+                if self.sample_in_bbox:
+                    surface_coordinates = surface_coordinates[ids_in_bbox]
+                    surface_normals = surface_normals[ids_in_bbox]
+                    surface_sizes = surface_sizes[ids_in_bbox]
+                    surface_fields = surface_fields[ids_in_bbox]
+                # surface_fields = surface_fields / (AIR_DENSITY * STREAM_VELOCITY**2.0)
 
                 # Get neighbors
                 interp_func = KDTree(surface_coordinates)
@@ -459,7 +470,7 @@ class DoMINODataPipe(Dataset):
         if self.sampling:
             geometry_points = self.geom_points_sample
             geometry_coordinates_sampled, idx_geometry = shuffle_array(
-                stl_vertices, geometry_points
+                stl_centers, geometry_points
             )
             if geometry_coordinates_sampled.shape[0] < geometry_points:
                 geometry_coordinates_sampled = pad(
@@ -467,7 +478,7 @@ class DoMINODataPipe(Dataset):
                 )
             geom_centers = geometry_coordinates_sampled
         else:
-            geom_centers = stl_vertices
+            geom_centers = stl_centers
 
         geom_centers = np.float32(geom_centers)
 
