@@ -52,7 +52,20 @@ logger = logging.getLogger("lmgn")
 
 
 def compute_edge_index(pos, radius):
-    # compute the graph connectivity using pairwise distance
+    """Computes graph connectivity based on pairwise distance.
+
+    Parameters
+    ----------
+    pos : Tensor
+        Node positions
+    radius : float
+        Connectivity radius
+
+    Returns
+    -------
+    Tensor
+        Edge indices
+    """
     distances = torch.cdist(pos, pos, p=2)
     mask = distances < radius  # & (distances > 0) # include self-edge
     edge_index = torch.nonzero(mask).t().contiguous()
@@ -60,7 +73,15 @@ def compute_edge_index(pos, radius):
 
 
 def compute_edge_attr(graph, radius=0.015):
-    # compute the displacement and distance per edge
+    """Computes edge attributes (displacement and distance).
+
+    Parameters
+    ----------
+    graph : DGLGraph
+        Input graph
+    radius : float, optional
+        Radius for distance calculation, by default 0.015
+    """
     edge_index = graph.edges()
     displacement = graph.ndata["pos"][edge_index[1]] - graph.ndata["pos"][edge_index[0]]
     distance = torch.pairwise_distance(
@@ -75,11 +96,19 @@ def compute_edge_attr(graph, radius=0.015):
 
 
 def graph_update(graph, radius):
-    """Updates the graph structure.
+    """Updates graph structure by reconstructing edges based on positions.
 
-    Removes all previous edges and re-constructs
-    the graph using pair-wise distance.
+    Parameters
+    ----------
+    graph : DGLGraph
+        Input graph
+    radius : float
+        Connectivity radius
 
+    Returns
+    -------
+    DGLGraph
+        Updated graph
     """
     # TODO: use more efficient graph construction method
     num_edges = graph.num_edges()
@@ -240,22 +269,12 @@ class LagrangianDataset(DGLDataset):
         # Target acceleration.
         acc = self.time_diff(vel[-2:])
 
-        # Boundary features for the current position.
-        boundary_features = self.compute_boundary_feature(
-            pos_t, self.radius, bounds=self.bounds
-        )
-
         # Normalize velocity and acceleration.
         vel = self.normalize_velocity(vel)
         acc = self.normalize_acceleration(acc)
 
         # Create graph node features.
-        # (num_history, num_particles, dimension) -> (num_particles, num_history * dimension)
-        vel_history = vel[:-1].permute(1, 0, 2).flatten(start_dim=1)
-
-        node_features = torch.cat(
-            (pos_t, vel_history, boundary_features, self.node_type[gidx]), dim=-1
-        )
+        node_features = self.pack_inputs(pos_t, vel[:-1], self.node_type[gidx])
 
         # Target position and velocity are for time t + 1, acceleration - for t.
         target_pos = pos[-1]
@@ -277,21 +296,69 @@ class LagrangianDataset(DGLDataset):
         return graph
 
     def normalize_velocity(self, velocity):
+        """Normalizes velocity using dataset statistics.
+
+        Parameters
+        ----------
+        velocity : Tensor
+            Input velocity
+
+        Returns
+        -------
+        Tensor
+            Normalized velocity
+        """
         velocity = velocity - self.vel_mean.to(velocity.device)
         velocity = velocity / self.vel_std.to(velocity.device)
         return velocity
 
     def denormalize_velocity(self, velocity):
+        """Denormalizes velocity using dataset statistics.
+
+        Parameters
+        ----------
+        velocity : Tensor
+            Normalized velocity
+
+        Returns
+        -------
+        Tensor
+            Denormalized velocity
+        """
         velocity = velocity * self.vel_std.to(velocity.device)
         velocity = velocity + self.vel_mean.to(velocity.device)
         return velocity
 
     def normalize_acceleration(self, acceleration):
+        """Normalizes acceleration using dataset statistics.
+
+        Parameters
+        ----------
+        acceleration : Tensor
+            Input acceleration
+
+        Returns
+        -------
+        Tensor
+            Normalized acceleration
+        """
         acceleration = acceleration - self.acc_mean.to(acceleration.device)
         acceleration = acceleration / self.acc_std.to(acceleration.device)
         return acceleration
 
     def denormalize_acceleration(self, acceleration):
+        """Denormalizes acceleration using dataset statistics.
+
+        Parameters
+        ----------
+        acceleration : Tensor
+            Normalized acceleration
+
+        Returns
+        -------
+        Tensor
+            Denormalized acceleration
+        """
         acceleration = acceleration * self.acc_std.to(acceleration.device)
         acceleration = acceleration + self.acc_mean.to(acceleration.device)
         return acceleration
@@ -316,20 +383,52 @@ class LagrangianDataset(DGLDataset):
         position_next = position + velocity_next  # * dt
         return position_next, velocity_next
 
+    def pack_inputs(
+        self, position: Tensor, vel_history: Tensor, node_type: Tensor
+    ) -> Tensor:
+        """Pack position, velocity history and node type into a single input tensor.
+
+        Parameters
+        ----------
+        position : Tensor
+            Current particle positions of shape (num_particles, dimension)
+        vel_history : Tensor
+            Velocity history of shape (num_history, num_particles, dimension)
+        node_type : Tensor
+            Node type features of shape (num_particles, num_node_types)
+
+        Returns
+        -------
+        Tensor
+            Concatenated input features of shape (num_particles, input_dimension)
+            where input_dimension = dimension + num_history * dimension + num_boundary_features + num_node_types
+        """
+        # Boundary features for the current position.
+        boundary_features = self.compute_boundary_feature(
+            position, self.radius, bounds=self.bounds
+        )
+
+        # (num_history, num_particles, dimension) -> (num_particles, num_history * dimension)
+        vel_history = vel_history.permute(1, 0, 2).flatten(start_dim=1)
+
+        return torch.cat((position, vel_history, boundary_features, node_type), dim=-1)
+
     def unpack_inputs(self, graph: dgl.DGLGraph):
-        """Unpacks the graph inputs into position and velocity.
+        """Unpacks the graph inputs into position, velocity and node type.
 
         Returns:
         --------
         Tuple
-            position, velocity inputs. Velocity is normalized.
+            position, velocity and node type inputs. Velocity is normalized.
         """
         ndata = graph.ndata["x"]
         pos = ndata[..., : self.dim]
         vel = ndata[..., self.dim : self.dim + self.dim * self.num_history]
         # (num_particles, t * dimension) -> (t, num_particles, dimension)
         vel = vel.reshape(-1, self.num_history, self.dim).permute(1, 0, 2)
-        return pos, vel
+        # (num_particles, num_node_types)
+        node_type = ndata[..., -self.num_node_types :]
+        return pos, vel, node_type
 
     def unpack_targets(self, graph: dgl.DGLGraph):
         """Unpacks the graph targets into position, velocity and acceleration.
@@ -346,7 +445,20 @@ class LagrangianDataset(DGLDataset):
         return pos, vel, acc
 
     def random_walk_noise(self, num_steps: int, num_particles: int):
-        """Creates random walk noise for positions."""
+        """Generates random walk noise for particle positions.
+
+        Parameters
+        ----------
+        num_steps : int
+            Number of time steps
+        num_particles : int
+            Number of particles
+
+        Returns
+        -------
+        Tensor
+            Position noise
+        """
 
         num_velocities = num_steps - 1
         # See comments in get_random_walk_noise_for_position_sequence in DeepMind code.
@@ -370,10 +482,38 @@ class LagrangianDataset(DGLDataset):
 
     @staticmethod
     def time_diff(x: Tensor):
+        """Computes time differences between consecutive steps.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input tensor
+
+        Returns
+        -------
+        Tensor
+            Time differences
+        """
         return x[1:] - x[:-1]
 
     @staticmethod
     def compute_boundary_feature(position, radius=0.015, bounds=[0.1, 0.9]):
+        """Computes boundary features based on distance to domain bounds.
+
+        Parameters
+        ----------
+        position : Tensor
+            Particle positions
+        radius : float, optional
+            Feature radius, by default 0.015
+        bounds : list, optional
+            Domain bounds, by default [0.1, 0.9]
+
+        Returns
+        -------
+        Tensor
+            Boundary features
+        """
         distance = torch.cat([position - bounds[0], bounds[1] - position], dim=-1)
         features = torch.exp(-(distance**2) / radius**2)
         features[distance > radius] = 0
@@ -381,19 +521,58 @@ class LagrangianDataset(DGLDataset):
 
     @staticmethod
     def boundary_clamp(position, bounds=[0.1, 0.9], eps=0.001):
+        """Clamps positions to stay within domain bounds.
+
+        Parameters
+        ----------
+        position : Tensor
+            Particle positions
+        bounds : list, optional
+            Domain bounds, by default [0.1, 0.9]
+        eps : float, optional
+            Boundary offset, by default 0.001
+
+        Returns
+        -------
+        Tensor
+            Clamped positions
+        """
         return torch.clamp(position, min=bounds[0] + eps, max=bounds[1] - eps)
 
     def _load_tf_data(self, path, split):
-        """
-        Utility for loading the .tfrecord dataset in DeepMind's MeshGraphNet repo:
-        https://github.com/google-deepmind/deepmind-research/tree/master/learning_to_simulate
-        Follow the instructions provided in that repo to download the .tfrecord files.
+        """Loads TensorFlow dataset from path.
+
+        Parameters
+        ----------
+        path : str
+            Dataset path
+        split : str
+            Dataset split
+
+        Returns
+        -------
+        tf.data.Iterator
+            Dataset iterator
         """
         dataset = self._load_dataset(path, split)
         dataset_iterator = tf.data.make_one_shot_iterator(dataset)
         return dataset_iterator
 
     def _load_dataset(self, path, split):
+        """Creates TensorFlow dataset from TFRecord files.
+
+        Parameters
+        ----------
+        path : str
+            Dataset path
+        split : str
+            Dataset split
+
+        Returns
+        -------
+        tf.data.Dataset
+            Processed dataset
+        """
         with open(os.path.join(path, "metadata.json"), "r") as fp:
             meta = json.loads(fp.read())
         dataset = tf.data.TFRecordDataset(os.path.join(path, split + ".tfrecord"))
@@ -403,5 +582,16 @@ class LagrangianDataset(DGLDataset):
         ).prefetch(tf.data.AUTOTUNE)
 
     def get_kinematic_mask(self, graph_idx: int) -> Tensor:
-        """Returns kinematic particles mask for a graph."""
+        """Returns mask for kinematic particles in a graph.
+
+        Parameters
+        ----------
+        graph_idx : int
+            Graph index
+
+        Returns
+        -------
+        Tensor
+            Boolean mask for kinematic particles
+        """
         return self.node_type[graph_idx][:, self.KINEMATIC_PARTICLE_ID] != 0
