@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   imports
 - Moved to experiment-based Hydra config in Lagrangian-MGN example
 - Make data caching optional in `MeshDatapipe`
+- The use of older `importlib_metadata` library is removed
 
 ### Deprecated
 

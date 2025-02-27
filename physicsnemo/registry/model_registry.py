@@ -17,9 +17,6 @@
 from importlib.metadata import EntryPoint, entry_points
 from typing import List, Union
 
-# This import is required for compatibility with doctests.
-import importlib_metadata
-
 import physicsnemo
 
 
@@ -106,7 +103,7 @@ class ModelRegistry:
 
         model = self._model_registry.get(name)
         if model is not None:
-            if isinstance(model, (EntryPoint, importlib_metadata.EntryPoint)):
+            if isinstance(model, EntryPoint):
                 model = model.load()
             return model
 
