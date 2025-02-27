@@ -142,11 +142,11 @@ def test_model_checkpointing(
     assert epoch == 0
     assert metadata_dict["model_type"] == "MLP"
 
-    # Clean up if writing to local file system - object storage files will disappear along with the mock.
+    # Clean up if writing to local file system (no need with object storage - files will disappear along with the mock).
     if fsspec.utils.get_protocol(checkpoint_folder) == "file":
         shutil.rmtree(checkpoint_folder)
-    elif isinstance(mlp_model_1, Module):
-        # For Modulus type models, the local cache must be cleared to allow multiple test runs
+    else:
+        # if writing to object, the local cache must be cleared to allow multiple test runs
         local_cache = os.environ["HOME"] + "/.cache/modulus"
         shutil.rmtree(local_cache)
 

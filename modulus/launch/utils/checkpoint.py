@@ -28,6 +28,7 @@ import modulus
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger
 from modulus.utils.capture import _StaticCapture
+from modulus.utils.filesystem import _download_cached
 
 optimizer = NewType("optimizer", torch.optim)
 scheduler = NewType("scheduler", _LRScheduler)
@@ -362,9 +363,8 @@ def load_checkpoint(
             if isinstance(model, modulus.models.Module):
                 model.load(file_name)
             else:
-                with fs.open(file_name, "rb") as fp:
-                    model.load_state_dict(torch.load(fp, map_location=device))
-
+                file_to_load = _cache_if_needed(file_name)
+                model.load_state_dict(torch.load(file_to_load, map_location=device))
             checkpoint_logging.success(
                 f"Loaded model state dictionary {file_name} to device {device}"
             )
@@ -376,9 +376,9 @@ def load_checkpoint(
             "Could not find valid checkpoint file, skipping load"
         )
         return 0
-
-    with fs.open(checkpoint_filename, "rb") as fp:
-        checkpoint_dict = torch.load(fp, map_location=device)
+        
+    file_to_load = _cache_if_needed(checkpoint_filename)
+    checkpoint_dict = torch.load(file_to_load, map_location=device)
     checkpoint_logging.success(
         f"Loaded checkpoint file {checkpoint_filename} to device {device}"
     )
@@ -412,3 +412,12 @@ def load_checkpoint(
         metadata_dict[key] = value
 
     return epoch
+
+# Read via cache and return the cached path for non-file protocols, otherwise just return the path
+def _cache_if_needed(path: str) -> str:
+    protocol = fsspec.utils.get_protocol(path)
+    if protocol == "file":
+        return path
+    else:
+        return _download_cached(path)
+    
