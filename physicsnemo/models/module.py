@@ -138,7 +138,10 @@ class Module(torch.nn.Module):
         Examples
         --------
         >>> from physicsnemo.models import Module
-        >>> fcn = Module.instantiate({'__name__': 'FullyConnected', '__module__': 'physicsnemo.models.mlp', '__args__': {'in_features': 10}})
+        >>> from physicsnemo.registry import ModelRegistry
+        >>> registry = ModelRegistry()
+        >>> model_entry = registry.factory('FullyConnected').load()
+        >>> fcn = model_entry(**{'in_features': 10})
         >>> fcn
         FullyConnected(
           (layers): ModuleList(
@@ -172,6 +175,11 @@ class Module(torch.nn.Module):
             except AttributeError:
                 # Cross fingers and hope for the best (maybe the class name changed)
                 _cls = cls
+
+        # This works with the importlib.metadata.EntryPoint
+        if isinstance(_cls, importlib.metadata.EntryPoint):
+            _cls = _cls.load()
+
         return _cls(**arg_dict["__args__"])
 
     def debug(self):
