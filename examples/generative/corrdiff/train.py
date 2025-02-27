@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import os, time, psutil, hydra, torch
+import fsspec.utils
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
@@ -65,10 +66,17 @@ def main(cfg: DictConfig) -> None:
     fp16 = fp_optimizations == "fp16"
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
-    logger.info(f"Saving the outputs in {os.getcwd()}")
-    checkpoint_dir = os.path.join(
-        cfg.training.io.get("checkpoint_dir", "."), f"checkpoints_{cfg.model.name}"
-    )
+
+    checkpoint_dir = str(cfg.training.io.get("checkpoint_dir", "."))
+    protocol = fsspec.utils.get_protocol(checkpoint_dir)
+    if protocol == "msc":
+        if not checkpoint_dir.endswith("/"):
+            checkpoint_dir += "/"
+        checkpoint_dir += f"checkpoints_{cfg.model.name}"
+    else:
+        checkpoint_dir = os.path.join(
+            cfg.training.io.get("checkpoint_dir", "."), f"checkpoints_{cfg.model.name}"
+        )
     if cfg.training.hp.batch_size_per_gpu == "auto":
         cfg.training.hp.batch_size_per_gpu = (
             cfg.training.hp.total_batch_size // dist.world_size

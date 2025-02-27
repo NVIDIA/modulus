@@ -17,18 +17,24 @@
 import shutil
 from typing import Callable
 
+import boto3
+import fsspec
+import os
 import pytest
 import torch
 import torch.nn as nn
+from moto import mock_aws
+from pathlib import Path
 from pytest_utils import import_or_fail
 
 from modulus.distributed import DistributedManager
 from modulus.models.mlp import FullyConnected
+from modulus.models import Module 
 
 
-@pytest.fixture()
-def checkpoint_folder() -> str:
-    return "./checkpoints"
+@pytest.fixture(params=["./checkpoints", "msc://checkpoint-test/checkpoints"])
+def checkpoint_folder(request) -> str:
+    return request.param
 
 
 @pytest.fixture(params=["modulus", "pytorch"])
@@ -56,6 +62,7 @@ def model_generator(request) -> Callable:
     return model
 
 
+@mock_aws
 @import_or_fail(["wandb", "mlflow"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_model_checkpointing(
@@ -67,6 +74,21 @@ def test_model_checkpointing(
     atol: float = 1e-3,
 ):
     """Test checkpointing util for model"""
+
+    # Set up the mock with IAM credentials for access. These should match those in
+    # the MSC Config file (./msc_config_checkpoint.yaml).
+    os.environ["AWS_ACCESS_KEY_ID"] = "access-key-id"
+    os.environ["AWS_SECRET_ACCESS_KEY"] = "secret-access-key"
+
+    # Ensure default region is set to match the MSC Config file.
+    os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+
+    current_file = Path(__file__).resolve()
+    current_dir = current_file.parent
+    os.environ["MSC_CONFIG"] = f"{current_dir}/msc_config_checkpoint.yaml"
+
+    conn = boto3.resource("s3", region_name="us-east-1")
+    conn.create_bucket(Bucket="checkpoint-test-bucket")
 
     from modulus.launch.utils import load_checkpoint, save_checkpoint
 
@@ -88,6 +110,7 @@ def test_model_checkpointing(
         metadata={"model_type": "MLP"},
     )
 
+
     # Load twin set of models for importing weights
     mlp_model_1 = model_generator(8).to(device)
     mlp_model_2 = model_generator(4).to(device)
@@ -101,11 +124,11 @@ def test_model_checkpointing(
     # Load model weights from checkpoint
     load_checkpoint(checkpoint_folder, models=[mlp_model_1, mlp_model_2], device=device)
 
-    new_output_1 = mlp_model_1(input_1)
-    new_output_2 = mlp_model_2(input_2)
+    loaded_output_1 = mlp_model_1(input_1)
+    loaded_output_2 = mlp_model_2(input_2)
 
-    assert torch.allclose(output_1, new_output_1, rtol, atol)
-    assert torch.allclose(output_2, new_output_2, rtol, atol)
+    assert torch.allclose(output_1, loaded_output_1, rtol, atol)
+    assert torch.allclose(output_2, loaded_output_2, rtol, atol)
 
     # Also load the model with metadata
     metadata_dict = {}
@@ -119,5 +142,11 @@ def test_model_checkpointing(
     assert epoch == 0
     assert metadata_dict["model_type"] == "MLP"
 
-    # Clean up
-    shutil.rmtree(checkpoint_folder)
+    # Clean up if writing to local file system (no need with object storage - files will disappear along with the mock).
+    if fsspec.utils.get_protocol(checkpoint_folder) == "file":
+        shutil.rmtree(checkpoint_folder)
+    else:
+        # if writing to object, the local cache must be cleared to allow multiple test runs
+        local_cache = os.environ["HOME"] + "/.cache/modulus"
+        shutil.rmtree(local_cache)
+
