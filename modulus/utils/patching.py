@@ -481,6 +481,20 @@ def image_batching(
             f"patch_shape_y must verify patch_shape_y ({patch_shape_y}) >= "
             f"1 + overlap_pix ({overlap_pix}) + boundary_pix ({boundary_pix})"
         )
+    # Safety check: validate input_interp dimensions if provided
+    if input_interp is not None:
+        if input_interp.shape[0] != batch_size:
+            raise ValueError(
+                f"input_interp batch size ({input_interp.shape[0]}) must match "
+                f"input batch size ({batch_size})"
+            )
+        if (input_interp.shape[2] != patch_shape_y) or (
+            input_interp.shape[3] != patch_shape_x
+        ):
+            raise ValueError(
+                f"input_interp patch shape ({input_interp.shape[2]}, {input_interp.shape[3]}) "
+                f"must match specified patch shape ({patch_shape_y}, {patch_shape_x})"
+            )
 
     patch_num_x = math.ceil(img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
     patch_num_y = math.ceil(img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))

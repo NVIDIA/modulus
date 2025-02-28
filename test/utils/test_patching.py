@@ -16,6 +16,7 @@
 
 
 import torch
+from einops import rearrange, repeat
 from pytest_utils import import_or_fail
 
 
@@ -188,7 +189,7 @@ def test_image_batching_with_input_interp(pytestconfig):
 
     for img_shape_y, img_shape_x in ((4, 4), (16, 8)):
         img_size = img_shape_y * img_shape_x
-        batch_size = (img_shape_y // patch_shape_y) * (img_shape_x // patch_shape_x)
+        patch_num = (img_shape_y // patch_shape_y) * (img_shape_x // patch_shape_x)
         input_tensor = (
             torch.arange(1, img_size + 1)
             .view(1, 1, img_shape_y, img_shape_x)
@@ -196,8 +197,11 @@ def test_image_batching_with_input_interp(pytestconfig):
             .float()
         )
         input_interp = (
-            torch.ones(1, 1, patch_shape_y, patch_shape_x).cuda().float()
-        )  # All ones for easy validation
+            torch.arange(-patch_shape_y * patch_shape_x, 0)
+            .view(1, 1, patch_shape_y, patch_shape_x)
+            .cuda()
+            .float()
+        )
         batched_images = image_batching(
             input_tensor,
             patch_shape_y,
@@ -206,8 +210,27 @@ def test_image_batching_with_input_interp(pytestconfig):
             boundary_pix,
             input_interp=input_interp,
         )
-        assert batched_images.shape == (batch_size, 2, patch_shape_y, patch_shape_x)
-        expected_output = torch.cat((input_tensor, input_interp), dim=1)
+        assert batched_images.shape == (patch_num, 2, patch_shape_y, patch_shape_x)
+
+        # Define expected_output using einops operations
+        expected_output = torch.cat(
+            (
+                rearrange(
+                    input_tensor,
+                    "b c (nb_p_h p_h) (nb_p_w p_w) -> (b nb_p_w nb_p_h) c p_h p_w",
+                    p_h=patch_shape_y,
+                    p_w=patch_shape_x,
+                ),
+                repeat(
+                    input_interp,
+                    "b c p_h p_w -> (b nb_p_w nb_p_h) c p_h p_w",
+                    nb_p_h=img_shape_y // patch_shape_y,
+                    nb_p_w=img_shape_x // patch_shape_x,
+                ),
+            ),
+            dim=1,
+        )
+
         assert torch.allclose(
             batched_images, expected_output, atol=1e-5
         ), "Batched images with input_interp do not match expected output."
