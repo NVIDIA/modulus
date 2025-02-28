@@ -52,14 +52,14 @@ class BasePatching(ABC):
         self, img_shape: Tuple[int, int], patch_shape: Tuple[int, int]
     ) -> None:
         # Make sure patches fit within the image
-        if any(p > i for p, i in zip(self.patch_shape, self.img_shape)):
+        if any(p > i for p, i in zip(patch_shape, img_shape)):
             warnings.warn(
-                f"Patch shape ({self.patch_shape}) is larger than "
-                f"image shape ({self.img_shape}). "
+                f"Patch shape {patch_shape} is larger than "
+                f"image shape {img_shape}. "
                 f"Patches will be cropped to fit within the image."
             )
         self.img_shape = img_shape
-        self.patch_shape = (min(p, i) for p, i in zip(self.patch_shape, self.img_shape))
+        self.patch_shape = tuple(min(p, i) for p, i in zip(patch_shape, img_shape))
 
     @abstractmethod
     def apply(self, input: Tensor, **kwargs) -> Tensor:
@@ -194,7 +194,7 @@ class RandomPatching(BasePatching):
         super().__init__(img_shape, patch_shape)
         self.patch_num = patch_num
         # Generate the indices of the patches to extract
-        self.reset_patches_indices()
+        self.reset_patch_indices()
 
     def reset_patch_indices(self) -> None:
         """
@@ -207,8 +207,8 @@ class RandomPatching(BasePatching):
         """
         self.patch_indices = [
             (
-                random.randint(0, self.img_shape_y - self.patch_shape_y),
-                random.randint(0, self.img_shape_x - self.patch_shape_x),
+                random.randint(0, self.img_shape[0] - self.patch_shape[0]),
+                random.randint(0, self.img_shape[1] - self.patch_shape[1]),
             )
             for _ in range(self.patch_num)
         ]
@@ -417,8 +417,8 @@ class DeterministicPatching(BasePatching):
         """
         out = image_fuse(
             input=input,
-            patch_shape_y=self.patch_shape[0],
-            patch_shape_x=self.patch_shape[1],
+            img_shape_y=self.img_shape[0],
+            img_shape_x=self.img_shape[1],
             batch_size=batch_size,
             overlap_pix=self.overlap_pix,
             boundary_pix=self.boundary_pix,
@@ -573,10 +573,10 @@ def image_fuse(
     input : Tensor
         The input tensor containing the image patches with shape (patch_num
         * batch_size, channels, patch_shape_y, patch_shape_x).
-    img_shape_x : int
-        The width (x-dimension) of the original full image.
     img_shape_y : int
         The height (y-dimension) of the original full image.
+    img_shape_x : int
+        The width (x-dimension) of the original full image.
     batch_size : int
         The original batch size before patching.
     overlap_pix : int

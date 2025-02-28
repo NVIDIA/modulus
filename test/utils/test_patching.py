@@ -196,7 +196,7 @@ def test_image_batching_with_input_interp(pytestconfig):
             .float()
         )
         input_interp = (
-            torch.ones(1, 1, img_shape_y, img_shape_x).cuda().float()
+            torch.ones(1, 1, patch_shape_y, patch_shape_x).cuda().float()
         )  # All ones for easy validation
         batched_images = image_batching(
             input_tensor,
