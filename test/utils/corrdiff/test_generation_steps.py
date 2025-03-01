@@ -101,7 +101,6 @@ def test_diffusion_step(device, pytestconfig):
     output = diffusion_step(
         net=mock_precond,
         sampler_fn=sampler_fn,
-        seed_batch_size=1,
         img_shape=(16, 16),
         img_out_channels=2,
         rank_batches=[[0]],
@@ -123,7 +122,6 @@ def test_diffusion_step(device, pytestconfig):
     output = diffusion_step(
         net=mock_precond,
         sampler_fn=sampler_fn,
-        seed_batch_size=1,
         img_shape=(16, 16),
         img_out_channels=2,
         rank_batches=[[0]],
@@ -165,7 +163,6 @@ def test_diffusion_step_rectangle(device, pytestconfig):
     output = diffusion_step(
         net=mock_precond,
         sampler_fn=sampler_fn,
-        seed_batch_size=seed_batch_size,
         img_shape=(img_shape_y, img_shape_x),
         img_out_channels=2,
         rank_batches=[list(range(seed_batch_size))],

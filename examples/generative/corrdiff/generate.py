@@ -206,7 +206,6 @@ def main(cfg: DictConfig) -> None:
                     image_res = diffusion_step(
                         net=net_res,
                         sampler_fn=sampler_fn,
-                        seed_batch_size=cfg.generation.seed_batch_size,
                         img_shape=img_shape,
                         img_out_channels=img_out_channels,
                         rank_batches=rank_batches,
