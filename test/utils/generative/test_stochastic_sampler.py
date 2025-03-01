@@ -119,7 +119,7 @@ def test_stochastic_sampler(pytestconfig):
 @import_or_fail("cftime")
 def test_stochastic_sampler_rectangle_patching(pytestconfig):
     from modulus.utils.generative import stochastic_sampler
-    from modulus.utils.patching import DeterministicPatching
+    from modulus.utils.patching import GridPatching2D
 
     net = MockNet()
 
@@ -129,8 +129,8 @@ def test_stochastic_sampler_rectangle_patching(pytestconfig):
     latents = torch.randn(2, 3, img_shape_y, img_shape_x)  # Mock latents
     img_lr = torch.randn(2, 3, img_shape_y, img_shape_x)  # Mock low-res image
 
-    # Instantiate image patching
-    patching = DeterministicPatching(
+    # Test with patching
+    patching = GridPatching2D(
         img_shape=(img_shape_y, img_shape_x),
         patch_shape=(patch_shape_y, patch_shape_x),
         overlap_pix=4,

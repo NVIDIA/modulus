@@ -139,7 +139,7 @@ def test_diffusion_step(device, pytestconfig):
 def test_diffusion_step_rectangle(device, pytestconfig):
     from modulus.utils.corrdiff import diffusion_step
     from modulus.utils.generative import stochastic_sampler
-    from modulus.utils.patching import DeterministicPatching
+    from modulus.utils.patching import GridPatching2D
 
     img_shape_y, img_shape_x = 32, 16
     seed_batch_size = 4
@@ -228,7 +228,7 @@ def test_diffusion_step_rectangle(device, pytestconfig):
     )
 
     # Define patching utility
-    patching = DeterministicPatching(
+    patching = GridPatching2D(
         img_shape=(img_shape_y, img_shape_x),
         patch_shape=(16, 8),
         overlap_pix=4,

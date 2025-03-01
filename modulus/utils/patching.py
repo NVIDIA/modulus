@@ -30,9 +30,9 @@ decomposition.
 """
 
 
-class BasePatching(ABC):
+class BasePatching2D(ABC):
     """
-    Abstract base class for image patching operations.
+    Abstract base class for 2D image patching operations.
 
     This class provides a foundation for implementing various image patching
     strategies.
@@ -51,6 +51,12 @@ class BasePatching(ABC):
     def __init__(
         self, img_shape: Tuple[int, int], patch_shape: Tuple[int, int]
     ) -> None:
+        # Check that img_shape and patch_shape are 2D
+        if len(img_shape) != 2:
+            raise ValueError(f"img_shape must be 2D, got {len(img_shape)}D")
+        if len(patch_shape) != 2:
+            raise ValueError(f"patch_shape must be 2D, got {len(patch_shape)}D")
+
         # Make sure patches fit within the image
         if any(p > i for p, i in zip(patch_shape, img_shape)):
             warnings.warn(
@@ -136,9 +142,9 @@ class BasePatching(ABC):
         return global_index
 
 
-class RandomPatching(BasePatching):
+class RandomPatching2D(BasePatching2D):
     """
-    Class for randomly extracting patches from images.
+    Class for randomly extracting patches from 2D images.
 
     This class provides utilities to randomly extract patches from images
     represented as 4D tensors. It maintains a list of random patch indices
@@ -163,9 +169,9 @@ class RandomPatching(BasePatching):
 
     See Also
     --------
-    :class:`modulus.utils.patching.BasePatching`
+    :class:`modulus.utils.patching.BasePatching2D`
         The base class providing the patching interface.
-    :class:`modulus.utils.patching.DeterministicPatching`
+    :class:`modulus.utils.patching.GridPatching2D`
         Alternative patching strategy using deterministic patch locations.
     """
 
@@ -173,7 +179,7 @@ class RandomPatching(BasePatching):
         self, img_shape: Tuple[int, int], patch_shape: Tuple[int, int], patch_num: int
     ) -> None:
         """
-        Initialize the RandomPatching object with the provided image shape,
+        Initialize the RandomPatching2D object with the provided image shape,
         patch shape, and number of patches to extract.
 
         Parameters
@@ -286,9 +292,9 @@ class RandomPatching(BasePatching):
         return out
 
 
-class DeterministicPatching(BasePatching):
+class GridPatching2D(BasePatching2D):
     """
-    Class for deterministically extracting patches from images.
+    Class for deterministically extracting patches from 2D images in a grid pattern.
 
     This class provides utilities to extract patches from images in a
     deterministic manner, with configurable overlap and boundary pixels.
@@ -314,9 +320,9 @@ class DeterministicPatching(BasePatching):
 
     See Also
     --------
-    :class:`modulus.utils.patching.BasePatching`
+    :class:`modulus.utils.patching.BasePatching2D`
         The base class providing the patching interface.
-    :class:`modulus.utils.patching.RandomPatching`
+    :class:`modulus.utils.patching.RandomPatching2D`
         Alternative patching strategy using random patch locations.
     """
 

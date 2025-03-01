@@ -25,7 +25,7 @@ from modulus.metrics.diffusion import (
     VELoss_dfsr,
     VPLoss,
 )
-from modulus.utils.patching import RandomPatching
+from modulus.utils.patching import RandomPatching2D
 
 # VPLoss tests
 
@@ -313,7 +313,7 @@ def test_residualloss_call_method():
     # Test with patching
     patch_num = 4
     patch_shape = (16, 16)
-    patching = RandomPatching(
+    patching = RandomPatching2D(
         img_shape=(32, 32), patch_shape=patch_shape, patch_num=patch_num
     )
     loss_value_with_patching = loss_func(
@@ -321,7 +321,7 @@ def test_residualloss_call_method():
     )
     assert isinstance(loss_value_with_patching, torch.Tensor)
     # Shape should be (batch_size * patch_num, channels, patch_shape_y, patch_shape_x)
-    expected_shape = (batch_size * patch_num, channels, patch_shape[0], patch_shape[1])
+    expected_shape = (batch_size * 4, channels, 16, 8)
     assert loss_value_with_patching.shape == expected_shape
 
     # Test error on invalid patching object

@@ -23,7 +23,7 @@ from modulus import Module
 from modulus.models.diffusion import UNet, EDMPrecondSR
 from modulus.distributed import DistributedManager
 from modulus.metrics.diffusion import RegressionLoss, ResidualLoss, RegressionLossCE
-from modulus.utils.patching import RandomPatching
+from modulus.utils.patching import RandomPatching2D
 from modulus.launch.logging import (
     PythonLogger,
     RankZeroLoggingWrapper,
@@ -159,7 +159,7 @@ def main(cfg: DictConfig) -> None:
     use_patching, img_shape, patch_shape = set_patch_shape(img_shape, patch_shape)
     if use_patching:
         # Utility to perform patches extraction and batching
-        patching = RandomPatching(
+        patching = RandomPatching2D(
             img_shape=img_shape,
             patch_shape=patch_shape,
             patch_num=getattr(cfg.training.hp, "patch_num", 1),

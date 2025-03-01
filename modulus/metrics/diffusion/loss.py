@@ -24,7 +24,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from modulus.utils.patching import RandomPatching
+from modulus.utils.patching import RandomPatching2D
 
 
 class VPLoss:
@@ -498,7 +498,7 @@ class ResidualLoss:
         net: torch.nn.Module,
         img_clean: Tensor,
         img_lr: Tensor,
-        patching: Optional[RandomPatching] = None,
+        patching: Optional[RandomPatching2D] = None,
         labels: Optional[Tensor] = None,
         lead_time_label: Optional[Tensor] = None,
         augment_pipe: Optional[Callable[[Tensor], Tuple[Tensor, Tensor]]] = None,
@@ -521,9 +521,9 @@ class ResidualLoss:
         img_lr : Tensor
             Low-resolution input images of shape (batch_size, c_lr,
             img_shape_y, img_shape_x).
-        patching : Optional[RandomPatching], optional
+        patching : Optional[RandomPatching2D], optional
             Patching strategy for processing large images, by default None. See
-            :class:`modulus.utils.patching.RandomPatching` for details.
+            :class:`modulus.utils.patching.RandomPatching2D` for details.
         labels : Optional[Tensor], optional
             Ground truth labels for the input images, by default None.
         lead_time_label : Optional[Tensor], optional
@@ -541,12 +541,12 @@ class ResidualLoss:
         Raises
         ------
         ValueError
-            If patching is provided but is not an instance of RandomPatching.
+            If patching is provided but is not an instance of RandomPatching2D.
         """
 
         # Safety check: enforce patching object
-        if patching and not isinstance(patching, RandomPatching):
-            raise ValueError("patching must be a 'RandomPatching' object.")
+        if patching and not isinstance(patching, RandomPatching2D):
+            raise ValueError("patching must be a 'RandomPatching2D' object.")
         # Safety check: enforce shapes
         if (
             img_clean.shape[0] != img_lr.shape[0]

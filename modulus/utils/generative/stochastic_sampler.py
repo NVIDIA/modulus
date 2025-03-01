@@ -20,7 +20,7 @@ from typing import Any, Callable, Optional
 import torch
 from torch import Tensor
 
-from modulus.utils.patching import DeterministicPatching
+from modulus.utils.patching import GridPatching2D
 
 
 def stochastic_sampler(
@@ -29,7 +29,7 @@ def stochastic_sampler(
     img_lr: Tensor,
     class_labels: Optional[Tensor] = None,
     randn_like: Callable[[Tensor], Tensor] = torch.randn_like,
-    patching: Optional[DeterministicPatching] = None,
+    patching: Optional[GridPatching2D] = None,
     mean_hr: Optional[Tensor] = None,
     lead_time_label: Optional[Tensor] = None,
     num_steps: int = 18,
@@ -64,12 +64,12 @@ def stochastic_sampler(
         Function to generate random noise with the same shape as the input
         tensor.
         By default torch.randn_like.
-    patching : Optional[DeterministicPatching], optional
+    patching : Optional[GridPatching2D], optional
         A patching utility for patch-based diffusion. Implements methods to
         extract patches from an image and batch the patches along `dim=0`.
         Should also implement a `fuse` method to reconstruct the original image
        from a batch of patches. See
-       :class:`modulus.utils.patching.DeterministicPatching` for details. By
+       :class:`modulus.utils.patching.GridPatching2D` for details. By
        default None, in which case non-patched diffusion is used.
     mean_hr : Optional[Tensor], optional
         Optional tensor containing mean high-resolution images for
@@ -110,8 +110,8 @@ def stochastic_sampler(
     sigma_max = min(sigma_max, net.sigma_max)
 
     # Safety check on type of patching
-    if patching is not None and not isinstance(patching, DeterministicPatching):
-        raise ValueError("patching must be an instance of DeterministicPatching.")
+    if patching is not None and not isinstance(patching, GridPatching2D):
+        raise ValueError("patching must be an instance of GridPatching2D.")
 
     # Safety check: if patching is used then img_lr and latents must have same
     # height and width, otherwise there is mismatch in the number

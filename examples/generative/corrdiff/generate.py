@@ -23,7 +23,7 @@ import numpy as np
 import netCDF4 as nc
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from modulus.utils.patching import DeterministicPatching
+from modulus.utils.patching import GridPatching2D
 from modulus import Module
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -110,7 +110,7 @@ def main(cfg: DictConfig) -> None:
     patch_shape = (patch_shape_y, patch_shape_x)
     use_patching, img_shape, patch_shape = set_patch_shape(img_shape, patch_shape)
     if use_patching:
-        patching = DeterministicPatching(
+        patching = GridPatching2D(
             img_shape=img_shape,
             patch_shape=patch_shape,
             boundary_pix=cfg.generation.boundary_pix,
