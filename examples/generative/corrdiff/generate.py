@@ -23,10 +23,10 @@ import numpy as np
 import netCDF4 as nc
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
+from modulus.utils.patching import GridPatching2D
 from modulus import Module
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-from einops import rearrange
 from torch.distributed import gather
 
 
@@ -45,6 +45,7 @@ from helpers.generate_helpers import (
     save_images,
 )
 from helpers.train_helpers import set_patch_shape
+from datasets.dataset import register_dataset
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config_generate")
@@ -85,6 +86,11 @@ def main(cfg: DictConfig) -> None:
 
     # Create dataset object
     dataset_cfg = OmegaConf.to_container(cfg.dataset)
+
+    # Register dataset (if custom dataset)
+    register_dataset(dataset_cfg.dataset.type)
+    logger0.info(f"Using dataset: {dataset_cfg.dataset.type}")
+
     if "has_lead_time" in cfg.generation:
         has_lead_time = cfg.generation["has_lead_time"]
     else:
@@ -96,19 +102,23 @@ def main(cfg: DictConfig) -> None:
     img_out_channels = len(dataset.output_channels())
 
     # Parse the patch shape
-    if hasattr(cfg.generation, "patch_shape_x"):  # TODO better config handling
+    if cfg.generation.patching:
         patch_shape_x = cfg.generation.patch_shape_x
-    else:
-        patch_shape_x = None
-    if hasattr(cfg.generation, "patch_shape_y"):
         patch_shape_y = cfg.generation.patch_shape_y
     else:
-        patch_shape_y = None
+        patch_shape_x, patch_shape_y = None, None
     patch_shape = (patch_shape_y, patch_shape_x)
-    img_shape, patch_shape = set_patch_shape(img_shape, patch_shape)
-    if patch_shape != img_shape:
+    use_patching, img_shape, patch_shape = set_patch_shape(img_shape, patch_shape)
+    if use_patching:
+        patching = GridPatching2D(
+            img_shape=img_shape,
+            patch_shape=patch_shape,
+            boundary_pix=cfg.generation.boundary_pix,
+            overlap_pix=cfg.generation.overlap_pix,
+        )
         logger0.info("Patch-based training enabled")
     else:
+        patching = None
         logger0.info("Patch-based training disabled")
 
     # Parse the inference mode
@@ -164,44 +174,27 @@ def main(cfg: DictConfig) -> None:
             solver=cfg.sampler.solver,
         )
     elif cfg.sampler.type == "stochastic":
-        sampler_fn = partial(
-            stochastic_sampler,
-            img_shape=img_shape[1],
-            patch_shape=patch_shape[1],
-            boundary_pix=cfg.sampler.boundary_pix,
-            overlap_pix=cfg.sampler.overlap_pix,
-        )
+        sampler_fn = partial(stochastic_sampler, patching=patching)
     else:
         raise ValueError(f"Unknown sampling method {cfg.sampling.type}")
 
     # Main generation definition
     def generate_fn():
-        img_shape_y, img_shape_x = img_shape
         with nvtx.annotate("generate_fn", color="green"):
-            if cfg.generation.sample_res == "full":
-                image_lr_patch = image_lr
-            else:
-                torch.cuda.nvtx.range_push("rearrange")
-                image_lr_patch = rearrange(
-                    image_lr,
-                    "b c (h1 h) (w1 w) -> (b h1 w1) c h w",
-                    h1=img_shape_y // patch_shape[0],
-                    w1=img_shape_x // patch_shape[1],
-                )
-                torch.cuda.nvtx.range_pop()
-            image_lr_patch = image_lr_patch.to(memory_format=torch.channels_last)
+            # (1, C, H, W)
+            img_lr = image_lr.to(memory_format=torch.channels_last)
 
             if net_reg:
                 with nvtx.annotate("regression_model", color="yellow"):
                     image_reg = regression_step(
                         net=net_reg,
-                        img_lr=image_lr_patch,
+                        img_lr=img_lr,
                         latents_shape=(
                             cfg.generation.seed_batch_size,
                             img_out_channels,
                             img_shape[0],
                             img_shape[1],
-                        ),
+                        ),  # (batch_size, C, H, W)
                         lead_time_label=lead_time_label,
                     )
             if net_res:
@@ -213,16 +206,15 @@ def main(cfg: DictConfig) -> None:
                     image_res = diffusion_step(
                         net=net_res,
                         sampler_fn=sampler_fn,
-                        seed_batch_size=cfg.generation.seed_batch_size,
                         img_shape=img_shape,
                         img_out_channels=img_out_channels,
                         rank_batches=rank_batches,
-                        img_lr=image_lr_patch.expand(
+                        img_lr=img_lr.expand(
                             cfg.generation.seed_batch_size, -1, -1, -1
                         ).to(memory_format=torch.channels_last),
                         rank=dist.rank,
                         device=device,
-                        hr_mean=mean_hr,
+                        mean_hr=mean_hr,
                         lead_time_label=lead_time_label,
                     )
             if cfg.generation.inference_mode == "regression":
@@ -232,13 +224,6 @@ def main(cfg: DictConfig) -> None:
             else:
                 image_out = image_reg + image_res
 
-            if cfg.generation.sample_res != "full":
-                image_out = rearrange(
-                    image_out,
-                    "(b h1 w1) c h w -> b c (h1 h) (w1 w)",
-                    h1=img_shape_y // patch_shape[0],
-                    w1=img_shape_x // patch_shape[1],
-                )
             # Gather tensors on rank 0
             if dist.world_size > 1:
                 if dist.rank == 0:
