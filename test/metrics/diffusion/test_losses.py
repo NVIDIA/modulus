@@ -321,7 +321,7 @@ def test_residualloss_call_method():
     )
     assert isinstance(loss_value_with_patching, torch.Tensor)
     # Shape should be (batch_size * patch_num, channels, patch_shape_y, patch_shape_x)
-    expected_shape = (batch_size * 4, channels, 16, 8)
+    expected_shape = (batch_size * patch_num, channels, patch_shape[0], patch_shape[1])
     assert loss_value_with_patching.shape == expected_shape
 
     # Test error on invalid patching object
