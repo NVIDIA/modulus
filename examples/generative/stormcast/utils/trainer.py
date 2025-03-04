@@ -84,7 +84,7 @@ def training_loop(cfg):
     torch.backends.cudnn.allow_tf32 = False
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
-    fp_optimizations = cfg.training.perf.fp_optimizations
+    fp_optimizations = cfg.training.fp_optimizations
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if fp_optimizations == "amp-fp16" else torch.bfloat16
 
