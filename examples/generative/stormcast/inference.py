@@ -123,6 +123,7 @@ def main(cfg: DictConfig):
                 i,
             )
 
+            # inference regression model, placing output into state_pred
             (condition, _, state_pred) = build_network_condition_and_target(
                 background,
                 [state_pred, state_pred],
@@ -132,6 +133,7 @@ def main(cfg: DictConfig):
             )
 
             state_pred_noedm = state_pred.clone()
+            # inference diffusion model
             edm_corrected_outputs = diffusion_model_forward(
                 diffusion_model,
                 condition,
