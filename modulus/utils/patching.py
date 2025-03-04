@@ -22,6 +22,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
 import torch
+from einops import rearrange
 from torch import Tensor
 
 """
@@ -516,9 +517,6 @@ def image_batching(
     )
     pad_x_right = padded_shape_x - img_shape_x - boundary_pix
     pad_y_right = padded_shape_y - img_shape_y - boundary_pix
-    input_padded = torch.zeros(
-        input.shape[0], input.shape[1], padded_shape_y, padded_shape_x
-    ).to(input.device)
     image_padding = torch.nn.ReflectionPad2d(
         (boundary_pix, pad_x_right, boundary_pix, pad_y_right)
     ).to(
@@ -526,50 +524,36 @@ def image_batching(
     )  # (padding_left,padding_right,padding_top,padding_bottom)
     input_padded = image_padding(input)
     patch_num = patch_num_x * patch_num_y
+    x_unfold = torch.nn.functional.unfold(
+        input=input_padded,
+        kernel_size=(patch_shape_y, patch_shape_x),
+        stride=(
+            patch_shape_y - overlap_pix - boundary_pix,
+            patch_shape_x - overlap_pix - boundary_pix,
+        ),
+    )
+    x_unfold = rearrange(
+        x_unfold,
+        "b (c p_h p_w) (nb_p_h nb_p_w) -> (nb_p_w nb_p_h b) c p_h p_w",
+        p_h=patch_shape_y,
+        p_w=patch_shape_x,
+        nb_p_h=patch_num_y,
+        nb_p_w=patch_num_x,
+    )
     if input_interp is not None:
-        output = torch.zeros(
-            patch_num * batch_size,
-            input.shape[1] + input_interp.shape[1],
-            patch_shape_y,
-            patch_shape_x,
-        ).to(input.device)
+        input_interp_repeated = rearrange(
+            torch.repeat_interleave(
+                input=input_interp,
+                repeats=patch_num,
+                dim=0,
+                output_size=x_unfold.shape[0],
+            ),
+            "(b p) c h w -> (p b) c h w",
+            p=patch_num,
+        )
+        return torch.cat((x_unfold, input_interp_repeated), dim=1)
     else:
-        output = torch.zeros(
-            patch_num * batch_size, input.shape[1], patch_shape_y, patch_shape_x
-        ).to(input.device)
-    for x_index in range(patch_num_x):
-        for y_index in range(patch_num_y):
-            x_start = x_index * (patch_shape_x - overlap_pix - boundary_pix)
-            y_start = y_index * (patch_shape_y - overlap_pix - boundary_pix)
-            if input_interp is not None:
-                output[
-                    (x_index * patch_num_y + y_index)
-                    * batch_size : (x_index * patch_num_y + y_index + 1)
-                    * batch_size,
-                ] = torch.cat(
-                    (
-                        input_padded[
-                            :,
-                            :,
-                            y_start : y_start + patch_shape_y,
-                            x_start : x_start + patch_shape_x,
-                        ],
-                        input_interp,
-                    ),
-                    dim=1,
-                )
-            else:
-                output[
-                    (x_index * patch_num_y + y_index)
-                    * batch_size : (x_index * patch_num_y + y_index + 1)
-                    * batch_size,
-                ] = input_padded[
-                    :,
-                    :,
-                    y_start : y_start + patch_shape_y,
-                    x_start : x_start + patch_shape_x,
-                ]
-    return output
+        return x_unfold
 
 
 def image_fuse(
@@ -611,11 +595,15 @@ def image_fuse(
         img_shape_y, img_shape_x).
 
     """
+
     # Infer sizes from input image shape
     patch_shape_y, patch_shape_x = input.shape[2], input.shape[3]
 
+    # Calculate the number of patches in each dimension
     patch_num_x = math.ceil(img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
     patch_num_y = math.ceil(img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
+
+    # Calculate the shape of the input after padding
     padded_shape_x = (
         (patch_shape_x - overlap_pix - boundary_pix) * (patch_num_x - 1)
         + patch_shape_x
@@ -626,97 +614,61 @@ def image_fuse(
         + patch_shape_y
         + boundary_pix
     )
+    # Calculate the shape of the padding to add to input
     pad_x_right = padded_shape_x - img_shape_x - boundary_pix
     pad_y_right = padded_shape_y - img_shape_y - boundary_pix
-    residual_x = patch_shape_x - pad_x_right  # residual pixels in the last patch
-    residual_y = patch_shape_y - pad_y_right  # residual pixels in the last patch
-    output = torch.zeros(
-        batch_size, input.shape[1], img_shape_y, img_shape_x, device=input.device
+    pad = (boundary_pix, pad_x_right, boundary_pix, pad_y_right)
+
+    # Count local overlaps between patches
+    input_ones = torch.ones(
+        (batch_size, input.shape[1], padded_shape_y, padded_shape_x),
+        device=input.device,
     )
-    one_map = torch.ones(1, 1, input.shape[2], input.shape[3], device=input.device)
-    count_map = torch.zeros(
-        1, 1, img_shape_y, img_shape_x, device=input.device
-    )  # to count the overlapping times
-    for x_index in range(patch_num_x):
-        for y_index in range(patch_num_y):
-            x_start = x_index * (patch_shape_x - overlap_pix - boundary_pix)
-            y_start = y_index * (patch_shape_y - overlap_pix - boundary_pix)
-            if (x_index == patch_num_x - 1) and (y_index != patch_num_y - 1):
-                output[
-                    :, :, y_start : y_start + patch_shape_y - 2 * boundary_pix, x_start:
-                ] += input[
-                    (x_index * patch_num_y + y_index)
-                    * batch_size : (x_index * patch_num_y + y_index + 1)
-                    * batch_size,
-                    :,
-                    boundary_pix : patch_shape_y - boundary_pix,
-                    boundary_pix : residual_x + boundary_pix,
-                ]
-                count_map[
-                    :, :, y_start : y_start + patch_shape_y - 2 * boundary_pix, x_start:
-                ] += one_map[
-                    :,
-                    :,
-                    boundary_pix : patch_shape_y - boundary_pix,
-                    boundary_pix : residual_x + boundary_pix,
-                ]
-            elif (y_index == patch_num_y - 1) and ((x_index != patch_num_x - 1)):
-                output[
-                    :, :, y_start:, x_start : x_start + patch_shape_x - 2 * boundary_pix
-                ] += input[
-                    (x_index * patch_num_y + y_index)
-                    * batch_size : (x_index * patch_num_y + y_index + 1)
-                    * batch_size,
-                    :,
-                    boundary_pix : residual_y + boundary_pix,
-                    boundary_pix : patch_shape_x - boundary_pix,
-                ]
-                count_map[
-                    :, :, y_start:, x_start : x_start + patch_shape_x - 2 * boundary_pix
-                ] += one_map[
-                    :,
-                    :,
-                    boundary_pix : residual_y + boundary_pix,
-                    boundary_pix : patch_shape_x - boundary_pix,
-                ]
-            elif x_index == patch_num_x - 1 and y_index == patch_num_y - 1:
-                output[:, :, y_start:, x_start:] += input[
-                    (x_index * patch_num_y + y_index)
-                    * batch_size : (x_index * patch_num_y + y_index + 1)
-                    * batch_size,
-                    :,
-                    boundary_pix : residual_y + boundary_pix,
-                    boundary_pix : residual_x + boundary_pix,
-                ]
-                count_map[:, :, y_start:, x_start:] += one_map[
-                    :,
-                    :,
-                    boundary_pix : residual_y + boundary_pix,
-                    boundary_pix : residual_x + boundary_pix,
-                ]
-            else:
-                output[
-                    :,
-                    :,
-                    y_start : y_start + patch_shape_y - 2 * boundary_pix,
-                    x_start : x_start + patch_shape_x - 2 * boundary_pix,
-                ] += input[
-                    (x_index * patch_num_y + y_index)
-                    * batch_size : (x_index * patch_num_y + y_index + 1)
-                    * batch_size,
-                    :,
-                    boundary_pix : patch_shape_y - boundary_pix,
-                    boundary_pix : patch_shape_x - boundary_pix,
-                ]
-                count_map[
-                    :,
-                    :,
-                    y_start : y_start + patch_shape_y - 2 * boundary_pix,
-                    x_start : x_start + patch_shape_x - 2 * boundary_pix,
-                ] += one_map[
-                    :,
-                    :,
-                    boundary_pix : patch_shape_y - boundary_pix,
-                    boundary_pix : patch_shape_x - boundary_pix,
-                ]
-    return output / count_map
+    overlap_count = torch.nn.functional.unfold(
+        input=input_ones,
+        kernel_size=(patch_shape_y, patch_shape_x),
+        stride=(
+            patch_shape_y - overlap_pix - boundary_pix,
+            patch_shape_x - overlap_pix - boundary_pix,
+        ),
+    )
+    overlap_count = torch.nn.functional.fold(
+        input=overlap_count,
+        output_size=(padded_shape_y, padded_shape_x),
+        kernel_size=(patch_shape_y, patch_shape_x),
+        stride=(
+            patch_shape_y - overlap_pix - boundary_pix,
+            patch_shape_x - overlap_pix - boundary_pix,
+        ),
+    )
+
+    # Reshape input to make it 3D to apply fold
+    x = rearrange(
+        input,
+        "(nb_p_w nb_p_h b) c p_h p_w -> b (c p_h p_w) (nb_p_h nb_p_w)",
+        p_h=patch_shape_y,
+        p_w=patch_shape_x,
+        nb_p_h=patch_num_y,
+        nb_p_w=patch_num_x,
+    )
+    # Stitch patches together (by summing over overlapping patches)
+    x_folded = torch.nn.functional.fold(
+        input=x,
+        output_size=(padded_shape_y, padded_shape_x),
+        kernel_size=(patch_shape_y, patch_shape_x),
+        stride=(
+            patch_shape_y - overlap_pix - boundary_pix,
+            patch_shape_x - overlap_pix - boundary_pix,
+        ),
+    )
+
+    # Remove padding
+    x_no_padding = x_folded[
+        ..., pad[2] : pad[2] + img_shape_y, pad[0] : pad[0] + img_shape_x
+    ]
+    overlap_count_no_padding = overlap_count[
+        ..., pad[2] : pad[2] + img_shape_y, pad[0] : pad[0] + img_shape_x
+    ]
+
+    # Normalize by overlap count
+    return x_no_padding / overlap_count_no_padding
