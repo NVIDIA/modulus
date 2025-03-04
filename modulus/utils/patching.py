@@ -199,8 +199,33 @@ class RandomPatching2D(BasePatching2D):
             None
         """
         super().__init__(img_shape, patch_shape)
-        self.patch_num = patch_num
+        self._patch_num = patch_num
         # Generate the indices of the patches to extract
+        self.reset_patch_indices()
+
+    @property
+    def patch_num(self) -> int:
+        """
+        Get the number of patches to extract.
+
+        Returns
+        -------
+        int
+            The number of patches to extract.
+        """
+        return self._patch_num
+
+    def set_patch_sum(self, value: int) -> None:
+        """
+        Set the number of patches to extract and reset patch indices.
+        This is the only way to modify the patch_num value.
+
+        Parameters
+        ----------
+        value : int
+            The new number of patches to extract.
+        """
+        self._patch_num = value
         self.reset_patch_indices()
 
     def reset_patch_indices(self) -> None:
