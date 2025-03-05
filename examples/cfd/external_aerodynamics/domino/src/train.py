@@ -532,7 +532,7 @@ def train_epoch(
                 loss_norm = (
                     0.5 * loss_norm_surf + loss_integral + 0.5 * loss_norm_surf_area
                 )
-            nvtx.range_pop("Loss Calculation")
+            nvtx.range_pop()
 
         loss = loss_norm
         loss = loss / loss_interval
