@@ -25,7 +25,7 @@ be fixed: velocity, pressure, turbulent viscosity for volume variables and
 pressure, wall-shear-stress for surface variables. The different parameters such as 
 variable names, domain resolution, sampling size etc. are configurable in config.yaml. 
 """
-
+import os
 from pathlib import Path
 from typing import (
     Literal,
@@ -36,6 +36,7 @@ from typing import (
 
 import numpy as np
 from torch.utils.data import Dataset
+from omegaconf import DictConfig
 
 from modulus.utils.domino.utils import (
     KDTree,
@@ -560,6 +561,205 @@ class DoMINODataPipe(Dataset):
                     np.array(AIR_DENSITY, dtype=np.float32), -1
                 ),
             }
+
+def compute_scaling_factors(cfg: DictConfig, input_path: str) -> None:
+
+    model_type = cfg.model.model_type
+
+    if model_type == "volume" or model_type == "combined":
+        vol_save_path = os.path.join(
+            cfg.output, "volume_scaling_factors.npy"
+        )
+        if not os.path.exists(vol_save_path):
+            volume_variable_names = list(cfg.variables.volume.solution.keys())
+
+            fm_dict = DoMINODataPipe(
+                input_path,
+                phase="train",
+                grid_resolution=cfg.model.interp_res,
+                volume_variables=volume_variable_names,
+                surface_variables=None,
+                normalize_coordinates=True,
+                sampling=False,
+                sample_in_bbox=True,
+                volume_points_sample=cfg.model.volume_points_sample,
+                geom_points_sample=cfg.model.geom_points_sample,
+                positional_encoding=cfg.model.positional_encoding,
+                model_type=cfg.model.model_type,
+                bounding_box_dims=cfg.data.bounding_box,
+                bounding_box_dims_surf=cfg.data.bounding_box_surface,
+                compute_scaling_factors=True,
+            )
+
+            # Calculate mean
+            if cfg.model.normalization == "mean_std_scaling":
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    vol_fields = d_dict["volume_fields"]
+
+                    if vol_fields is not None:
+                        if j == 0:
+                            vol_fields_sum = np.mean(vol_fields, 0)
+                        else:
+                            vol_fields_sum += np.mean(vol_fields, 0)
+                    else:
+                        vol_fields_sum = 0.0
+
+                vol_fields_mean = vol_fields_sum / len(fm_dict)
+
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    vol_fields = d_dict["volume_fields"]
+
+                    if vol_fields is not None:
+                        if j == 0:
+                            vol_fields_sum_square = np.mean(
+                                (vol_fields - vol_fields_mean) ** 2.0, 0
+                            )
+                        else:
+                            vol_fields_sum_square += np.mean(
+                                (vol_fields - vol_fields_mean) ** 2.0, 0
+                            )
+                    else:
+                        vol_fields_sum_square = 0.0
+
+                vol_fields_std = np.sqrt(vol_fields_sum_square / len(fm_dict))
+
+                vol_scaling_factors = [vol_fields_mean, vol_fields_std]
+
+            if cfg.model.normalization == "min_max_scaling":
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    vol_fields = d_dict["volume_fields"]
+
+                    if vol_fields is not None:
+                        vol_mean = np.mean(vol_fields, 0)
+                        vol_std = np.std(vol_fields, 0)
+                        vol_idx = mean_std_sampling(
+                            vol_fields, vol_mean, vol_std, tolerance=12.0
+                        )
+                        vol_fields_sampled = np.delete(vol_fields, vol_idx, axis=0)
+                        if j == 0:
+                            vol_fields_max = np.amax(vol_fields_sampled, 0)
+                            vol_fields_min = np.amin(vol_fields_sampled, 0)
+                        else:
+                            vol_fields_max1 = np.amax(vol_fields_sampled, 0)
+                            vol_fields_min1 = np.amin(vol_fields_sampled, 0)
+
+                            for k in range(vol_fields.shape[-1]):
+                                if vol_fields_max1[k] > vol_fields_max[k]:
+                                    vol_fields_max[k] = vol_fields_max1[k]
+
+                                if vol_fields_min1[k] < vol_fields_min[k]:
+                                    vol_fields_min[k] = vol_fields_min1[k]
+                    else:
+                        vol_fields_max = 0.0
+                        vol_fields_min = 0.0
+
+                    if j > 20:
+                        break
+                vol_scaling_factors = [vol_fields_max, vol_fields_min]
+            np.save(vol_save_path, vol_scaling_factors)
+
+    if model_type == "surface" or model_type == "combined":
+        surf_save_path = os.path.join(
+            cfg.output, "surface_scaling_factors.npy"
+        )
+
+        if not os.path.exists(surf_save_path):
+            input_path = cfg.data.input_dir
+
+            volume_variable_names = list(cfg.variables.volume.solution.keys())
+            surface_variable_names = list(cfg.variables.surface.solution.keys())
+
+            fm_dict = DoMINODataPipe(
+                input_path,
+                phase="train",
+                grid_resolution=cfg.model.interp_res,
+                volume_variables=None,
+                surface_variables=surface_variable_names,
+                normalize_coordinates=True,
+                sampling=False,
+                sample_in_bbox=True,
+                volume_points_sample=cfg.model.volume_points_sample,
+                geom_points_sample=cfg.model.geom_points_sample,
+                positional_encoding=cfg.model.positional_encoding,
+                model_type=cfg.model.model_type,
+                bounding_box_dims=cfg.data.bounding_box,
+                bounding_box_dims_surf=cfg.data.bounding_box_surface,
+                compute_scaling_factors=True,
+            )
+
+            # Calculate mean
+            if cfg.model.normalization == "mean_std_scaling":
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    surf_fields = d_dict["surface_fields"]
+
+                    if surf_fields is not None:
+                        if j == 0:
+                            surf_fields_sum = np.mean(surf_fields, 0)
+                        else:
+                            surf_fields_sum += np.mean(surf_fields, 0)
+                    else:
+                        surf_fields_sum = 0.0
+
+                surf_fields_mean = surf_fields_sum / len(fm_dict)
+
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    surf_fields = d_dict["surface_fields"]
+
+                    if surf_fields is not None:
+                        if j == 0:
+                            surf_fields_sum_square = np.mean(
+                                (surf_fields - surf_fields_mean) ** 2.0, 0
+                            )
+                        else:
+                            surf_fields_sum_square += np.mean(
+                                (surf_fields - surf_fields_mean) ** 2.0, 0
+                            )
+                    else:
+                        surf_fields_sum_square = 0.0
+
+                surf_fields_std = np.sqrt(surf_fields_sum_square / len(fm_dict))
+
+                surf_scaling_factors = [surf_fields_mean, surf_fields_std]
+
+            if cfg.model.normalization == "min_max_scaling":
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    surf_fields = d_dict["surface_fields"]
+
+                    if surf_fields is not None:
+                        surf_mean = np.mean(surf_fields, 0)
+                        surf_std = np.std(surf_fields, 0)
+                        surf_idx = mean_std_sampling(
+                            surf_fields, surf_mean, surf_std, tolerance=12.0
+                        )
+                        surf_fields_sampled = np.delete(surf_fields, surf_idx, axis=0)
+                        if j == 0:
+                            surf_fields_max = np.amax(surf_fields_sampled, 0)
+                            surf_fields_min = np.amin(surf_fields_sampled, 0)
+                        else:
+                            surf_fields_max1 = np.amax(surf_fields_sampled, 0)
+                            surf_fields_min1 = np.amin(surf_fields_sampled, 0)
+
+                            for k in range(surf_fields.shape[-1]):
+                                if surf_fields_max1[k] > surf_fields_max[k]:
+                                    surf_fields_max[k] = surf_fields_max1[k]
+
+                                if surf_fields_min1[k] < surf_fields_min[k]:
+                                    surf_fields_min[k] = surf_fields_min1[k]
+                    else:
+                        surf_fields_max = 0.0
+                        surf_fields_min = 0.0
+
+                    if j > 20:
+                        break
+
+                surf_scaling_factors = [surf_fields_max, surf_fields_min]
+            np.save(surf_save_path, surf_scaling_factors)
 
 
 if __name__ == "__main__":
