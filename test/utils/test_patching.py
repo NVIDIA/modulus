@@ -15,6 +15,7 @@
 # limitations under the License.
 
 
+import pytest
 import torch
 from einops import rearrange, repeat
 from pytest_utils import import_or_fail
@@ -80,53 +81,55 @@ def test_image_fuse_with_boundary(pytestconfig):
 
 
 @import_or_fail("cftime")
-def test_image_fuse_with_multiple_batches(pytestconfig):
-    from modulus.utils.patching import image_fuse
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_image_fuse_with_multiple_batches(pytestconfig, device):
+    from modulus.utils.patching import image_batching, image_fuse
 
     # Test with multiple batches
     batch_size = 2
-    for img_shape_y, img_shape_x in ((4, 4), (8, 4)):
-        img_size = img_shape_y * img_shape_x
-        overlap_pix = 0
-        boundary_pix = 0
 
-        input_tensor = (
-            torch.cat(
-                [
-                    torch.arange(1, img_size + 1).view(1, 1, img_shape_y, img_shape_x),
-                    torch.arange(img_size + 1, 2 * img_size + 1).view(
-                        1, 1, img_shape_y, img_shape_x
-                    ),
-                ]
-            )
-            .cuda()
-            .float()
+    # Test cases: (img_shape_y, img_shape_x, patch_shape_y, patch_shape_x, overlap_pix, boundary_pix)
+    test_cases = [
+        (32, 32, 16, 16, 0, 0),  # Square image, no overlap/boundary
+        (64, 32, 32, 16, 0, 0),  # Rectangular image, no overlap/boundary
+        (48, 48, 16, 16, 4, 2),  # Square image, minimal overlap/boundary
+        (64, 48, 32, 16, 6, 2),  # Rectangular, larger overlap/boundary
+    ]
+
+    for (
+        img_shape_y,
+        img_shape_x,
+        patch_shape_y,
+        patch_shape_x,
+        overlap_pix,
+        boundary_pix,
+    ) in test_cases:
+        # Create original test image
+        original_image = (
+            torch.rand(batch_size, 3, img_shape_y, img_shape_x).to(device).float()
         )
-        input_tensor = input_tensor.repeat(batch_size, 1, 1, 1)
+
+        # Apply image_batching to split the image into patches
+        batched_images = image_batching(
+            original_image, patch_shape_y, patch_shape_x, overlap_pix, boundary_pix
+        )
+
+        # Apply image_fuse to reconstruct the image from patches
         fused_image = image_fuse(
-            input_tensor,
+            batched_images,
             img_shape_y,
             img_shape_x,
             batch_size,
             overlap_pix,
             boundary_pix,
         )
-        assert fused_image.shape == (batch_size, 1, img_shape_y, img_shape_x)
-        expected_output = (
-            torch.cat(
-                [
-                    torch.arange(1, img_size + 1).view(1, 1, img_shape_y, img_shape_x),
-                    torch.arange(img_size + 1, 2 * img_size + 1).view(
-                        1, 1, img_shape_y, img_shape_x
-                    ),
-                ]
-            )
-            .cuda()
-            .float()
+
+        # Verify that image_fuse reverses image_batching
+        assert torch.allclose(fused_image, original_image, atol=1e-5), (
+            f"Failed on {device}: img=({img_shape_y},{img_shape_x}), "
+            f"patch=({patch_shape_y},{patch_shape_x}), "
+            f"overlap={overlap_pix}, boundary={boundary_pix}"
         )
-        assert torch.allclose(
-            fused_image, expected_output, atol=1e-5
-        ), "Output for multiple batches does not match expected output."
 
 
 @import_or_fail("cftime")

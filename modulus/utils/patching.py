@@ -528,6 +528,22 @@ def image_batching(
                 f"must match specified patch shape ({patch_shape_y}, {patch_shape_x})"
             )
 
+    # Safety check: make sure patch_shape is large enough in comparison to
+    # overlap_pix and boundary_pix. Otherwise, number of patches extracted by
+    # unfold differs from the expected number of patches.
+    if patch_shape_x <= overlap_pix + 2 * boundary_pix:
+        raise ValueError(
+            f"patch_shape_x ({patch_shape_x}) must verify "
+            f"patch_shape_x ({patch_shape_x}) > "
+            f"overlap_pix ({overlap_pix}) + 2 * boundary_pix ({boundary_pix})"
+        )
+    if patch_shape_y <= overlap_pix + 2 * boundary_pix:
+        raise ValueError(
+            f"patch_shape_y ({patch_shape_y}) must verify "
+            f"patch_shape_y ({patch_shape_y}) > "
+            f"overlap_pix ({overlap_pix}) + 2 * boundary_pix ({boundary_pix})"
+        )
+
     patch_num_x = math.ceil(img_shape_x / (patch_shape_x - overlap_pix - boundary_pix))
     patch_num_y = math.ceil(img_shape_y / (patch_shape_y - overlap_pix - boundary_pix))
     padded_shape_x = (
@@ -550,13 +566,13 @@ def image_batching(
     input_padded = image_padding(input)
     patch_num = patch_num_x * patch_num_y
     x_unfold = torch.nn.functional.unfold(
-        input=input_padded,
+        input=input_padded.view(_cast_type(input_padded)),
         kernel_size=(patch_shape_y, patch_shape_x),
         stride=(
             patch_shape_y - overlap_pix - boundary_pix,
             patch_shape_x - overlap_pix - boundary_pix,
         ),
-    )
+    ).to(input_padded.dtype)
     x_unfold = rearrange(
         x_unfold,
         "b (c p_h p_w) (nb_p_h nb_p_w) -> (nb_p_w nb_p_h b) c p_h p_w",
@@ -697,3 +713,25 @@ def image_fuse(
 
     # Normalize by overlap count
     return x_no_padding / overlap_count_no_padding
+
+
+def _cast_type(input: Tensor) -> torch.dtype:
+    """Return float type based on input tensor type.
+
+    Parameters
+    ----------
+    input : Tensor
+        Input tensor to determine float type from
+
+    Returns
+    -------
+    torch.dtype
+        Float type corresponding to input tensor type for int32/64,
+        otherwise returns original dtype
+    """
+    if input.dtype == torch.int32:
+        return torch.float32
+    elif input.dtype == torch.int64:
+        return torch.float64
+    else:
+        return input.dtype

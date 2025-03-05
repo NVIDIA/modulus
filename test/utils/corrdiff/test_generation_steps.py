@@ -230,7 +230,7 @@ def test_diffusion_step_rectangle(device, pytestconfig):
     # Define patching utility
     patching = GridPatching2D(
         img_shape=(img_shape_y, img_shape_x),
-        patch_shape=(16, 8),
+        patch_shape=(16, 10),
         overlap_pix=4,
         boundary_pix=2,
     )

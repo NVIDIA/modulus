@@ -124,7 +124,7 @@ def test_stochastic_sampler_rectangle_patching(pytestconfig):
     net = MockNet()
 
     img_shape_y, img_shape_x = 256, 64
-    patch_shape_y, patch_shape_x = 16, 8
+    patch_shape_y, patch_shape_x = 16, 10
 
     latents = torch.randn(2, 3, img_shape_y, img_shape_x)  # Mock latents
     img_lr = torch.randn(2, 3, img_shape_y, img_shape_x)  # Mock low-res image
