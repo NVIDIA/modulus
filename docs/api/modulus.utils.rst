@@ -40,7 +40,11 @@ Filesystem utils
 Generative utils
 ----------------
 
-.. automodule:: modulus.utils.generative.sampler
+.. automodule:: modulus.utils.generative.deterministic_sampler
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.utils.generative.stochastic_sampler
     :members:
     :show-inheritance:
 
