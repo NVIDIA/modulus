@@ -44,6 +44,8 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
+from nvtx import annotate as nvtx_annotate
+import torch.cuda.nvtx as nvtx
 
 from modulus.distributed import DistributedManager
 from modulus.launch.utils import load_checkpoint, save_checkpoint
@@ -465,8 +467,10 @@ def train_epoch(
         sampled_batched = dict_to_device(sample_batched, device)
 
         with autocast(enabled=False):
-            prediction_vol, prediction_surf = model(sampled_batched)
+            with nvtx.range("Model Forward Pass"):
+                prediction_vol, prediction_surf = model(sampled_batched)
 
+            nvtx.range_push("Loss Calculation")
             if prediction_vol is not None:
                 target_vol = sampled_batched["volume_fields"]
                 if loss_fn_type == "rmse":
@@ -528,6 +532,7 @@ def train_epoch(
                 loss_norm = (
                     0.5 * loss_norm_surf + loss_integral + 0.5 * loss_norm_surf_area
                 )
+            nvtx.range_pop("Loss Calculation")
 
         loss = loss_norm
         loss = loss / loss_interval
@@ -950,7 +955,7 @@ def main(cfg: DictConfig) -> None:
     initial_integral_factor_orig = cfg.model.integral_loss_scaling_factor
 
     for epoch in range(init_epoch, cfg.train.epochs):
-        start_time = time.time()
+        start_time = time.perf_counter()
         print(f"Device {dist.device}, epoch {epoch_number}:")
 
         train_sampler.set_epoch(epoch)
@@ -959,6 +964,7 @@ def main(cfg: DictConfig) -> None:
         initial_integral_factor = initial_integral_factor_orig
 
         model.train(True)
+        epoch_start_time = time.perf_counter()
         avg_loss = train_epoch(
             dataloader=train_dataloader,
             model=model,
@@ -969,6 +975,10 @@ def main(cfg: DictConfig) -> None:
             device=dist.device,
             integral_scaling_factor=initial_integral_factor,
             loss_fn_type=cfg.model.loss_function,
+        )
+        epoch_end_time = time.perf_counter()
+        print(
+            f"Device {dist.device}, Epoch {epoch_number} took {epoch_end_time - epoch_start_time} seconds"
         )
 
         model.eval()
@@ -1017,7 +1027,7 @@ def main(cfg: DictConfig) -> None:
                 ),  # hacky way of using epoch to store metadata
             )
         print(
-            f"Device { dist.device}, Best val loss {best_vloss}, Time taken {time.time() - start_time}"
+            f"Device { dist.device}, Best val loss {best_vloss}, Time taken {time.perf_counter() - start_time}"
         )
 
         if dist.rank == 0 and (epoch + 1) % cfg.train.checkpoint_interval == 0.0:

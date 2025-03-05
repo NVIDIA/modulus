@@ -51,6 +51,9 @@ from modulus.utils.domino.utils import (
 )
 from modulus.utils.sdf import signed_distance_field
 
+from nvtx import annotate as nvtx_annotate
+import torch.cuda.nvtx as nvtx
+
 
 class DoMINODataPipe(Dataset):
     """
@@ -154,12 +157,15 @@ class DoMINODataPipe(Dataset):
     def __len__(self):
         return len(self.indices)
 
+    @nvtx_annotate(message="DoMINODataPipe __getitem__")
     def __getitem__(self, idx):
         index = self.indices[idx]
         cfd_filename = self.filenames[index]
 
         filepath = self.data_path / cfd_filename
+        nvtx.range_push("Read .npy")
         data_dict = np.load(filepath, allow_pickle=True).item()
+        nvtx.range_pop()
 
         stl_vertices = data_dict["stl_coordinates"]
         stl_centers = data_dict["stl_centers"]
@@ -189,6 +195,8 @@ class DoMINODataPipe(Dataset):
 
         nx, ny, nz = self.grid_resolution
 
+
+        nvtx.range_push("Surface SDF")
         surf_grid = create_grid(s_max, s_min, [nx, ny, nz])
         surf_grid_reshaped = surf_grid.reshape(nx * ny * nz, 3)
 
@@ -206,6 +214,7 @@ class DoMINODataPipe(Dataset):
         surf_grid = np.float32(surf_grid)
         sdf_surf_grid = np.float32(sdf_surf_grid)
         surf_grid_max_min = np.float32(np.asarray([s_min, s_max]))
+        nvtx.range_pop()
 
         if self.model_type == "volume" or self.model_type == "combined":
             volume_coordinates = data_dict["volume_mesh_centers"]
@@ -362,6 +371,7 @@ class DoMINODataPipe(Dataset):
                 surface_fields = surface_fields[ids_in_bbox]
 
                 # Get neighbors
+                nvtx.range_push("Get Neighbors")
                 interp_func = KDTree(surface_coordinates)
                 dd, ii = interp_func.query(
                     surface_coordinates, k=self.num_surface_neighbors
@@ -373,7 +383,7 @@ class DoMINODataPipe(Dataset):
                 surface_neighbors_normals = surface_neighbors_normals[:, 1:]
                 surface_neighbors_sizes = surface_sizes[ii]
                 surface_neighbors_sizes = surface_neighbors_sizes[:, 1:]
-
+                nvtx.range_pop()
                 dx, dy, dz = (
                     (s_max[0] - s_min[0]) / nx,
                     (s_max[1] - s_min[1]) / ny,
@@ -393,6 +403,7 @@ class DoMINODataPipe(Dataset):
                     surf_grid = normalize(surf_grid, s_max, s_min)
 
                 if self.sampling:
+                    nvtx.range_push("Surface Sampling")
                     (
                         surface_coordinates_sampled,
                         idx_surface,
@@ -414,6 +425,7 @@ class DoMINODataPipe(Dataset):
                     surface_neighbors_normals = surface_neighbors_normals[idx_surface]
                     surface_neighbors_sizes = surface_neighbors_sizes[idx_surface]
                     surface_coordinates = surface_coordinates_sampled
+                    nvtx.range_pop()
 
                 if self.scaling_type is not None:
                     if self.surface_factors is not None:
@@ -457,6 +469,7 @@ class DoMINODataPipe(Dataset):
             pos_normals_com_surface = None
 
         if self.sampling:
+            nvtx.range_push("Geometry Sampling")
             geometry_points = self.geom_points_sample
             geometry_coordinates_sampled, idx_geometry = shuffle_array(
                 stl_vertices, geometry_points
@@ -466,6 +479,7 @@ class DoMINODataPipe(Dataset):
                     geometry_coordinates_sampled, geometry_points, pad_value=-100.0
                 )
             geom_centers = geometry_coordinates_sampled
+            nvtx.range_pop()
         else:
             geom_centers = stl_vertices
 
