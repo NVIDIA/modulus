@@ -67,3 +67,10 @@ Weather / Climate utils
 
 .. automodule:: modulus.utils.zenith_angle
     :show-inheritance:
+
+Patching utils
+--------------
+
+.. automodule:: modulus.utils.patching
+    :members:
+    :show-inheritance:

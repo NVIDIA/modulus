@@ -77,7 +77,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
     Examples
     ---------
     The model forward pass can be called with:
-    >>> `model(x, img_lr, force_fp32=False, **forward_kwargs)`
+    >>> model(x, img_lr, force_fp32=False, **forward_kwargs)
     where:
         x, img_lr: torch.Tensor
             Passed as positional arguments to the underlying model. Refer
