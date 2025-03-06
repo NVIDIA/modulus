@@ -1,0 +1,17 @@
+defaults:
+  - config
+  - _self_
+
+exp_tag: cached
+
+training_prefix: ${cached_prefix}
+data_processor:
+  use_cache: true
+
+train: # Training configurable parameters
+  dataloader:
+    num_workers: 20
+
+val: # Validation configurable parameters
+  dataloader:
+    num_workers: 0

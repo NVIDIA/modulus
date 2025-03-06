@@ -51,6 +51,7 @@ from modulus.utils.domino.utils import (
     pad,
     sample_array,
     standardize,
+    mean_std_sampling,
 )
 from modulus.utils.sdf import signed_distance_field
 
