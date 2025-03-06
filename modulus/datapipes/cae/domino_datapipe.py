@@ -50,6 +50,7 @@ from modulus.utils.domino.utils import (
     normalize,
     pad,
     sample_array,
+    shuffle_array,
     standardize,
     mean_std_sampling,
 )
@@ -143,7 +144,7 @@ class DoMINODataPipe(Dataset):
         self.bounding_box_dims_surf.append(np.asarray(bounding_box_dims_surf.max))
         self.bounding_box_dims_surf.append(np.asarray(bounding_box_dims_surf.min))
 
-        self.filenames = get_filenames(self.data_path)
+        self.filenames = get_filenames(self.data_path, exclude_dirs=True)
         total_files = len(self.filenames)
 
         self.phase = phase

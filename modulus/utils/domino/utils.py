@@ -304,10 +304,14 @@ def create_directory(filepath):
         os.makedirs(filepath)
 
 
-def get_filenames(filepath):
+def get_filenames(filepath,exclude_dirs=False):
     """Function to get filenames from a directory"""
     if os.path.exists(filepath):
-        filenames = os.listdir(filepath)
+        filenames = []
+        for item in os.listdir(filepath):
+            if exclude_dirs and os.path.isdir(os.path.join(filepath, item)):
+                continue
+            filenames.append(item)
         return filenames
     else:
         FileNotFoundError()
@@ -368,11 +372,12 @@ def mean_std_sampling(field, mean, std, tolerance=3.0):
     return idx_all
 
 
-def dict_to_device(state_dict, device):
+def dict_to_device(state_dict, device, exclude_keys=["filename"]):
     """Function to load dictionary to device"""
     new_state_dict = {}
     for k, v in state_dict.items():
-        new_state_dict[k] = v.to(device)
+        if k not in exclude_keys:
+            new_state_dict[k] = v.to(device)
     return new_state_dict
 
 

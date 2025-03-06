@@ -637,7 +637,7 @@ def main(cfg: DictConfig) -> None:
                 surface_points_sample=cfg.model.surface_points_sample,
                 geom_points_sample=cfg.model.geom_points_sample,
                 model_type=cfg.model.model_type,
-                deterministic_seed=cfg.train.deterministic_sampling,
+                deterministic_seed=False,
             )
         else:
             return DoMINODataPipe(
@@ -660,7 +660,7 @@ def main(cfg: DictConfig) -> None:
                 bounding_box_dims=cfg.data.bounding_box,
                 bounding_box_dims_surf=cfg.data.bounding_box_surface,
                 num_surface_neighbors=cfg.model.num_surface_neighbors,
-                deterministic_seed=cfg.train.deterministic_sampling,
+                deterministic_seed=False,
             )
     train_dataset = get_dataset(cfg, "train")
     val_dataset = get_dataset(cfg, "val")
