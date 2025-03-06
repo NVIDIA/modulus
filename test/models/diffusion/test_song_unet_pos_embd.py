@@ -94,6 +94,49 @@ def test_song_unet_global_indexing(device):
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_song_unet_embedding_selector(device):
+    """Test the embedding selector functionality of SongUNetPosEmbd."""
+    torch.manual_seed(0)
+    N_pos = 2
+    patch_shape_x = 32
+    patch_shape_y = 64
+    # Construct the DDM++ UNet model
+    model = UNet(
+        img_resolution=128,
+        in_channels=2 + N_pos,
+        out_channels=2,
+        gridtype="test",
+        N_grid_channels=N_pos,
+    ).to(device)
+    input_image = torch.ones([1, 2, patch_shape_y, patch_shape_x]).to(device)
+    noise_labels = torch.randn([1]).to(device)
+    class_labels = torch.randint(0, 1, (1, 1)).to(device)
+
+    # Expected embeddings should be the same as global_index
+    idx_x = torch.arange(45, 45 + patch_shape_x)
+    idx_y = torch.arange(12, 12 + patch_shape_y)
+    mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
+    expected_embeds = torch.stack((mesh_x, mesh_y), dim=0)[None].to(device)
+
+    # Function to select embeddings
+    def embedding_selector(emb):
+        return emb[None, :, 45 : 45 + patch_shape_x, 12 : 12 + patch_shape_y]
+
+    output_image = model(
+        input_image,
+        noise_labels,
+        class_labels,
+        embedding_selector=embedding_selector,
+    )
+    selected_embeds = model.positional_embedding_selector(
+        input_image, embedding_selector
+    )
+
+    assert output_image.shape == (1, 2, patch_shape_y, patch_shape_x)
+    assert torch.equal(selected_embeds, expected_embeds)
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_song_unet_constructor(device):
     """Test the Song UNet constructor options"""
 

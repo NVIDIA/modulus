@@ -159,11 +159,15 @@ def stochastic_sampler(
         # Patched conditioning [x_lr, mean_hr]
         # (batch_size * patch_num, C_in + C_out, patch_shape_y, patch_shape_x)
         x_lr = patching.apply(input=x_lr, additional_input=img_lr)
-        # Patched global grid coordinates
-        # (batch_size * patch_num, 2, patch_shape_y, patch_shape_x)
-        global_index = patching.global_index(batch_size=batch_size).to(latents.device)
+
+        # Function to select the correct positional embedding for each patch
+        def patch_embedding_selector(emb):
+            # emb: (N_pe, image_shape_y, image_shape_x)
+            # (batch_size * patch_num, N_pe, patch_shape_y, patch_shape_x)
+            return patching.apply(emb[None].expand(batch_size, -1, -1, -1))
+
     else:
-        global_index = None
+        patch_embedding_selector = None
 
     # Main sampling loop.
     x_next = latents.to(torch.float64) * t_steps[0]
@@ -184,9 +188,6 @@ def stochastic_sampler(
         )
         x_lr = x_lr.to(latents.device)
 
-        if global_index is not None:
-            global_index = global_index.to(latents.device)
-
         if lead_time_label is not None:
             denoised = net(
                 x_hat_batch,
@@ -194,7 +195,7 @@ def stochastic_sampler(
                 t_hat,
                 class_labels,
                 lead_time_label=lead_time_label,
-                global_index=global_index,
+                embedding_selector=patch_embedding_selector,
             ).to(torch.float64)
         else:
             denoised = net(
@@ -202,7 +203,7 @@ def stochastic_sampler(
                 x_lr,
                 t_hat,
                 class_labels,
-                global_index=global_index,
+                embedding_selector=patch_embedding_selector,
             ).to(torch.float64)
         if patching:
             # Un-patch the denoised image
@@ -227,7 +228,7 @@ def stochastic_sampler(
                     t_next,
                     class_labels,
                     lead_time_label=lead_time_label,
-                    global_index=global_index,
+                    embedding_selector=patch_embedding_selector,
                 ).to(torch.float64)
             else:
                 denoised = net(
@@ -235,7 +236,7 @@ def stochastic_sampler(
                     x_lr,
                     t_next,
                     class_labels,
-                    global_index=global_index,
+                    embedding_selector=patch_embedding_selector,
                 ).to(torch.float64)
             if patching:
                 # Un-patch the denoised image

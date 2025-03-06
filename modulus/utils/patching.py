@@ -124,7 +124,7 @@ class BasePatching2D(ABC):
         Parameters
         ----------
         batch_size : int
-            The size of the input batch.
+            The size of the batch of images to patch.
 
         Returns
         -------
@@ -230,8 +230,8 @@ class RandomPatching2D(BasePatching2D):
 
     def reset_patch_indices(self) -> None:
         """
-        Generate new random indices for the patches to extract. These indices
-        correspond to the indices of the lower left corner of each patch.
+        Generate new random indices for the patches to extract. These are the
+        starting indices of the patches to extract (upper left corner).
 
         Returns
         -------
@@ -255,8 +255,7 @@ class RandomPatching2D(BasePatching2D):
         Applies the patching operation by extracting patches specified by
         `self.patch_indices` from the `input` Tensor. Extracted patches are
         batched along the first dimension of the output. The layout of the
-        output assumes an outer index for the patches and an inner index for
-        the batch elements, thats is for any i, `out[B * i: B * (i + 1)]`
+        output assumes that for any i, `out[B * i: B * (i + 1)]`
         corresponds to the same patch exacted from each batch element of
         `input`.
 
@@ -264,7 +263,7 @@ class RandomPatching2D(BasePatching2D):
         ---------
         input : Tensor
             The input tensor representing the full image with shape
-            (batch_size, channels, img_shape_y, img_shape_x).
+            (batch_size, channels_in, img_shape_y, img_shape_x).
         additional_input : Optional[Tensor], optional
             If provided, it is concatenated to each patch along `dim=1`.
             Must have same batch size as `input`. Bilinear interpolation
@@ -274,10 +273,10 @@ class RandomPatching2D(BasePatching2D):
         Returns
         -------
         Tensor
-            A tensor of shape (batch_size * self.patch_num, channels_out,
-            patch_shape_y, patch_shape_x). If `additional_input` is provided,
-            channels_out comprises channels from both `input` and
-            `additional_input`.
+            A tensor of shape (batch_size * self.patch_num, channels [+
+            additional_channels], patch_shape_y, patch_shape_x). If
+            `additional_input` is provided, its channels are concatenated
+            along the channel dimension.
         """
         B = input.shape[0]
         out = torch.zeros(
@@ -380,6 +379,11 @@ class GridPatching2D(BasePatching2D):
 
         Splits the input tensor into patches in a grid-like pattern. Can
         optionally concatenate additional interpolated data to each patch.
+        Extracted patches are batched along the first dimension of the output.
+        The layout of the output assumes that for any i, `out[B * i: B * (i + 1)]`
+        corresponds to the same patch exacted from each batch element of
+        `input`. The patches can be reconstructed back into the original image
+        using the fuse method.
 
         Parameters
         ----------
@@ -566,7 +570,7 @@ def image_batching(
     input_padded = image_padding(input)
     patch_num = patch_num_x * patch_num_y
     x_unfold = torch.nn.functional.unfold(
-        input=input_padded.view(_cast_type(input_padded)),
+        input=input_padded.view(_cast_type(input_padded)),  # Cast to float
         kernel_size=(patch_shape_y, patch_shape_x),
         stride=(
             patch_shape_y - overlap_pix - boundary_pix,
@@ -606,7 +610,8 @@ def image_fuse(
     boundary_pix: int,
 ) -> Tensor:
     """
-    Reconstructs a full image from a batch of patched images.
+    Reconstructs a full image from a batch of patched images. Reverts the patching
+    operation performed by image_batching().
 
     This function takes a batch of image patches and reconstructs the full
     image by stitching the patches together. The function accounts for
@@ -635,6 +640,10 @@ def image_fuse(
         The reconstructed full image tensor with shape (batch_size, channels,
         img_shape_y, img_shape_x).
 
+    See Also
+    --------
+    :func:`modulus.utils.patching.image_batching`
+        The function this reverses, which splits images into patches.
     """
 
     # Infer sizes from input image shape

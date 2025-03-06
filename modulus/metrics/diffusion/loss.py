@@ -524,6 +524,8 @@ class ResidualLoss:
         patching : Optional[RandomPatching2D], optional
             Patching strategy for processing large images, by default None. See
             :class:`modulus.utils.patching.RandomPatching2D` for details.
+            When provided, the patching strategy is used for both image patches
+            and positional embeddings selection in the model `net`.
         labels : Optional[Tensor], optional
             Ground truth labels for the input images, by default None.
         lead_time_label : Optional[Tensor], optional
@@ -605,13 +607,18 @@ class ResidualLoss:
             # Patched conditioning on y_lr and interp(img_lr)
             # (batch_size * patch_num, 2*c_in, patch_shape_y, patch_shape_x)
             y_lr_patched = patching.apply(input=y_lr, additional_input=img_lr)
-            # Patched global grid coordinates (pos_embd)
-            # (batch_size * patch_num, 2, patch_shape_y, patch_shape_x)
-            global_index = patching.global_index(batch_size=batch_size)
+
+            # Function to select the correct positional embedding for each
+            # patch
+            def patch_embedding_selector(emb):
+                # emb: (N_pe, image_shape_y, image_shape_x) or
+                # (batch_size * patch_num, N_pe, patch_shape_y, patch_shape_x)
+                return patching.apply(emb[None].expand(batch_size, -1, -1, -1))
+
             y = y_patched
             y_lr = y_lr_patched
         else:
-            global_index = None
+            patch_embedding_selector = None
 
         # Noise
         rnd_normal = torch.randn([y.shape[0], 1, 1, 1], device=img_clean.device)
@@ -627,7 +634,7 @@ class ResidualLoss:
                 y_lr,
                 sigma,
                 labels,
-                global_index=global_index,
+                embedding_selector=patch_embedding_selector,
                 lead_time_label=lead_time_label,
                 augment_labels=augment_labels,
             )
@@ -637,7 +644,7 @@ class ResidualLoss:
                 y_lr,
                 sigma,
                 labels,
-                global_index=global_index,
+                embedding_selector=patch_embedding_selector,
                 augment_labels=augment_labels,
             )
         loss = weight * ((D_yn - y) ** 2)
