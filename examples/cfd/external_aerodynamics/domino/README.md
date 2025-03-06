@@ -41,8 +41,9 @@ To train and test the DoMINO model on AWS dataset, follow these steps:
 2. Specify the configuration settings in `conf/config.yaml`.
 
 3. Run `process_data.py`. This will process VTP/VTU files and save them as npy for faster
- processing in DoMINO datapipe. Modify data_processor key in config file. The processed
-  dataset should be divided into 2 directories, for training and validation.
+ processing in DoMINO datapipe. Modify data_processor key in config file. Optionally, run
+ `cache_data.py` if using caching to decrease training time. The final processed dataset
+ should be divided into 2 directories, for training and validation.
 
 4. Run `train.py` to start the training. Modify data, train and model keys in config file.
 

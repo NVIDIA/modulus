@@ -286,10 +286,12 @@ def shuffle_array(arr, npoin):
     idx = idx[:npoin]
     return arr[idx], idx
 
+
 def sample_array(arr, n_samples):
     """Function for sampling arrays without replacement"""
     idx = np.random.choice(arr.shape[0], size=n_samples, replace=False)
     return arr[idx], idx
+
 
 def shuffle_array_without_sampling(arr):
     """Function for shuffline arrays without sampling."""
@@ -304,7 +306,7 @@ def create_directory(filepath):
         os.makedirs(filepath)
 
 
-def get_filenames(filepath,exclude_dirs=False):
+def get_filenames(filepath, exclude_dirs=False):
     """Function to get filenames from a directory"""
     if os.path.exists(filepath):
         filenames = []

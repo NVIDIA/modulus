@@ -1,32 +1,38 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """
 This script processes DoMINODataPipe format files into cached versions
 for faster loading during training. It processes files in parallel and can be
 configured through config.yaml in the data_processing tab.
 """
 
-from modulus.datapipes.cae.domino_datapipe import CachedDoMINODataset, DoMINODataPipe, compute_scaling_factors
+from modulus.datapipes.cae.domino_datapipe import (
+    CachedDoMINODataset,
+    DoMINODataPipe,
+    compute_scaling_factors,
+)
 import hydra
-import time
 import numpy as np
 import os
-from pathlib import Path
-from hydra.utils import to_absolute_path
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from modulus.distributed import DistributedManager
-
-import signal
-import sys
-
-
-def handle_sigterm(signum, frame):
-    print("Received SIGTERM - exiting gracefully to allow restart after pre-emption")
-    # Do cleanup
-    sys.exit(0)
-# Register the handler
-signal.signal(signal.SIGTERM, handle_sigterm)
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
@@ -36,12 +42,8 @@ def main(cfg: DictConfig) -> None:
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    vol_save_path = os.path.join(
-        cfg.output, "volume_scaling_factors.npy"
-    )
-    surf_save_path = os.path.join(
-        cfg.output, "surface_scaling_factors.npy"
-    )
+    vol_save_path = os.path.join(cfg.output, "volume_scaling_factors.npy")
+    surf_save_path = os.path.join(cfg.output, "surface_scaling_factors.npy")
     if os.path.exists(vol_save_path):
         vol_factors = np.load(vol_save_path)
     else:
@@ -51,7 +53,6 @@ def main(cfg: DictConfig) -> None:
         surf_factors = np.load(surf_save_path)
     else:
         surf_factors = None
-
 
     # Set up variables based on model type
     model_type = cfg.model.model_type
@@ -63,10 +64,9 @@ def main(cfg: DictConfig) -> None:
     if model_type in ["surface", "combined"]:
         surface_variable_names = list(cfg.variables.surface.solution.keys())
 
-
     # Create dataset once
     dataset_orig = DoMINODataPipe(
-        data_path=cfg.data_processor.output_dir, # Caching comes after data processing
+        data_path=cfg.data_processor.output_dir,  # Caching comes after data processing
         phase="train",  # Phase doesn't matter for caching
         grid_resolution=cfg.model.interp_res,
         volume_variables=volume_variable_names,
@@ -106,10 +106,7 @@ def main(cfg: DictConfig) -> None:
 
     def get_dataloader(dataset, world_size, rank):
         sampler = DistributedSampler(
-            dataset,
-            num_replicas=world_size,
-            rank=rank,
-            shuffle=False 
+            dataset, num_replicas=world_size, rank=rank, shuffle=False
         )
 
         return DataLoader(
@@ -122,16 +119,19 @@ def main(cfg: DictConfig) -> None:
     dataloader_orig = get_dataloader(dataset_orig, dist.world_size, dist.rank)
     dataloader_cached = get_dataloader(dataset_cached, dist.world_size, dist.rank)
 
-
     # Process and cache files
-    for _, (sample_orig, sample_cached) in enumerate(zip(dataloader_orig, dataloader_cached)):
+    for _, (sample_orig, sample_cached) in enumerate(
+        zip(dataloader_orig, dataloader_cached)
+    ):
         filename_orig = sample_orig["filename"][0]
         filename_cached = sample_cached["filename"][0]
         mismatched = False
         if filename_orig != filename_cached:
-            print(f"Rank {dist.rank}: Mismatched filenames: {filename_orig} != {filename_cached}")
+            print(
+                f"Rank {dist.rank}: Mismatched filenames: {filename_orig} != {filename_cached}"
+            )
             mismatched = True
-        for k,v in sample_orig.items():
+        for k, v in sample_orig.items():
             if k in ["filename"]:
                 continue
             if k not in sample_cached:
@@ -140,14 +140,18 @@ def main(cfg: DictConfig) -> None:
             elif not torch.allclose(v, sample_cached[k]):
                 print(f"Rank {dist.rank}: Mismatched values for key {k}")
                 # Get boolean mask of mismatches
-                mismatches = (v != sample_cached[k])
+                mismatches = v != sample_cached[k]
                 # Get indices where values mismatch
                 mismatch_indices = torch.nonzero(mismatches, as_tuple=False)
-                print(f"  Found {len(mismatch_indices)} mismatches, of {v.numel()} total values")
+                print(
+                    f"  Found {len(mismatch_indices)} mismatches, of {v.numel()} total values"
+                )
                 print(f" Tensor shape: {v.shape}, vs {sample_cached[k].shape}")
                 # Get the actual values at those positions
                 for idx in mismatch_indices[:5]:  # Show only first 5 mismatches
-                    idx_tuple = tuple(idx.tolist())  # Convert index tensor to tuple for indexing
+                    idx_tuple = tuple(
+                        idx.tolist()
+                    )  # Convert index tensor to tuple for indexing
                     val1 = v[idx_tuple].item()
                     val2 = sample_cached[k][idx_tuple].item()
                     print(f"  Index {idx_tuple}: {val1} vs {val2}")
