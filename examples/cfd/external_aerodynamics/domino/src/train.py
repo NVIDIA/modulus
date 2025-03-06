@@ -50,7 +50,7 @@ import torch.cuda.nvtx as nvtx
 from modulus.distributed import DistributedManager
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
-from modulus.datapipes.cae.domino_datapipe import DoMINODataPipe, compute_scaling_factors
+from modulus.datapipes.cae.domino_datapipe import DoMINODataPipe, CachedDoMINODataset, compute_scaling_factors
 from modulus.models.domino.model import DoMINO
 from modulus.utils.domino.utils import *
 
@@ -620,49 +620,50 @@ def main(cfg: DictConfig) -> None:
         vol_factors = None
         surf_factors = None
 
-    train_dataset = DoMINODataPipe(
-        input_path,
-        phase="train",
-        grid_resolution=cfg.model.interp_res,
-        volume_variables=volume_variable_names,
-        surface_variables=surface_variable_names,
-        normalize_coordinates=True,
-        sampling=True,
-        sample_in_bbox=True,
-        volume_points_sample=cfg.model.volume_points_sample,
-        surface_points_sample=cfg.model.surface_points_sample,
-        geom_points_sample=cfg.model.geom_points_sample,
-        positional_encoding=cfg.model.positional_encoding,
-        volume_factors=vol_factors,
-        surface_factors=surf_factors,
-        scaling_type=cfg.model.normalization,
-        model_type=cfg.model.model_type,
-        bounding_box_dims=cfg.data.bounding_box,
-        bounding_box_dims_surf=cfg.data.bounding_box_surface,
-        num_surface_neighbors=cfg.model.num_surface_neighbors,
-    )
+    def get_dataset(cfg, phase):
+        if phase == "train":
+            input_path = cfg.data.input_dir
+        elif phase == "val":
+            input_path = cfg.data.input_dir_val
+        else:
+            raise ValueError(f"Invalid phase {phase}")
 
-    val_dataset = DoMINODataPipe(
-        input_path_val,
-        phase="val",
-        grid_resolution=cfg.model.interp_res,
-        volume_variables=volume_variable_names,
-        surface_variables=surface_variable_names,
-        normalize_coordinates=True,
-        sampling=True,
-        sample_in_bbox=True,
-        volume_points_sample=cfg.model.volume_points_sample,
-        surface_points_sample=cfg.model.surface_points_sample,
-        geom_points_sample=cfg.model.geom_points_sample,
-        positional_encoding=cfg.model.positional_encoding,
-        volume_factors=vol_factors,
-        surface_factors=surf_factors,
-        scaling_type=cfg.model.normalization,
-        model_type=cfg.model.model_type,
-        bounding_box_dims=cfg.data.bounding_box,
-        bounding_box_dims_surf=cfg.data.bounding_box_surface,
-        num_surface_neighbors=cfg.model.num_surface_neighbors,
-    )
+        if cfg.data_processor.use_cache:
+            return CachedDoMINODataset(
+                input_path,
+                phase=phase,
+                sampling=True,
+                volume_points_sample=cfg.model.volume_points_sample,
+                surface_points_sample=cfg.model.surface_points_sample,
+                geom_points_sample=cfg.model.geom_points_sample,
+                model_type=cfg.model.model_type,
+                deterministic_seed=cfg.train.deterministic_sampling,
+            )
+        else:
+            return DoMINODataPipe(
+                input_path,
+                phase=phase,
+                grid_resolution=cfg.model.interp_res,
+                volume_variables=volume_variable_names,
+                surface_variables=surface_variable_names,
+                normalize_coordinates=True,
+                sampling=True,
+                sample_in_bbox=True,
+                volume_points_sample=cfg.model.volume_points_sample,
+                surface_points_sample=cfg.model.surface_points_sample,
+                geom_points_sample=cfg.model.geom_points_sample,
+                positional_encoding=cfg.model.positional_encoding,
+                volume_factors=vol_factors,
+                surface_factors=surf_factors,
+                scaling_type=cfg.model.normalization,
+                model_type=cfg.model.model_type,
+                bounding_box_dims=cfg.data.bounding_box,
+                bounding_box_dims_surf=cfg.data.bounding_box_surface,
+                num_surface_neighbors=cfg.model.num_surface_neighbors,
+                deterministic_seed=cfg.train.deterministic_sampling,
+            )
+    train_dataset = get_dataset(cfg, "train")
+    val_dataset = get_dataset(cfg, "val")
 
     train_sampler = DistributedSampler(
         train_dataset,

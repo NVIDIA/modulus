@@ -122,4 +122,6 @@ data_processor: # Data processor configurable parameters
   kind: drivaer_aws # must be either drivesim or drivaer_aws
   output_dir: /lustre/rranade/modulus_dev/data/volume_data/
   input_dir: /lustre/datasets/drivaer_aws/drivaer_data_full/
+  cached_dir: /lustre/cached/drivaer_aws/drivaer_data_full/
+  use_cache: false
   num_processors: 12

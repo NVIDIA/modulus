@@ -19,7 +19,6 @@ Important utilities for data processing and training, testing DoMINO.
 """
 
 import os
-import time
 
 import numpy as np
 from scipy.spatial import KDTree
@@ -282,12 +281,15 @@ def pad_inp(arr, npoin, pad_value=0.0):
 
 def shuffle_array(arr, npoin):
     """Function for shuffling arrays"""
-    np.random.seed(seed=int(time.time()))
     idx = np.arange(arr.shape[0])
     np.random.shuffle(idx)
     idx = idx[:npoin]
     return arr[idx], idx
 
+def sample_array(arr, n_samples):
+    """Function for sampling arrays without replacement"""
+    idx = np.random.choice(arr.shape[0], size=n_samples, replace=False)
+    return arr[idx], idx
 
 def shuffle_array_without_sampling(arr):
     """Function for shuffline arrays without sampling."""
@@ -378,8 +380,6 @@ def area_weighted_shuffle_array(arr, npoin, area):
     factor = 1.0
     total_area = np.sum(area**factor)
     probs = area**factor / total_area
-    np.random.seed(seed=int(time.time()))
     idx = np.arange(arr.shape[0])
-    np.random.shuffle(idx)
     ids = np.random.choice(idx, npoin, p=probs[idx])
     return arr[ids], ids
