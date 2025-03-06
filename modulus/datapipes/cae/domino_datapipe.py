@@ -670,7 +670,6 @@ def compute_scaling_factors(cfg: DictConfig, input_path: str) -> None:
         )
 
         if not os.path.exists(surf_save_path):
-            input_path = cfg.data.input_dir
 
             volume_variable_names = list(cfg.variables.volume.solution.keys())
             surface_variable_names = list(cfg.variables.surface.solution.keys())
