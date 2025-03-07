@@ -1,5 +1,5 @@
 PhysicsNeMo Utils
-=============
+==================
 
 .. autosummary::
    :toctree: generated
@@ -39,10 +39,6 @@ Filesystem utils
 
 Generative utils
 ----------------
-
-.. automodule:: physicsnemo.utils.generative.sampler
-    :members:
-    :show-inheritance:
 
 .. automodule:: physicsnemo.utils.generative.utils
     :members:

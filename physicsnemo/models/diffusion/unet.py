@@ -71,9 +71,9 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         Keyword arguments for the underlying model.
 
 
-    Reference
+    References
     ----------
-    Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
+    Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
     Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
     Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
     arXiv preprint arXiv:2309.15214.

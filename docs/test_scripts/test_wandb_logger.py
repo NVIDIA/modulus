@@ -3,7 +3,8 @@ import torch
 
 import physicsnemo
 from physicsnemo.datapipes.benchmarks.darcy import Darcy2D
-from physicsnemo.launch.logging import LaunchLogger, PythonLogger, initialize_wandb
+from physicsnemo.launch.logging import LaunchLogger, PythonLogger
+from physicsnemo.launch.logging.wandb import initialize_wandb
 from physicsnemo.metrics.general.mse import mse
 from physicsnemo.models.fno.fno import FNO
 

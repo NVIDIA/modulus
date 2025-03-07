@@ -1,5 +1,5 @@
 PhysicsNeMo Datapipes
-=================
+======================
 
 .. autosummary::
    :toctree: generated

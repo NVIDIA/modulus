@@ -1,5 +1,5 @@
 Domain Decomposition, ``ShardTensor`` and ``FSDP`` Tutorial
-=============================
+============================================================
 
 This tutorial demonstrates how to use PhysicsNeMo's ``ShardTensor`` functionality alongside PyTorch's ``FSDP``   (Fully Sharded Data Parallel) to train a simple convolutional neural network. We'll show how to:
 
@@ -9,7 +9,7 @@ This tutorial demonstrates how to use PhysicsNeMo's ``ShardTensor`` functionalit
 4. Train the model
 
 Simple CNN Model
----------------
+----------------
 
 The preamble to the training script has an important patch to make sure that the conv2d operation works with ``ShardTensor``:
 
@@ -32,7 +32,7 @@ Next, setup the distributed environment including the device mesh.  Here we do i
 but you can do it locally as well and pass device_mesh objects around.
 
 Setting Up the Environment
-------------------------
+--------------------------
 
 .. code-block:: python
 
@@ -82,7 +82,7 @@ First, let's create a simple one-layer CNN model:
     
 
 Preparing Data with ``ShardTensor``
------------------------------
+------------------------------------
 
 Create a simple dataset and shard it across devices:
 
@@ -112,7 +112,7 @@ Create a simple dataset and shard it across devices:
         return data, labels
 
 Combining FSDP with Domain Decomposition
--------------------------------------
+----------------------------------------
 
 Set up the model with both FSDP and spatial decomposition:
 
@@ -145,7 +145,7 @@ Note that, above, we manually distribute the model over the spatial mesh, then s
 
 
 Training Loop
-------------
+-------------
 
 Implement a basic training loop:
 
@@ -171,7 +171,7 @@ Implement a basic training loop:
                 print(f"Step {i}, Loss: {loss.item():.4f}")
 
 Main Training Script
-------------------
+--------------------
 
 Put it all together:
 
@@ -201,7 +201,7 @@ Put it all together:
 
 
 Running the Code
---------------
+----------------
 
 To run this example with 4 GPUs (2x2 mesh):
 
@@ -212,7 +212,7 @@ To run this example with 4 GPUs (2x2 mesh):
 This will train the model using both data parallelism (``FSDP``) and spatial decomposition (``ShardTensor``) across 4 GPUs in a 2x2 configuration.
 
 Key Points
----------
+----------
 
 1. The device mesh is split into two dimensions: one for data parallelism (``FSDP``) and one for spatial decomposition (``ShardTensor``).  We get that in one line using torch DeviceMesh: ``mesh = dm.initialize_mesh((-1, 2), mesh_dim_names=["data", "spatial"])``.  And in fact, for multilevel parallelism, you can extend your mesh further.  Think of DeviceMesh like a tensor of arbitrary rank, and each element is one GPU.
 2. Input data is sharded across the spatial dimension using ``ShardTensor``

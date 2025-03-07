@@ -1,5 +1,5 @@
 PhysicsNeMo Launch Logging
-======================
+===========================
 
 .. automodule:: physicsnemo.launch.logging
 .. currentmodule:: physicsnemo.launch.logging
