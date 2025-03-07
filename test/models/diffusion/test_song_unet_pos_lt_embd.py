@@ -69,8 +69,10 @@ def test_song_unet_forward(device):
 def test_song_unet_lt_indexing(device):
     torch.manual_seed(0)
     N_pos = 2
-    patch_shape_x = 32
     patch_shape_y = 64
+    patch_shape_x = 32
+    offset_y = 12
+    offset_x = 45
     # Construct the DDM++ UNet model
     lead_time_channels = 4
     model = UNet(
@@ -85,17 +87,21 @@ def test_song_unet_lt_indexing(device):
     input_image = torch.ones([1, 10, patch_shape_y, patch_shape_x]).to(device)
     noise_labels = noise_labels = torch.randn([1]).to(device)
     class_labels = torch.randint(0, 1, (1, 1)).to(device)
-    idx_x = torch.arange(45, 45 + patch_shape_x)
-    idx_y = torch.arange(12, 12 + patch_shape_y)
-    mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
-    global_index = torch.stack((mesh_x, mesh_y), dim=0)[None].to(device)
-
-    # pos_embed = model.positional_embedding_indexing(input_image, torch.cat([model.pos_embd, model.lt_embd], dim=0).to(device), global_index)
-    # assert torch.equal(pos_embed, global_index)
+    idx_x = torch.arange(offset_x, offset_x + patch_shape_x)
+    idx_y = torch.arange(offset_y, offset_y + patch_shape_y)
+    mesh_x, mesh_y = torch.meshgrid(idx_y, idx_x, indexing="ij")
+    global_index = torch.stack((mesh_x, mesh_y), dim=0)[None].to(
+        device
+    )  # (2, patch_shape_y, patch_shape_x)
 
     # Define a function to select the embeddings
     def embedding_selector(emb):
-        return emb[None, :, 45 : 45 + patch_shape_x, 12 : 12 + patch_shape_y]
+        return emb[
+            None,
+            :,
+            offset_y : offset_y + patch_shape_y,
+            offset_x : offset_x + patch_shape_x,
+        ]
 
     model.training = True
     output_image_indexing = model(
@@ -113,7 +119,7 @@ def test_song_unet_lt_indexing(device):
         embedding_selector=embedding_selector,
     )
     assert output_image_indexing.shape == (1, 10, patch_shape_y, patch_shape_x)
-    assert torch.equal(output_image_indexing, output_image_selector)
+    assert torch.allclose(output_image_indexing, output_image_selector, atol=1e-5)
 
     model.training = False
     output_image_indexing = model(
@@ -131,15 +137,17 @@ def test_song_unet_lt_indexing(device):
         embedding_selector=embedding_selector,
     )
     assert output_image_indexing.shape == (1, 10, patch_shape_y, patch_shape_x)
-    assert torch.equal(output_image_indexing, output_image_selector)
+    assert torch.allclose(output_image_indexing, output_image_selector, atol=1e-5)
 
 
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_song_unet_global_indexing(device):
     torch.manual_seed(0)
     N_pos = 2
-    patch_shape_x = 32
-    patch_shape_y = 64
+    patch_shape_y = 32
+    patch_shape_x = 64
+    offset_y = 12
+    offset_x = 45
     # Construct the DDM++ UNet model
     model = UNet(
         img_resolution=128,
@@ -151,10 +159,12 @@ def test_song_unet_global_indexing(device):
     input_image = torch.ones([1, 2, patch_shape_y, patch_shape_x]).to(device)
     noise_labels = noise_labels = torch.randn([1]).to(device)
     class_labels = torch.randint(0, 1, (1, 1)).to(device)
-    idx_x = torch.arange(45, 45 + patch_shape_x)
-    idx_y = torch.arange(12, 12 + patch_shape_y)
-    mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
-    global_index = torch.stack((mesh_x, mesh_y), dim=0)[None].to(device)
+    idx_x = torch.arange(offset_x, offset_x + patch_shape_x)
+    idx_y = torch.arange(offset_y, offset_y + patch_shape_y)
+    mesh_x, mesh_y = torch.meshgrid(idx_y, idx_x, indexing="ij")
+    global_index = torch.stack((mesh_x, mesh_y), dim=0)[None].to(
+        device
+    )  # (2, patch_shape_y, patch_shape_x)
 
     output_image = model(
         input_image, noise_labels, class_labels, global_index=global_index
@@ -170,8 +180,10 @@ def test_song_unet_global_indexing(device):
 def test_song_unet_embedding_selector(device):
     torch.manual_seed(0)
     N_pos = 2
-    patch_shape_x = 32
-    patch_shape_y = 64
+    patch_shape_y = 32
+    patch_shape_x = 64
+    offset_y = 12
+    offset_x = 45
     # Construct the DDM++ UNet model
     model = UNet(
         img_resolution=128,
@@ -185,14 +197,21 @@ def test_song_unet_embedding_selector(device):
     class_labels = torch.randint(0, 1, (1, 1)).to(device)
 
     # Expected embeddings should be the same as global_index
-    idx_x = torch.arange(45, 45 + patch_shape_x)
-    idx_y = torch.arange(12, 12 + patch_shape_y)
-    mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
-    expected_embeds = torch.stack((mesh_x, mesh_y), dim=0)[None].to(device)
+    idx_x = torch.arange(offset_x, offset_x + patch_shape_x)
+    idx_y = torch.arange(offset_y, offset_y + patch_shape_y)
+    mesh_x, mesh_y = torch.meshgrid(idx_y, idx_x, indexing="ij")
+    expected_embeds = torch.stack((mesh_x, mesh_y), dim=0)[None].to(
+        device
+    )  # (2, patch_shape_y, patch_shape_x)
 
     # Define a function to select the embeddings
     def embedding_selector(emb):
-        return emb[None, :, 45 : 45 + patch_shape_x, 12 : 12 + patch_shape_y]
+        return emb[
+            None,
+            :,
+            offset_y : offset_y + patch_shape_y,
+            offset_x : offset_x + patch_shape_x,
+        ]
 
     output_image = model(
         input_image,

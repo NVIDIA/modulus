@@ -15,7 +15,7 @@
 # limitations under the License.
 
 from functools import partial
-from typing import Optional
+from typing import Callable, Optional
 
 import pytest
 import torch
@@ -38,6 +38,7 @@ class MockNet:
         t: torch.Tensor,
         class_labels: Optional[torch.Tensor],
         global_index: Optional[torch.Tensor] = None,
+        embedding_selector: Optional[Callable] = None,
     ) -> torch.Tensor:
         # Mock behavior: return input tensor for testing purposes
         return x * 0.9

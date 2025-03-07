@@ -640,27 +640,27 @@ class SongUNetPosEmbd(SongUNet):
                 self.pos_embd.to(x.dtype)
                 .to(x.device)[None]
                 .expand((x.shape[0], -1, -1, -1))
-            )  # (B, N_pe, X, Y)
+            )  # (B, N_pe, H, W)
 
         B = global_index.shape[0]
-        X = global_index.shape[2]
-        Y = global_index.shape[3]
+        H = global_index.shape[2]
+        W = global_index.shape[3]
         global_index = torch.reshape(
             torch.permute(global_index, (1, 0, 2, 3)), (2, -1)
-        )  # (B, 2, X, Y) to (2, B*X*Y)
+        )  # (B, 2, H, W) to (2, B*H*W)
         # Use advanced indexing to select the positional embeddings based on
         # their y-x coordinates
         selected_pos_embd = self.pos_embd.to(x.device)[
             :, global_index[0], global_index[1]
-        ]  # (N_pe, B*X*Y)
+        ]  # (N_pe, B*H*W)
         selected_pos_embd = (
             torch.permute(
-                torch.reshape(selected_pos_embd, (self.pos_embd.shape[0], B, X, Y)),
+                torch.reshape(selected_pos_embd, (self.pos_embd.shape[0], B, H, W)),
                 (1, 0, 2, 3),
             )
             .to(x.device)
             .to(x.dtype)
-        )  # (B, N_pe, X, Y)
+        )  # (B, N_pe, H, W)
         return selected_pos_embd
 
     def positional_embedding_selector(
@@ -711,7 +711,7 @@ class SongUNetPosEmbd(SongUNet):
         """
         return embedding_selector(
             self.pos_embd.to(x.dtype).to(x.device)
-        )  # (B, N_pe, X, Y)
+        )  # (B, N_pe, H, W)
 
     def _get_positional_embedding(self):
         if self.N_grid_channels == 0:
@@ -719,7 +719,7 @@ class SongUNetPosEmbd(SongUNet):
         elif self.gridtype == "learnable":
             grid = torch.nn.Parameter(
                 torch.randn(self.N_grid_channels, self.img_shape_y, self.img_shape_x)
-            )
+            )  # (N_grid_channels, img_shape_y, img_shape_x)
         elif self.gridtype == "linear":
             if self.N_grid_channels != 2:
                 raise ValueError("N_grid_channels must be set to 2 for gridtype linear")
@@ -742,7 +742,7 @@ class SongUNetPosEmbd(SongUNet):
                         np.stack((grid_x1, grid_y1, grid_x2, grid_y2), axis=0), axis=0
                     )
                 )
-            )
+            )  # (4, img_shape_y, img_shape_x)
             grid.requires_grad = False
         elif self.gridtype == "sinusoidal" and self.N_grid_channels != 4:
             if self.N_grid_channels % 4 != 0:
@@ -758,13 +758,15 @@ class SongUNetPosEmbd(SongUNet):
                 for p_fn in [np.sin, np.cos]:
                     grid_list.append(p_fn(grid_x * freq))
                     grid_list.append(p_fn(grid_y * freq))
-            grid = torch.from_numpy(np.stack(grid_list, axis=0))
+            grid = torch.from_numpy(
+                np.stack(grid_list, axis=0)
+            )  # (N_grid_channels, img_shape_y, img_shape_x)
             grid.requires_grad = False
         elif self.gridtype == "test" and self.N_grid_channels == 2:
             idx_x = torch.arange(self.img_shape_y)
             idx_y = torch.arange(self.img_shape_x)
             mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
-            grid = torch.stack((mesh_x, mesh_y), dim=0)
+            grid = torch.stack((mesh_x, mesh_y), dim=0)  # (2, img_shape_y, img_shape_x)
         else:
             raise ValueError("Gridtype not supported.")
         return grid
@@ -1055,18 +1057,20 @@ class SongUNetPosLtEmbd(SongUNet):
             )
 
         B = global_index.shape[0]
-        X = global_index.shape[2]
-        Y = global_index.shape[3]
-        global_index = torch.reshape(torch.permute(global_index, (1, 0, 2, 3)), (2, -1))
+        H = global_index.shape[2]
+        W = global_index.shape[3]
+        global_index = torch.reshape(
+            torch.permute(global_index, (1, 0, 2, 3)), (2, -1)
+        )  # (B, 2, H, W) to (2, B*H*W)
         selected_embeds = embeds.to(x.device)[:, global_index[0], global_index[1]]
         selected_embeds = (
             torch.permute(
-                torch.reshape(selected_embeds, (embeds.shape[0], B, X, Y)),
+                torch.reshape(selected_embeds, (embeds.shape[0], B, H, W)),
                 (1, 0, 2, 3),
             )
             .to(x.device)
             .to(x.dtype)
-        )
+        )  # (B, N_pe, H, W)
         return selected_embeds
 
     def positional_embedding_selector(
@@ -1118,7 +1122,7 @@ class SongUNetPosLtEmbd(SongUNet):
         :meth:`modulus.utils.patching.BasePatching2D.apply`
             For the base patching method typically used in embedding_selector.
         """
-        return embedding_selector(embeds.to(x.dtype).to(x.device))  # (B, N_pe, X, Y)
+        return embedding_selector(embeds.to(x.dtype).to(x.device))  # (B, N_pe, H, W)
 
     def _get_positional_embedding(self):
         if self.N_grid_channels == 0:
@@ -1126,14 +1130,16 @@ class SongUNetPosLtEmbd(SongUNet):
         elif self.gridtype == "learnable":
             grid = torch.nn.Parameter(
                 torch.randn(self.N_grid_channels, self.img_shape_y, self.img_shape_x)
-            )
+            )  # (N_grid_channels, img_shape_y, img_shape_x)
         elif self.gridtype == "linear":
             if self.N_grid_channels != 2:
                 raise ValueError("N_grid_channels must be set to 2 for gridtype linear")
             x = np.meshgrid(np.linspace(-1, 1, self.img_shape_y))
             y = np.meshgrid(np.linspace(-1, 1, self.img_shape_x))
             grid_x, grid_y = np.meshgrid(y, x)
-            grid = torch.from_numpy(np.stack((grid_x, grid_y), axis=0))
+            grid = torch.from_numpy(
+                np.stack((grid_x, grid_y), axis=0)
+            )  # (2, img_shape_y, img_shape_x)
             grid.requires_grad = False
         elif self.gridtype == "sinusoidal" and self.N_grid_channels == 4:
             # print('sinusuidal grid added ......')
@@ -1149,7 +1155,7 @@ class SongUNetPosLtEmbd(SongUNet):
                         np.stack((grid_x1, grid_y1, grid_x2, grid_y2), axis=0), axis=0
                     )
                 )
-            )
+            )  # (4, img_shape_y, img_shape_x)
             grid.requires_grad = False
         elif self.gridtype == "sinusoidal" and self.N_grid_channels != 4:
             if self.N_grid_channels % 4 != 0:
@@ -1165,13 +1171,15 @@ class SongUNetPosLtEmbd(SongUNet):
                 for p_fn in [np.sin, np.cos]:
                     grid_list.append(p_fn(grid_x * freq))
                     grid_list.append(p_fn(grid_y * freq))
-            grid = torch.from_numpy(np.stack(grid_list, axis=0))
+            grid = torch.from_numpy(
+                np.stack(grid_list, axis=0)
+            )  # (N_grid_channels, img_shape_y, img_shape_x)
             grid.requires_grad = False
         elif self.gridtype == "test" and self.N_grid_channels == 2:
             idx_x = torch.arange(self.img_shape_y)
             idx_y = torch.arange(self.img_shape_x)
             mesh_x, mesh_y = torch.meshgrid(idx_x, idx_y)
-            grid = torch.stack((mesh_x, mesh_y), dim=0)
+            grid = torch.stack((mesh_x, mesh_y), dim=0)  # (2, img_shape_y, img_shape_x)
         else:
             raise ValueError("Gridtype not supported.")
         return grid
@@ -1186,5 +1194,5 @@ class SongUNetPosLtEmbd(SongUNet):
                 self.img_shape_y,
                 self.img_shape_x,
             )
-        )
+        )  # (lead_time_steps, lead_time_channels, img_shape_y, img_shape_x)
         return grid

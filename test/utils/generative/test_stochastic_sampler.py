@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Callable, Optional
 
 import torch
 from pytest_utils import import_or_fail
@@ -37,6 +37,7 @@ class MockNet:
         t: Tensor,
         class_labels: Optional[Tensor],
         global_index: Optional[Tensor] = None,
+        embedding_selector: Optional[Callable] = None,
     ) -> Tensor:
         # Mock behavior: return input tensor for testing purposes
         return x * 0.9

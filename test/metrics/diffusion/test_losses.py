@@ -273,7 +273,13 @@ def test_residualloss_initialization():
 
 
 def fake_residual_net(
-    x, img_lr, sigma, labels=None, global_index=None, augment_labels=None
+    x,
+    img_lr,
+    sigma,
+    labels=None,
+    global_index=None,
+    embedding_selector=None,
+    augment_labels=None,
 ):
     return torch.zeros_like(x)
 
