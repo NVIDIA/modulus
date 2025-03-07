@@ -1,5 +1,5 @@
 Profiling Applications in PhysicsNeMo
-==================================
+======================================
 
 In this tutorial, we'll learn about profiling your scientific AI applications in PhysicsNeMo.
 First, we'll discuss the high-level philosophy of profiling AI applications, then get 
@@ -20,101 +20,102 @@ example,
 is a useful reference for the many options available.  In many profiling guides, you'll
 find the following terms discussed:
 
-#. **Profiling Overhead** When you run an application with profiling enabled, 
-be aware that you are nearly always *changing* the application and it's performance.
-The amount an application's performance is affected by the profiling tools is often
-called the **profiling overhead** and can, potentially, skew profiling results
-and conclusions.  In many cases, this is just fine and even necessary.  
-In general, profiling tools try to limit performance overhead. For AI applications,
-overhead can vary by profiling tool (python vs. lower-level profilers, for example)
-as well the type of profiler (sampling, tracing, or another)
+* **Profiling Overhead** When you run an application with profiling enabled, 
+  be aware that you are nearly always *changing* the application and it's performance.
+  The amount an application's performance is affected by the profiling tools is often
+  called the **profiling overhead** and can, potentially, skew profiling results
+  and conclusions.  In many cases, this is just fine and even necessary.  
+  In general, profiling tools try to limit performance overhead. For AI applications,
+  overhead can vary by profiling tool (python vs. lower-level profilers, for example)
+  as well the type of profiler (sampling, tracing, or another)
 
-#. **Hotspots** in an application are performance critical regions that the application
-spends significant time in.  Application optimization is a data-driven endeavor, 
-and the **hotspots** of an application are typically the highest priority code regions
-for optimization.  The goal of profiling is first to discover hotspots, and subsequently
-to find optimizations and measure their impact.  For AI Applications, hotspots
-can take many forms and not all can be found in one pass.  As an example, a poorly
-configured dataloader can easily stall an AI application by starving the GPU
-of data.  In this case, no amount of CUDA optimization will make a significant
-impact on application performance.  On the other hand, if your application
-uses custom kernels or experimental features, they may be a hotspot and target 
-for tuning.  These two examples typically require separate profiling tools 
-to discover effectively in AI applications.
+* **Hotspots** in an application are performance critical regions that the application
+  spends significant time in.  Application optimization is a data-driven endeavor, 
+  and the **hotspots** of an application are typically the highest priority code regions
+  for optimization.  The goal of profiling is first to discover hotspots, and subsequently
+  to find optimizations and measure their impact.  For AI Applications, hotspots
+  can take many forms and not all can be found in one pass.  As an example, a poorly
+  configured dataloader can easily stall an AI application by starving the GPU
+  of data.  In this case, no amount of CUDA optimization will make a significant
+  impact on application performance.  On the other hand, if your application
+  uses custom kernels or experimental features, they may be a hotspot and target 
+  for tuning.  These two examples typically require separate profiling tools 
+  to discover effectively in AI applications.
 
-#. **Sampling** is the process of periodically asking an application, "What are 
-you doing right now?".  Sampling-based profiling techniques can be very powerful:
-they are low-overhead (small impact on application's performance) and when 
-analyzed with statistical methods, they can quickly identify hotspots.  Sampling
-can sometimes be considered a "bottom-up" view of an application.  Profilers with
-sampling capabilities include 
-`Nvidia's Nsight <https://developer.nvidia.com/nsight-systems>`_,
-`HPCToolkit <https://hpctoolkit.org/index.html>`_,
-`Tau <https://www.cs.uoregon.edu/research/tau/home.php>`_,
-`Scalene <https://github.com/plasma-umass/scalene>`_, and many others.  For AI
-applications, sampling both Python and CUDA code can be beneficial.
+* **Sampling** is the process of periodically asking an application, "What are 
+  you doing right now?".  Sampling-based profiling techniques can be very powerful:
+  they are low-overhead (small impact on application's performance) and when 
+  analyzed with statistical methods, they can quickly identify hotspots.  Sampling
+  can sometimes be considered a "bottom-up" view of an application.  Profilers with
+  sampling capabilities include 
+  `Nvidia's Nsight <https://developer.nvidia.com/nsight-systems>`_,
+  `HPCToolkit <https://hpctoolkit.org/index.html>`_,
+  `Tau <https://www.cs.uoregon.edu/research/tau/home.php>`_,
+  `Scalene <https://github.com/plasma-umass/scalene>`_, and many others.  For AI
+  applications, sampling both Python and CUDA code can be beneficial.
 
-#. **Tracing** an application is the "top-down" profiling of an application and 
-the logical opposite of sampling.  When **tracing** an application, the profilers
-follow execution call paths and measure execution time.  Depending on the 
-application, tracing can have a relatively high overhead but also provides
-more detailed information for function execution times.  A common and useful
-tracing tool in AI Applications if the profiler built in to 
-`pytorch <https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html>`_
-but other tools also offer tracing capabilities: 
-`Nvidia's Nsight <https://developer.nvidia.com/nsight-systems>`_,
-Python's built-in `CProfile <https://docs.python.org/3/library/profile.html>`_,
-and others.
+* **Tracing** an application is the "top-down" profiling of an application and 
+  the logical opposite of sampling.  When **tracing** an application, the profilers
+  follow execution call paths and measure execution time.  Depending on the 
+  application, tracing can have a relatively high overhead but also provides
+  more detailed information for function execution times.  A common and useful
+  tracing tool in AI Applications if the profiler built in to 
+  `pytorch <https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html>`_
+  but other tools also offer tracing capabilities: 
+  `Nvidia's Nsight <https://developer.nvidia.com/nsight-systems>`_,
+  Python's built-in `CProfile <https://docs.python.org/3/library/profile.html>`_,
+  and others.
 
-#. **Instrumentation** is the act of modifying your code to produce more useful 
-profiling results.  A familiar and accesible (but not recommended) method of
-**instrumentation** is to simply wrap your code blocks of interest in timing-
-measuring logic (like using `std::chrono::steady_clock::time_point` in C++
-or `time.perf_countner()` in Python).
-Instrumentation can sometimes be done semi-automatically,
-though even in those cases it often requires programmer intervention to insert
-(and later, possibly, remove) instrumentation.  A useful instrumentation tool 
-for Python level code is, for example, 
-`line_profiler <https://github.com/pyutils/line_profiler>`_
-which requires manually decorating functions to be profiled, and executing them
-in a specific context.
+* **Instrumentation** is the act of modifying your code to produce more useful 
+  profiling results.  A familiar and accesible (but not recommended) method of
+  **instrumentation** is to simply wrap your code blocks of interest in timing-
+  measuring logic (like using `std::chrono::steady_clock::time_point` in C++
+  or `time.perf_countner()` in Python).
+  Instrumentation can sometimes be done semi-automatically,
+  though even in those cases it often requires programmer intervention to insert
+  (and later, possibly, remove) instrumentation.  A useful instrumentation tool 
+  for Python level code is, for example, 
+  `line_profiler <https://github.com/pyutils/line_profiler>`_
+  which requires manually decorating functions to be profiled, and executing them
+  in a specific context.
 
-#. **Annotations** are a 
-common and useful type of instrumentation: programmers can **annotate** their
-application with sensible, user-friendly names and regions to more easily
-detangle the results of profiling and map back to application code.  One of the 
-most useful annotation tools in AI Applications is `Nvidia's Tools Extension
-Library <https://github.com/NVIDIA/NVTX>`_, available in both C and Python.
-Annotations are also useful for marking regions or events of specific interest.
+* **Annotations** are a 
+  common and useful type of instrumentation: programmers can **annotate** their
+  application with sensible, user-friendly names and regions to more easily
+  detangle the results of profiling and map back to application code.  One of the 
+  most useful annotation tools in AI Applications is `Nvidia's Tools Extension
+  Library <https://github.com/NVIDIA/NVTX>`_, available in both C and Python.
+  Annotations are also useful for marking regions or events of specific interest.
 
+* **Application Timelines** are a visual representation of an application's 
+  operations, as well as the order they are executed and - potentially - visualization
+  of idle time and unusued compute resources.  Often the **timeline** is the end 
+  product of a profiler (though not always) and robust visualization tools
+  such as `Nsight <https://developer.nvidia.com/nsight-systems>`_ as well as 
+  the `Perfetto Viewer <https://perfetto.dev/>`_ built into chrome can be
+  critical to producing actionable output when profiling.
 
-#. **Application Timelines** are a visual representation of an application's 
-operations, as well as the order they are executed and - potentially - visualization
-of idle time and unusued compute resources.  Often the **timeline** is the end 
-product of a profiler (though not always) and robust visualization tools
-such as `Nsight <>` as well as the `Perfetto Viewer <https://perfetto.dev/>`_ 
-built into chrome can be critical to producing actionable output when profiling.
+* **Asynchronous Execution and Concurrency** is an incredibly powerful tool 
+  for obtaining high application performance, but also a potential challenge 
+  in capturing application profiles and reliably detecting hotspots and 
+  performance bottlenecks.  Specifically, **concurrency** can mislead you in analyzing
+  total time spent in functions (does a function with 100x calls more than 
+  another function constitute a bottleneck?  Are they all running and 
+  finishing concurrently?), while **asynchronous execution** can lead you 
+  to the wrong conclusions in sampling-based profiling methods.  A very important
+  example of this, in AI Application performance measurements, is the fact
+  that Pytorch submits kernels to GPUs asynchronously and returns control flow
+  to python immediately, and imperatively.  This can lead to situations where one
+  pytorch operation, `B` is awaiting the output of another operation `A` as input.
+  A python-level, sampling-based profile will indicate that the application is 
+  spending too much time in operation `B`, while the reality may be that kernel `A`
+  is the true hotspot.  Mixed-language tracing tools, such as pytorch's own 
+  `profiler <https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html>`_,
+  are powerful ways to visualize
 
-#. **Asynchronous Execution and Concurrency** is an incredibly powerful tool 
-for obtaining high application performance, but also a potential challenge 
-in capturing application profiles and reliably detecting hotspots and 
-performance bottlenecks.  Specifically, **concurrency** can mislead you in analyzing
-total time spent in functions (does a function with 100x calls more than 
-another function constitute a bottleneck?  Are they all running and 
-finishing concurrently?), while **asynchronous execution** can lead you 
-to the wrong conclusions in sampling-based profiling methods.  A very important
-example of this, in AI Application performance measurements, is the fact
-that Pytorch submits kernels to GPUs asynchronously and returns control flow
-to python immediately, and imperatively.  This can lead to situations where one
-pytorch operation, `B` is awaiting the output of another operation `A` as input.
-A python-level, sampling-based profile will indicate that the application is 
-spending too much time in operation `B`, while the reality may be that kernel `A`
-is the true hotspot.  Mixed-language tracing tools, such as pytorch's own 
-`profiler <https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html>`_,
-are powerful ways to visualize
 
 Profiling AI Applications and PhysicsNeMo
---------------------------------------
+------------------------------------------
 
 As described in brief above, many of the tools and tricks of profiling applications
 have corner cases and sharp edges when applied to AI Applications.  First and foremost,
@@ -135,7 +136,7 @@ PhysicsNeMo's tools are designed to be inserted into your workload once, and gen
 provide no significant overhead (or even do anything at all!) until enabled.
 
 PhysicsNeMo Profiling Tools
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 PhysicsNeMo provides three high level tools for profiling utilities:
 
@@ -145,26 +146,22 @@ PhysicsNeMo provides three high level tools for profiling utilities:
 
 We'll get more into the details of some of these tools later, but at a high level:
 
-#. The `Profiler` is the core utility of `physicsnemo`'s profiling features.
-Similar to the `physicsnemo` DistributedManager, this class is a singleton instance
-designed to enable easy access to profiling handles and propogate configurations.
-The Profiler is meant to be your steering wheel for driving different profiling
-techniques, without having to go into your code and change annotations or decorations.
-We'll see how to enable the profiler with different techniques below. An instance of the 
-PhysicsNeMo Profiler can be used as a context for profiling.
+* The `Profiler` is the core utility of `physicsnemo`'s profiling features.
+  Similar to the `physicsnemo` DistributedManager, this class is a singleton instance
+  designed to enable easy access to profiling handles and propogate configurations.
+  The Profiler is meant to be your steering wheel for driving different profiling
+  techniques, without having to go into your code and change annotations or decorations.
+  We'll see how to enable the profiler with different techniques below. An instance of the 
+  PhysicsNeMo Profiler can be used as a context for profiling.
 
-#. `profile` is a function decorator that you can use to mark specific functions
-in your code for profiling.  It is targeting tools like python's `line_profiler`
-utility, and generally most useful for python operations that aren't backed by
-an asynchronous backend like CUDA.  You can freely decorate functions with 
-`@profile` but it is not a context manager.  `@profile` takes no arguments.
+* `profile` is a function decorator that you can use to mark specific functions
+  in your code for profiling.  It is targeting tools like python's `line_profiler`
+  utility, and generally most useful for python operations that aren't backed by
+  an asynchronous backend like CUDA.  You can freely decorate functions with 
+  `@profile` but it is not a context manager.  `@profile` takes no arguments.
 
-#. `annotate` is context-decorator and shortcut to `nvtx` annotations.
-`annotate` can also be used as a context just like `nvtx.annotate`.
-
-which will (in the physicsnemo
-profiling tools) turn on automatic annotation for the duration of the context.
-This can be expensive, and has to be explicitly
+* `annotate` is context-decorator and shortcut to `nvtx` annotations.
+  `annotate` can also be used as a context just like `nvtx.annotate`.
 
 The Workload
 ^^^^^^^^^^^^
@@ -203,13 +200,13 @@ Training:
 +------------+--------------------+----------------------+
 | Batch Size | Seconds/Iteration  | Examples/Second      |
 +============+====================+======================+
-| 1          | 0.039             | 25.530              |
+| 1          | 0.039              | 25.530               |
 +------------+--------------------+----------------------+
-| 2          | 0.072             | 27.964              |
+| 2          | 0.072              | 27.964               |
 +------------+--------------------+----------------------+
-| 4          | 0.147             | 27.295              |
+| 4          | 0.147              | 27.295               |
 +------------+--------------------+----------------------+
-| 8          | 0.289             | 27.642              |
+| 8          | 0.289              | 27.642               |
 +------------+--------------------+----------------------+
 
 Inference:
@@ -217,16 +214,16 @@ Inference:
 +------------+--------------------+----------------------+
 | Batch Size | Seconds/Iteration  | Examples/Second      |
 +============+====================+======================+
-| 1          | 0.030             | 32.935              |
+| 1          | 0.030              | 32.935               |
 +------------+--------------------+----------------------+
-| 2          | 0.062             | 32.223              |
+| 2          | 0.062              | 32.223               |
 +------------+--------------------+----------------------+
-| 4          | 0.130             | 30.835              |
+| 4          | 0.130              | 30.835               |
 +------------+--------------------+----------------------+
-| 8          | 0.258             | 31.044              |
+| 8          | 0.258              | 31.044               |
 +------------+--------------------+----------------------+
 
-..note::
+.. note::
     These numbers are approximate measurements and the workload, as written, 
     has some variations in performance.  Dont' worry if your results 
     differ a little - if you're following along with the example, just capture
@@ -250,6 +247,7 @@ Next, take a look at the first instrumented version of the model code,
 compared to the original:
 
 .. code-block:: diff
+
     *** attn_baseline.py	2025-01-27 07:41:37.749753000 -0800
     --- attn_instrumented.py	2025-01-27 11:27:09.162202000 -0800
     ***************
@@ -450,13 +448,13 @@ Training:
 +------------+--------------------+----------------------+
 | Batch Size | Seconds/Iteration  | Examples/Second      |
 +============+====================+======================+
-| 1          | 0.008             | 132.717             |
+| 1          | 0.008              | 132.717              |
 +------------+--------------------+----------------------+
-| 2          | 0.014             | 140.548             |
+| 2          | 0.014              | 140.548              |
 +------------+--------------------+----------------------+
-| 4          | 0.027             | 145.709             |
+| 4          | 0.027              | 145.709              |
 +------------+--------------------+----------------------+
-| 8          | 0.054             | 148.801             |
+| 8          | 0.054              | 148.801              |
 +------------+--------------------+----------------------+
 
 Inference:
@@ -464,13 +462,13 @@ Inference:
 +------------+--------------------+----------------------+
 | Batch Size | Seconds/Iteration  | Examples/Second      |
 +============+====================+======================+
-| 1          | 0.002             | 404.637             |
+| 1          | 0.002              | 404.637              |
 +------------+--------------------+----------------------+
-| 2          | 0.005             | 427.025             |
+| 2          | 0.005              | 427.025              |
 +------------+--------------------+----------------------+
-| 4          | 0.009             | 440.119             |
+| 4          | 0.009              | 440.119              |
 +------------+--------------------+----------------------+
-| 8          | 0.018             | 447.086             |
+| 8          | 0.018              | 447.086              |
 +------------+--------------------+----------------------+
 
 Things are moving a litle faster now.  Let's look again at the python level profiling (batch size 8):
@@ -567,11 +565,12 @@ The most useful output produced is a trace of the operations in the workload.  T
 viewed by copying the file to a system that has the chrome browser, and viewing the file
 at ui.perfetto.dev:
 
-.. image:: ../img/profiling/whole-application.png
+.. figure:: ../img/profiling/whole-application.png
    :width: 100%
    :align: center
    :alt: Chrome trace view showing CPU threads and CUDA kernels for an entire application.
-   :title: Chrome trace view showing CPU threads and CUDA kernels. The top bars show CPU threads while the bottom shows CUDA kernel execution.
+   
+   Chrome trace view showing CPU threads and CUDA kernels. The top bars show CPU threads while the bottom shows CUDA kernel execution.
 
 
 The top two bars in this image represent the CPU threads: the top is the main thread (and
@@ -585,28 +584,31 @@ If you click on some of the larges kernels in the bottom, this profiler will sho
 you which CPU operations launched these kernels.  The most obvious ones are softmax,
 both forward and backward:
 
-.. image:: ../img/profiling/softmax-forward.png
+.. figure:: ../img/profiling/softmax_fwd.png
    :width: 100%
    :align: center
    :alt: In the forward pass, the softmax kernel is the dominant operation.
-   :title: Zoom in on the forward pass in the torch profiler.  The softmax kernel is the dominant operation.
+   
+   Zoom in on the forward pass in the torch profiler.  The softmax kernel is the dominant operation.
 
-.. image:: ../img/profiling/softmax-backward.png
+.. figure:: ../img/profiling/softmax_bwd.png
    :width: 100%
    :align: center
    :alt: In the backward pass, the softmax gradient kernel is also a dominant operation.
-   :title: Zoom in on the backward pass in the torch profiler. The softmax gradient kernel is a dominant operation.
+   
+   Zoom in on the backward pass in the torch profiler. The softmax gradient kernel is a dominant operation.
 
 
 Further, if you zoom in on the end of the orange `cudaDeviceSynchronize()` block,
 you can see clearly the optimizer kernels finish immediately before the synchronization
 releases.  The data loader fires up right away for the next batch.
 
-.. image:: ../img/profiling/end-of-sync.png
+.. figure:: ../img/profiling/endOfSync.png
    :width: 100%
    :align: center
    :alt: At the end of the synchronization block, optimizer kernels complete and the data loader begins.
-   :title: End of synchronization showing optimizer kernels completing and data loader starting.
+   
+   End of synchronization showing optimizer kernels completing and data loader starting.
 
 Flash Attention
 ^^^^^^^^^^^^^^^
@@ -622,39 +624,40 @@ original implementation:
 Training:
 
 +------------+----------------------+----------------------+
-| Batch Size | Examples/Second      | Flash Attention     |
+| Batch Size | Examples/Second      | Flash Attention      |
 +============+======================+======================+
-| 1          | 132.717             | 137.065             |
+| 1          | 132.717              | 137.065              |
 +------------+----------------------+----------------------+
-| 2          | 140.548             | 147.341             |
+| 2          | 140.548              | 147.341              |
 +------------+----------------------+----------------------+
-| 4          | 145.709             | 155.647             |
+| 4          | 145.709              | 155.647              |
 +------------+----------------------+----------------------+
-| 8          | 148.801             | 160.469             |
+| 8          | 148.801              | 160.469              |
 +------------+----------------------+----------------------+
 
 
 Inference:
 
 +------------+----------------------+----------------------+
-| Batch Size | Examples/Second      | Flash Attention     |
+| Batch Size | Examples/Second      | Flash Attention      |
 +============+======================+======================+
-| 1          | 404.637             | 452.962             |
+| 1          | 404.637              | 452.962              |
 +------------+----------------------+----------------------+
-| 2          | 427.025             | 498.080             |
+| 2          | 427.025              | 498.080              |
 +------------+----------------------+----------------------+
-| 4          | 440.119             | 519.582             |
+| 4          | 440.119              | 519.582              |
 +------------+----------------------+----------------------+
-| 8          | 447.086             | 533.435             |
+| 8          | 447.086              | 533.435              |
 +------------+----------------------+----------------------+
 
 Why not?  The answer is in the profile:
 
-.. image:: ../img/profiling/fa-fp32.png
+.. figure:: ../img/profiling/FA-fp32.png
    :width: 100%
    :align: center
    :alt: Flash attention kernel running in float32 precision showing limited performance improvement
-   :title: Flash attention kernel in float32 precision.
+   
+   Flash attention kernel in float32 precision.
 
 The flash attention kernel here is not using mixed precision, and therefore likely unoptimized on the GPU.
 Let's use autocasting in `optimized_code_2`, and enable torch cudnn benchmaring,
@@ -680,15 +683,15 @@ The performance results are encouraging:
 Training:
 
 +------------+----------------------+----------------------+----------------------+
-| Batch Size | Examples/Second      | Flash Attention     | FA (mixed precision) |
+| Batch Size | Examples/Second      | Flash Attention      | FA (mixed precision) |
 +============+======================+======================+======================+
-| 1          | 132.717             | 137.065             | 372.424             |
+| 1          | 132.717              | 137.065              | 372.424              |
 +------------+----------------------+----------------------+----------------------+
-| 2          | 140.548             | 147.341             | 513.969             |
+| 2          | 140.548              | 147.341              | 513.969              |
 +------------+----------------------+----------------------+----------------------+
-| 4          | 145.709             | 155.647             | 599.336             |
+| 4          | 145.709              | 155.647              | 599.336              |
 +------------+----------------------+----------------------+----------------------+
-| 8          | 148.801             | 160.469             | 647.252             |
+| 8          | 148.801              | 160.469              | 647.252              |
 +------------+----------------------+----------------------+----------------------+
 
 
@@ -696,15 +699,15 @@ Training:
 Inference:
 
 +------------+----------------------+----------------------+----------------------+
-| Batch Size | Examples/Second      | Flash Attention     | FA (mixed precision) |
+| Batch Size | Examples/Second      | Flash Attention      | FA (mixed precision) |
 +============+======================+======================+======================+
-| 1          | 404.637             | 452.962             | 1218.758            |
+| 1          | 404.637              | 452.962              | 1218.758             |
 +------------+----------------------+----------------------+----------------------+
-| 2          | 427.025             | 498.080             | 1582.922            |
+| 2          | 427.025              | 498.080              | 1582.922             |
 +------------+----------------------+----------------------+----------------------+
-| 4          | 440.119             | 519.582             | 1887.888            |
+| 4          | 440.119              | 519.582              | 1887.888             |
 +------------+----------------------+----------------------+----------------------+
-| 8          | 447.086             | 533.435             | 2026.366            |
+| 8          | 447.086              | 533.435              | 2026.366             |
 +------------+----------------------+----------------------+----------------------+
 
 
@@ -736,31 +739,32 @@ single CUDA kernels with `triton`.  The syntax is simple:
 We see a modest improvement:
 
 Training:
+
 +------------+----------------------+----------------------+----------------------+----------------------+
-| Batch Size | Examples/Second      | Flash Attention     | FA (mixed precision) | FA (fp16, compiled) |
+| Batch Size | Examples/Second      | Flash Attention      | FA (mixed precision) | FA (fp16, compiled)  |
 +============+======================+======================+======================+======================+
-| 1          | 132.717             | 137.065             | 372.424             | 376.741             |
+| 1          | 132.717              | 137.065              | 372.424              | 376.741              |
 +------------+----------------------+----------------------+----------------------+----------------------+
-| 2          | 140.548             | 147.341             | 513.969             | 566.597             |
+| 2          | 140.548              | 147.341              | 513.969              | 566.597              |
 +------------+----------------------+----------------------+----------------------+----------------------+
-| 4          | 145.709             | 155.647             | 599.336             | 660.578             |
+| 4          | 145.709              | 155.647              | 599.336              | 660.578              |
 +------------+----------------------+----------------------+----------------------+----------------------+
-| 8          | 148.801             | 160.469             | 647.252             | 725.194             |
+| 8          | 148.801              | 160.469              | 647.252              | 725.194              |
 +------------+----------------------+----------------------+----------------------+----------------------+
 
 
 Inference:
 
 +------------+----------------------+----------------------+----------------------+----------------------+
-| Batch Size | Examples/Second      | Flash Attention     | FA (mixed precision) | FA (fp16, compiled) |
+| Batch Size | Examples/Second      | Flash Attention      | FA (mixed precision) | FA (fp16, compiled)  |
 +============+======================+======================+======================+======================+
-| 1          | 404.637             | 452.962             | 1218.758            | 1212.066            |
+| 1          | 404.637              | 452.962              | 1218.758             | 1212.066             |
 +------------+----------------------+----------------------+----------------------+----------------------+
-| 2          | 427.025             | 498.080             | 1582.922            | 1627.413            |
+| 2          | 427.025              | 498.080              | 1582.922             | 1627.413             |
 +------------+----------------------+----------------------+----------------------+----------------------+
-| 4          | 440.119             | 519.582             | 1887.888            | 1986.898            |
+| 4          | 440.119              | 519.582              | 1887.888             | 1986.898             |
 +------------+----------------------+----------------------+----------------------+----------------------+
-| 8          | 447.086             | 533.435             | 2026.366            | 2163.309            |
+| 8          | 447.086              | 533.435              | 2026.366             | 2163.309             |
 +------------+----------------------+----------------------+----------------------+----------------------+
 
 
@@ -828,31 +832,31 @@ Where to go from here?
 We've spent some detail in this tutorial looking at profiling techniques for AI applications, and how
 to easily enable them in PhysicsNeMo.  As a recap:
 
-#. PhysicsNeMo makes it easy to enable AI profiling with a simple interface, `Profiler()`, which you can
-modify to use different profiling tools.
+* PhysicsNeMo makes it easy to enable AI profiling with a simple interface, `Profiler()`, which you can
+  modify to use different profiling tools.
 
-#. The `profile` decorator from physicsnemo is a dynamic decorator that you can leave in your code,
-and it will only perform functions when a profiling tool from `Profiler()` is enabled.
+* The `profile` decorator from physicsnemo is a dynamic decorator that you can leave in your code,
+  and it will only perform functions when a profiling tool from `Profiler()` is enabled.
 
-#. The `annotate` decorator is a conviencence decorator that is directly tied to `nvtx` annotations.
-You can freely use them interchangeably.
+* The `annotate` decorator is a conviencence decorator that is directly tied to `nvtx` annotations.
+  You can freely use them interchangeably.
 
-#. The `pytorch` and `nsight` profilers make it easy to profile your pytorch code.  Pytorch's profiler
-can be activated in PhysicsNeMo with a configuration switch, and nsight can be activated with a simple
-bash command wrapping your script.
+* The `pytorch` and `nsight` profilers make it easy to profile your pytorch code.  Pytorch's profiler
+  can be activated in PhysicsNeMo with a configuration switch, and nsight can be activated with a simple
+  bash command wrapping your script.
 
-#. The `torch.compile` decorator can be used to compile your model for even better performance, but can 
-make the profiles more challenging to understand if a significant portion of the runtime is spent in compiled kernels.
+* The `torch.compile` decorator can be used to compile your model for even better performance, but can 
+  make the profiles more challenging to understand if a significant portion of the runtime is spent in compiled kernels.
 
 That said, what happens when you *do* find a bottleneck?  The answer can vary.  Here are some common
 cases that can help guide you in the right direction:
 
-#. If the bottleneck is in the data loader, there are a few things you can try:
+* If the bottleneck is in the data loader, there are a few things you can try:
 
     - Use a more efficient data loader, such as a prefetch loader.
     - Use a more efficient data format, such as a compressed numpy array.
 
-#. If the bottleneck is in the model:
+* If the bottleneck is in the model:
 
     - Make sure you have the most efficient implementation of the model's layers.
       Transformer operations (attention, layernorm, etc.) are a common source of

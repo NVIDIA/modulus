@@ -59,7 +59,7 @@ highly configurable allowing you to use them out-of-the-box for different applic
 Refer :ref:`PhysicsNeMo Models` for a more complete list of available models. 
 
 Using custom models in PhysicsNeMo
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 PhysicsNeMo provides a lot of pre-built optimized models. However,
 there might be times where the shipped models might not serve your application. In such

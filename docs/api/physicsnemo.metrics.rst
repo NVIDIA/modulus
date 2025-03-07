@@ -1,5 +1,5 @@
 PhysicsNeMo Metrics
-===============
+====================
 
 .. automodule:: physicsnemo.metrics
 .. currentmodule:: physicsnemo.metrics

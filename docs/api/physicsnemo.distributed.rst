@@ -1,5 +1,5 @@
 PhysicsNeMo Distributed
-===================
+========================
 
 .. automodule:: physicsnemo.distributed
 .. currentmodule:: physicsnemo.distributed
@@ -136,21 +136,21 @@ without having to explicitly pass those params down the call stack.
    :toctree: generated
 
 physicsnemo.distributed.manager
-----------------------------
+--------------------------------
 
 .. automodule:: physicsnemo.distributed.manager
     :members:
     :show-inheritance:
 
 physicsnemo.distributed.utils
-----------------------------
+-----------------------------
 
 .. automodule:: physicsnemo.distributed.utils
     :members:
     :show-inheritance:
 
 physicsnemo.distributed.autograd
-----------------------------
+--------------------------------
 
 .. automodule:: physicsnemo.distributed.autograd
     :members:
@@ -164,7 +164,7 @@ physicsnemo.distributed.fft
     :show-inheritance:
 
 physicsnemo.distributed.mappings
-----------------------------
+--------------------------------
 
 .. automodule:: physicsnemo.distributed.mappings
     :members:

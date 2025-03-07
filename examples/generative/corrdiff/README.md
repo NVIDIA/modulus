@@ -1,5 +1,5 @@
 <!-- markdownlint-disable -->
-## Generative Correction Diffusion Model (CorrDiff) for Km-scale Atmospheric Downscaling
+# Generative Correction Diffusion Model (CorrDiff) for Km-scale Atmospheric Downscaling
 
 ## Problem overview
 

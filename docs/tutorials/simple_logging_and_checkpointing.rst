@@ -8,7 +8,7 @@ In this tutorial we will look at some of the utilities from PhysicsNeMo to simpl
 important aspect of model training. 
 
 Logging in PhysicsNeMo
--------------------
+-----------------------
 
 PhysicsNeMo provides utilities to standardize the logs of different training runs. Using the
 logging utilites from PhysicsNeMo, you would have the flexibility of choosing between the
@@ -186,7 +186,7 @@ To visulaize the logs interactively, simply follow the instructions printed in t
 
 
 Checkpointing in PhysicsNeMo
---------------------------
+-----------------------------
 
 PhysicsNeMo provides easy utilities to save and load the checkpoints of the model, optimizer,
 scheduler, and scaler during training and inference. Similar to logging, custom

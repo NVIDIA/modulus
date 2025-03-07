@@ -1,5 +1,5 @@
 PhysicsNeMo Deploy
-==============
+===================
 
 .. autosummary::
    :toctree: generated

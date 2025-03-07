@@ -1,6 +1,6 @@
 
 PhysicsNeMo ``ShardTensor``
-===========
+===========================
 
 In scientific AI applications, the parallelization techniques to enable state of the art 
 models are different from those used in training large language models.  PhysicsNeMo 
@@ -54,7 +54,7 @@ The example below shows how to create and work with ``ShardTensor``:
         )
 
 How does this work?
-""""""""""""""""""
+""""""""""""""""""""
 
 ``ShardTensor`` extends PyTorch's ``DTensor`` to support uneven sharding where different ranks can have different 
 local tensor sizes. It tracks shard size information and handles redistribution between different 
@@ -67,23 +67,27 @@ Key differences from ``DTensor`` include:
 - Flexible redistribution between different sharding schemes
 
 Operations work by:
+
 1. Converting inputs to local tensors
+
 2. Performing operations locally 
+
 3. Constructing new ``ShardTensor`` with appropriate sharding
+
 4. Handling any needed communication between ranks
 
 .. autosummary::
    :toctree: generated
 
 ``ShardTensor``
------------
+----------------
 
 .. autoclass:: physicsnemo.distributed.shard_tensor.ShardTensor
     :members:
     :show-inheritance:
 
 Utility Functions
-----------------
+------------------
 
 .. autofunction:: physicsnemo.distributed.shard_tensor.scatter_tensor
 

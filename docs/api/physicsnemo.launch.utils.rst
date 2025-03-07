@@ -1,5 +1,5 @@
 PhysicsNeMo Launch Utils
-====================
+=========================
 
 .. automodule:: physicsnemo.launch.utils
 .. currentmodule:: physicsnemo.launch.utils
