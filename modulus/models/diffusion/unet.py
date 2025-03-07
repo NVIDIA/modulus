@@ -168,8 +168,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
                 f"Expected the dtype to be {dtype}, " f"but got {F_x.dtype} instead."
             )
 
-        # skip connection - for SR there's size mismatch bewtween input and
-        # output
+        # skip connection
         D_x = F_x.to(torch.float32)
         return D_x
 

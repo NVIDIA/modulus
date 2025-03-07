@@ -22,7 +22,8 @@ from pytest_utils import import_or_fail
 
 
 @import_or_fail("cftime")
-def test_image_fuse_basic(pytestconfig):
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_image_fuse_basic(pytestconfig, device):
     from modulus.utils.patching import image_fuse
 
     # Basic test: No overlap, no boundary, one patch
@@ -34,7 +35,7 @@ def test_image_fuse_basic(pytestconfig):
         input_tensor = (
             torch.arange(1, img_shape_y * img_shape_x + 1)
             .view(1, 1, img_shape_y, img_shape_x)
-            .cuda()
+            .to(device)
             .float()
         )
         fused_image = image_fuse(
@@ -53,28 +54,27 @@ def test_image_fuse_basic(pytestconfig):
 
 
 @import_or_fail("cftime")
-def test_image_fuse_with_boundary(pytestconfig):
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_image_fuse_with_boundary(pytestconfig, device):
     from modulus.utils.patching import image_fuse
 
     # Test with boundary pixels
-    batch_size = 1
-    img_shape_x = img_shape_y = 4
     overlap_pix = 0
     boundary_pix = 1
 
-    input_tensor = torch.ones(1, 1, 6, 6).cuda().float()  # All ones for easy validation
+    input_tensor = torch.randn(1, 1, 8, 6).to(device).float()
     fused_image = image_fuse(
         input_tensor,
-        img_shape_y,
-        img_shape_x,
-        batch_size,
-        overlap_pix,
-        boundary_pix,
+        img_shape_y=6,
+        img_shape_x=4,
+        batch_size=1,
+        overlap_pix=overlap_pix,
+        boundary_pix=boundary_pix,
     )
-    assert fused_image.shape == (batch_size, 1, img_shape_y, img_shape_x)
-    expected_output = (
-        torch.ones(1, 1, 4, 4).cuda().float()
-    )  # Expected output is just the inner 4x4 part
+    assert fused_image.shape == (1, 1, 6, 4)
+    expected_output = input_tensor[
+        :, :, boundary_pix:-boundary_pix, boundary_pix:-boundary_pix
+    ]
     assert torch.allclose(
         fused_image, expected_output, atol=1e-5
     ), "Output with boundary does not match expected output."
@@ -133,7 +133,8 @@ def test_image_fuse_with_multiple_batches(pytestconfig, device):
 
 
 @import_or_fail("cftime")
-def test_image_batching_basic(pytestconfig):
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_image_batching_basic(pytestconfig, device):
     from modulus.utils.patching import image_batching
 
     # Test with no overlap, no boundary, no input_interp
@@ -142,7 +143,7 @@ def test_image_batching_basic(pytestconfig):
     overlap_pix = 0
     boundary_pix = 0
 
-    input_tensor = torch.arange(1, 17).view(1, 1, 4, 4).cuda().float()
+    input_tensor = torch.arange(1, 17).view(1, 1, 4, 4).to(device).float()
     batched_images = image_batching(
         input_tensor,
         patch_shape_y,
@@ -158,15 +159,17 @@ def test_image_batching_basic(pytestconfig):
 
 
 @import_or_fail("cftime")
-def test_image_batching_with_boundary(pytestconfig):
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_image_batching_with_boundary(pytestconfig, device):
     from modulus.utils.patching import image_batching
 
     # Test with boundary pixels, no overlap, no input_interp
-    patch_shape_x = patch_shape_y = 6
+    patch_shape_y = 8
+    patch_shape_x = 6
     overlap_pix = 0
     boundary_pix = 1
 
-    input_tensor = torch.ones(1, 1, 4, 4).cuda().float()  # All ones for easy validation
+    input_tensor = torch.rand(1, 1, 6, 4).to(device).float()
     batched_images = image_batching(
         input_tensor,
         patch_shape_y,
@@ -174,15 +177,22 @@ def test_image_batching_with_boundary(pytestconfig):
         overlap_pix,
         boundary_pix,
     )
-    assert batched_images.shape == (1, 1, patch_shape_x, patch_shape_y)
-    expected_output = torch.ones(1, 1, 6, 6).cuda().float()
+    # Create expected output using reflection padding
+    expected_output = torch.nn.functional.pad(
+        input_tensor,
+        pad=(boundary_pix, boundary_pix, boundary_pix, boundary_pix),
+        mode="reflect",
+    )
+
+    assert batched_images.shape == (1, 1, patch_shape_y, patch_shape_x)
     assert torch.allclose(
         batched_images, expected_output, atol=1e-5
     ), "Batched images with boundary do not match expected output."
 
 
 @import_or_fail("cftime")
-def test_image_batching_with_input_interp(pytestconfig):
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_image_batching_with_input_interp(pytestconfig, device):
     from modulus.utils.patching import image_batching
 
     # Test with input_interp tensor
@@ -196,13 +206,13 @@ def test_image_batching_with_input_interp(pytestconfig):
         input_tensor = (
             torch.arange(1, img_size + 1)
             .view(1, 1, img_shape_y, img_shape_x)
-            .cuda()
+            .to(device)
             .float()
         )
         input_interp = (
             torch.arange(-patch_shape_y * patch_shape_x, 0)
             .view(1, 1, patch_shape_y, patch_shape_x)
-            .cuda()
+            .to(device)
             .float()
         )
         batched_images = image_batching(

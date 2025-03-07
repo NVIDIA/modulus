@@ -621,8 +621,7 @@ def image_fuse(
     Parameters
     ----------
     input : Tensor
-        The input tensor containing the image patches with shape (patch_num
-        * batch_size, channels, patch_shape_y, patch_shape_x).
+        The input tensor containing the image patches with shape (patch_num * batch_size, channels, patch_shape_y, patch_shape_x).
     img_shape_y : int
         The height (y-dimension) of the original full image.
     img_shape_x : int
