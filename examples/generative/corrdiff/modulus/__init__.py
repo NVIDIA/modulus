@@ -14,31 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-hydra:
-  job:
-    chdir: true
-    name: regression  # choose from [regression, diffusion, patched_diffusion]
-  run:
-    dir: ./outputs/${hydra:job.name}
+from .datapipes.datapipe import Datapipe
+from .datapipes.meta import DatapipeMetaData
+from .models.meta import ModelMetaData
+from .models.module import Module
 
-# Get defaults
-defaults:
-
-  # Dataset
-  # - dataset/cwb_train
-  - dataset/hrrr_corrdiff_synthetic
-
-  # Model
-  # - model/corrdiff_regression
-  #- model/corrdiff_diffusion
-  - model/corrdiff_patched_diffusion
-  
-
-  # Training
-  # - training/corrdiff_regression
-  #- training/corrdiff_diffusion
-  # - training/corrdiff_patched_diffusion
-  - training/corrdiff_patched_diffusion_opt
-
-  # Validation (comment out to disable validation)
-  - validation/cwb
+__version__ = "0.10.0a0"
