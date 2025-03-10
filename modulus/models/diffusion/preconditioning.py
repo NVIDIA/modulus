@@ -805,7 +805,6 @@ class EDMPrecondSR(Module):
     def _legacy_scaling_fn(x, img_lr, c_in):
         return c_in * torch.cat([x, img_lr.to(x.dtype)], dim=1)
 
-    @nvtx.annotate(message="EDMPrecondSR", color="orange")
     def forward(
         self,
         x,

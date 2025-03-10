@@ -21,6 +21,7 @@ from .loss import (
     RegressionLoss,
     RegressionLossCE,
     ResLoss,
+    ResLoss_Opt,
     VELoss,
     VELoss_dfsr,
     VPLoss,

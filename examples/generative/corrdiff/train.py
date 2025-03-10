@@ -37,8 +37,8 @@ from helpers.train_helpers import (
 )
 import nvtx
 import contextlib 
-import pdb
-import wandb
+
+
 
 torch._dynamo.reset()
 # Increase the cache size limit
@@ -53,14 +53,6 @@ def main(cfg: DictConfig) -> None:
     # Initialize distributed environment for training
     DistributedManager.initialize()
     dist = DistributedManager()
-
-    #set up wandb
-    if dist.rank == 0:
-        wandb.login(key="56d6b1c55cf68cebc9129d638c9dba7987a4af51")
-        wandb.init( project="corrdiff_batch_opt",
-                    resume="allow",             # Options: 'allow', 'must', 'never'
-                    # id="wrujmaml"            # The run ID of the process you want to resume)
-                )
         
     # Initialize loggers
     if dist.rank == 0:
@@ -218,7 +210,6 @@ def main(cfg: DictConfig) -> None:
     #      optimization_mode = True
     use_torch_compile = False
     use_apex_gn =  False
-    fused_conv_bias = False
     profile_mode = False
 
     if hasattr(cfg.training.perf, "torch_compile"):
@@ -459,7 +450,6 @@ def main(cfg: DictConfig) -> None:
                         writer.add_scalar(
                             "training_loss_running_mean", average_loss_running_mean, cur_nimg
                         )
-                        wandb.log({"training loss": average_loss, "cur_nimg": cur_nimg})
 
                     ptt = is_time_for_periodic_task(
                         cur_nimg,
@@ -485,7 +475,6 @@ def main(cfg: DictConfig) -> None:
                             current_lr = g["lr"]
                             if dist.rank == 0:
                                 writer.add_scalar("learning_rate", current_lr, cur_nimg)
-                                wandb.log({"lr": current_lr, "cur_nimg": cur_nimg})
                         handle_and_clip_gradients(
                             model, grad_clip_threshold=cfg.training.hp.grad_clip_threshold
                         )
@@ -516,15 +505,7 @@ def main(cfg: DictConfig) -> None:
                                         img_clean_valid = img_clean_valid.to(dist.device, dtype=input_dtype, non_blocking=True).to(memory_format=torch.channels_last)
                                         img_lr_valid = img_lr_valid.to(dist.device, dtype=input_dtype, non_blocking=True).to(memory_format=torch.channels_last)
                                         labels_valid = labels_valid.to(dist.device, non_blocking=True)
-                                        # img_clean_valid = (
-                                        #     img_clean_valid.to(dist.device)
-                                        #     .to(torch.float32)
-                                        #     .contiguous()
-                                        # )
-                                        # img_lr_valid = (
-                                        #     img_lr_valid.to(dist.device).to(torch.float32).contiguous()
-                                        # )
-                                        # labels_valid = labels_valid.to(dist.device).contiguous()
+     
                                     else:
                                         img_clean_valid = (
                                             img_clean_valid.to(dist.device)
@@ -560,20 +541,6 @@ def main(cfg: DictConfig) -> None:
                                         valid_loss_accum += (
                                             loss_valid / cfg.training.io.validation_steps
                                         )
-
-                                    # loss_valid = loss_fn(
-                                    #     net=model,
-                                    #     img_clean=img_clean_valid,
-                                    #     img_lr=img_lr_valid,
-                                    #     labels=labels_valid,
-                                    #     augment_pipe=None,
-                                    # )
-                                    # loss_valid = (
-                                    #     (loss_valid.sum() / batch_size_per_gpu).cpu().item()
-                                    # )
-                                    # valid_loss_accum += (
-                                    #     loss_valid / cfg.training.io.validation_steps
-                                    # )
                                 valid_loss_sum = torch.tensor(
                                     [valid_loss_accum], device=dist.device
                                 )
@@ -587,7 +554,6 @@ def main(cfg: DictConfig) -> None:
                                     writer.add_scalar(
                                         "validation_loss", average_valid_loss, cur_nimg
                                     )
-                                    wandb.log({"validation loss": average_valid_loss, "cur_nimg": cur_nimg})
 
                 if is_time_for_periodic_task(
                     cur_nimg,
