@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import re
+import os, re
 from pathlib import Path
 from typing import Any, Dict, List, NewType, Optional, Union
 
@@ -413,6 +413,19 @@ def load_checkpoint(
 
     return epoch
 
+# Get a checkpoint directory based on a given base directory and model name
+def get_checkpoint_dir(base_dir: str, model_name: str) -> str:
+    top_level_dir = f"checkpoints_{model_name}"
+    protocol = fsspec.utils.get_protocol(base_dir)
+    if protocol == "msc":
+        if not base_dir.endswith("/"):
+            base_dir += "/"
+        return base_dir + top_level_dir
+    else:
+        return os.path.join(
+            base_dir, top_level_dir
+        )
+
 # Read via cache and return the cached path for non-file protocols, otherwise just return the path
 def _cache_if_needed(path: str) -> str:
     protocol = fsspec.utils.get_protocol(path)
@@ -420,4 +433,3 @@ def _cache_if_needed(path: str) -> str:
         return path
     else:
         return _download_cached(path)
-    

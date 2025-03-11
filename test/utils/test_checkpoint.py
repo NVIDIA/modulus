@@ -150,3 +150,11 @@ def test_model_checkpointing(
         local_cache = os.environ["HOME"] + "/.cache/modulus"
         shutil.rmtree(local_cache)
 
+def test_get_checkpoint_dir():
+    from modulus.launch.utils import get_checkpoint_dir
+    assert get_checkpoint_dir(".", "model") == "./checkpoints_model"
+    assert get_checkpoint_dir("./", "model") == "./checkpoints_model"
+    assert get_checkpoint_dir("/Users/auser", "model") == "/Users/auser/checkpoints_model"
+    assert get_checkpoint_dir("/Users/auser/", "model") == "/Users/auser/checkpoints_model"
+    assert get_checkpoint_dir("msc://test_profile/bucket", "model") == "msc://test_profile/bucket/checkpoints_model"
+    assert get_checkpoint_dir("msc://test_profile/bucket/", "model") == "msc://test_profile/bucket/checkpoints_model"

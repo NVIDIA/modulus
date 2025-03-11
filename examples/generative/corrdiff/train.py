@@ -15,7 +15,6 @@
 # limitations under the License.
 
 import os, time, psutil, hydra, torch
-import fsspec.utils
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from torch.nn.parallel import DistributedDataParallel
@@ -26,7 +25,7 @@ from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from modulus.metrics.diffusion import RegressionLoss, ResLoss, RegressionLossCE
 from modulus.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from modulus.launch.utils import load_checkpoint, save_checkpoint
+from modulus.launch.utils import load_checkpoint, save_checkpoint, get_checkpoint_dir
 from datasets.dataset import init_train_valid_datasets_from_config
 from helpers.train_helpers import (
     set_patch_shape,
@@ -67,16 +66,8 @@ def main(cfg: DictConfig) -> None:
     enable_amp = fp_optimizations.startswith("amp")
     amp_dtype = torch.float16 if (fp_optimizations == "amp-fp16") else torch.bfloat16
 
-    checkpoint_dir = str(cfg.training.io.get("checkpoint_dir", "."))
-    protocol = fsspec.utils.get_protocol(checkpoint_dir)
-    if protocol == "msc":
-        if not checkpoint_dir.endswith("/"):
-            checkpoint_dir += "/"
-        checkpoint_dir += f"checkpoints_{cfg.model.name}"
-    else:
-        checkpoint_dir = os.path.join(
-            cfg.training.io.get("checkpoint_dir", "."), f"checkpoints_{cfg.model.name}"
-        )
+    logger.info(f"Saving the outputs in {os.getcwd()}")
+    checkpoint_dir = get_checkpoint_dir(str(cfg.training.io.get("checkpoint_dir", ".")), cfg.model.name)
     if cfg.training.hp.batch_size_per_gpu == "auto":
         cfg.training.hp.batch_size_per_gpu = (
             cfg.training.hp.total_batch_size // dist.world_size
