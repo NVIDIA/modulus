@@ -87,6 +87,7 @@ def test_model_checkpointing(
     current_dir = current_file.parent
     os.environ["MSC_CONFIG"] = f"{current_dir}/msc_config_checkpoint.yaml"
 
+    # Create a bucket using the mock directly to ensure that MSC accesses the correct location.
     conn = boto3.resource("s3", region_name="us-east-1")
     conn.create_bucket(Bucket="checkpoint-test-bucket")
 
