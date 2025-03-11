@@ -28,7 +28,7 @@ import modulus
 from modulus.distributed import DistributedManager
 from modulus.launch.logging import PythonLogger
 from modulus.utils.capture import _StaticCapture
-from modulus.utils.filesystem import _download_cached
+from modulus.utils.filesystem import _download_cached, LOCAL_CACHE
 
 optimizer = NewType("optimizer", torch.optim)
 scheduler = NewType("scheduler", _LRScheduler)
@@ -432,4 +432,4 @@ def _cache_if_needed(path: str) -> str:
     if protocol == "file":
         return path
     else:
-        return _download_cached(path)
+        return _download_cached(path, recursive=False, local_cache_path=os.path.join(LOCAL_CACHE, f"checkpoint_pid_{os.getpid()}"))
