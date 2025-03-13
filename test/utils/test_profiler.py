@@ -60,10 +60,16 @@ class MockProfiler(PhysicsNeMoProfilerWrapper, metaclass=_Profiler_Singleton):
             self._config = replace(config, **config_overrides)
 
     def enable(self):
+        # Progress the state to enabled
         self.enabled = True
 
     def _standup(self):
-        self._initialized = True
+        # ... to initialized
+        self.initialized = True
+
+    def finalize(self, output_path: Path):
+        # ... to finalized
+        self.finalized = True
 
     def __enter__(self):
         return self
@@ -72,9 +78,6 @@ class MockProfiler(PhysicsNeMoProfilerWrapper, metaclass=_Profiler_Singleton):
         pass
 
     def __call__(self, *args, **kwargs):
-        pass
-
-    def finalize(self, output_path):
         pass
 
     def step(self):
@@ -86,8 +89,11 @@ def reset_profiler():
     Profiler._clear_instance()
     ProfileRegistry._clear()
     _register_profilers()
-    # Register the mock profiler
+    # Reset and re-register the mock profiler
+    MockProfiler._clear_instance()
+
     ProfileRegistry.register_profiler("mock", MockProfiler)
+    # Reset the singleton instance
 
 
 def test_profiler_initialization():
@@ -105,7 +111,7 @@ def test_profiler_initialization():
 
     # It's a singleton, so we should get the same instance
     mock_profiler = MockProfiler()
-    assert mock_profiler._initialized
+    assert mock_profiler.initialized
 
 
 def test_profiler_context_manager():
@@ -120,6 +126,34 @@ def test_profiler_context_manager():
         # Now it is initialized
         assert p.initialized
         assert p.enabled
+
+
+def test_profiler_state_progression():
+    profiler = Profiler()
+    mock_profiler = MockProfiler()
+
+    # Everything should be disabled by default
+    assert not mock_profiler.enabled
+    assert not mock_profiler.initialized
+    assert not mock_profiler.finalized
+
+    profiler.enable(mock_profiler)
+
+    assert mock_profiler.enabled
+    assert not mock_profiler.initialized
+    assert not mock_profiler.finalized
+
+    profiler.initialize()
+
+    assert mock_profiler.enabled
+    assert mock_profiler.initialized
+    assert not mock_profiler.finalized
+
+    profiler.finalize()
+
+    assert mock_profiler.enabled
+    assert mock_profiler.initialized
+    assert mock_profiler.finalized
 
 
 def test_profiler_decoration():
@@ -162,8 +196,8 @@ def test_output_path():
 
         # Test string conversion
         test_path2 = str(Path(tmpdir) / "test_output2")
-        profiler.output_dir = test_path2
-        assert isinstance(profiler.output_dir, Path)
+        profiler.output_path = test_path2
+        assert isinstance(profiler.output_path, Path)
 
 
 def test_profiler_finalization():
@@ -208,3 +242,23 @@ def test_function_replacement():
 
         # Check that the function was replaced in the module
         mock_module.original_function = wrapped_function
+
+
+def test_state_enum_ge_operator():
+    # Access the private State enum
+    state_enum = PhysicsNeMoProfilerWrapper.State
+
+    # Test the __ge__ operator
+    assert state_enum.ENABLED >= state_enum.DISABLED
+    assert state_enum.INITIALIZED >= state_enum.ENABLED
+    assert state_enum.FINALIZED >= state_enum.INITIALIZED
+
+    # Test the reverse, which should be False
+    assert not (state_enum.DISABLED >= state_enum.ENABLED)
+    assert not (state_enum.ENABLED >= state_enum.INITIALIZED)
+    assert not (state_enum.INITIALIZED >= state_enum.FINALIZED)
+
+    # Test equality
+    assert state_enum.ENABLED >= state_enum.ENABLED
+    assert state_enum.INITIALIZED >= state_enum.INITIALIZED
+    assert state_enum.FINALIZED >= state_enum.FINALIZED

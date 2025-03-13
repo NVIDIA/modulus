@@ -64,7 +64,7 @@ class LineProfileWrapper(PhysicsNeMoProfilerWrapper, metaclass=_Profiler_Singlet
             )
             self._profiler = None
             self.enabled = False
-        self._initialized = True
+        self.initialized = True
 
     def finalize(self, output_top: Path) -> None:
         """Serialize the line_profiler output to a file.
@@ -72,6 +72,9 @@ class LineProfileWrapper(PhysicsNeMoProfilerWrapper, metaclass=_Profiler_Singlet
         Args:
             output_top: Path to the directory where profiling results should be saved
         """
+        if not lp_avail:
+            return
+
         if not self.enabled:
             return
 

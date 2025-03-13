@@ -21,8 +21,6 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from physicsnemo.distributed import DistributedManager
-
 
 class PhysicsNeMoProfilerWrapper(ContextDecorator):
     """
@@ -38,12 +36,27 @@ class PhysicsNeMoProfilerWrapper(ContextDecorator):
     and physicsnemo will automatically handle the details.
     """
 
-    # This private state class is used to ensure only one state is active at a time.
     class State(Enum):
-        DISABLED = "disabled"
-        ENABLED = "enabled"
-        INITIALIZED = "initialized"
-        FINALIZED = "finalized"
+        """Private state class used to ensure only one state is active at a time."""
+
+        DISABLED = 0
+        ENABLED = 1
+        INITIALIZED = 2
+        FINALIZED = 3
+
+        def __ge__(self, other: "State") -> bool:  # noqa: F821
+            """Compare if this state is greater than or equal to another state.
+            Used for ensuring state progression can look backwards
+
+            Args:
+                other: The state to compare against
+
+            Returns:
+                bool: True if this state's value is >= other state's value
+            """
+            if self.__class__ is other.__class__:
+                return self.value >= other.value
+            return NotImplemented
 
     _state = State.DISABLED
     _is_context: bool = False
@@ -67,34 +80,13 @@ class PhysicsNeMoProfilerWrapper(ContextDecorator):
         pass
 
     @property
-    def initialized(self) -> bool:
-        """Get whether the profiler has been initialized.
-
-        Returns:
-            bool: True if profiler is initialized, False otherwise
-        """
-        return self._state == self.State.INITIALIZED
-
-    @initialized.setter
-    def initialized(self, value: bool) -> None:
-        """Set whether the profiler has been initialized.
-
-        Args:
-            value (bool): True to mark as initialized, False otherwise
-        """
-        if not isinstance(value, bool):
-            raise TypeError("initialized must be a boolean value")
-        if value:
-            self._state = self.State.INITIALIZED
-
-    @property
     def enabled(self) -> bool:
         """Get whether the profiler is enabled.
 
         Returns:
             bool: True if profiler is enabled, False otherwise
         """
-        return self._state == self.State.ENABLED
+        return self._state >= self.State.ENABLED
 
     @enabled.setter
     def enabled(self, value: bool) -> None:
@@ -111,13 +103,34 @@ class PhysicsNeMoProfilerWrapper(ContextDecorator):
             self._state = self.State.DISABLED
 
     @property
+    def initialized(self) -> bool:
+        """Get whether the profiler has been initialized.
+
+        Returns:
+            bool: True if profiler is initialized, False otherwise
+        """
+        return self._state >= self.State.INITIALIZED
+
+    @initialized.setter
+    def initialized(self, value: bool) -> None:
+        """Set whether the profiler has been initialized.
+
+        Args:
+            value (bool): True to mark as initialized, False otherwise
+        """
+        if not isinstance(value, bool):
+            raise TypeError("initialized must be a boolean value")
+        if value:
+            self._state = self.State.INITIALIZED
+
+    @property
     def finalized(self) -> bool:
         """Get whether the profiler has been finalized.
 
         Returns:
             bool: True if profiler is finalized, False otherwise
         """
-        return self._state == self.State.FINALIZED
+        return self._state >= self.State.FINALIZED
 
     @finalized.setter
     def finalized(self, value: bool) -> None:
@@ -182,6 +195,8 @@ class PhysicsNeMoProfilerWrapper(ContextDecorator):
             Path: The created output directory path
         """
         out_dir = top / Path(self._name)
+        # This is here to prevent circular import:
+        from physicsnemo.distributed import DistributedManager
 
         # If the model is distributed, control the location of the output:
         if DistributedManager.is_initialized():

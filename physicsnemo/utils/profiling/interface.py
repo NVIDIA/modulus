@@ -118,24 +118,6 @@ class Profiler(metaclass=_Profiler_Singleton):
             raise TypeError("finalized must be a boolean value")
         self._finalized = value
 
-    @property
-    def output_dir(self) -> Path:
-        """Get the output directory path for profiling results.
-
-        Returns:
-            Path: Path to the output directory
-        """
-        return self._output_top
-
-    @output_dir.setter
-    def output_dir(self, value: str | Path) -> None:
-        """Set the output directory path for profiling results.
-
-        Args:
-            value (Union[str, Path]): Path to the output directory, as string or Path
-        """
-        self._output_top = Path(value)
-
     def _standup(self) -> None:
         """Initialize all registered profilers and decorate registered functions.
 
@@ -262,7 +244,6 @@ class Profiler(metaclass=_Profiler_Singleton):
         for p in self._profilers:
             if p.enabled and p.is_context:
                 self.exit_stack.enter_context(p)
-
         return self
 
     def __exit__(self, *exc) -> None:
