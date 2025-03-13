@@ -43,8 +43,7 @@ class TorchProfilerConfig:
     name: str = "torch"
     torch_prof_activities: Optional[Tuple[ProfilerActivity, ...]] = None
     record_shapes: bool = True
-    profile_memory: bool = True
-    with_stack: bool = True
+    with_stack: bool = False
     profile_memory: bool = True
     with_flops: bool = True
     schedule: Optional[Callable] = None
@@ -127,12 +126,11 @@ class TorchProfileWrapper(PhysicsNeMoProfilerWrapper, metaclass=_Profiler_Single
             return
 
         # Avoid finalizing if we never initialized or already finalized:
-        if not self.initialized or self.finalized:
+        if self.finalized:
             return
 
         # Get the output directory:
         out_top = self.output_dir(output_top)
-
         if self._profiler is not None:
 
             try:
