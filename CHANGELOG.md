@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DrivAerML dataset support in FIGConvNet example.
 - Retraining recipe for DoMINO from a pretrained model checkpoint
 - Added Datacenter CFD use case.
+- Added ReGen score-based data assimilation example
 
 ### Changed
 
