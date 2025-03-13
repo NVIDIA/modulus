@@ -19,7 +19,7 @@ hp:
 
     training_duration: 200000000
     # Training duration
-    total_batch_size: 1024
+    total_batch_size: 16
     # Total batch size
     batch_size_per_gpu: 4
     # Limit batch size per GPU
