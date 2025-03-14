@@ -29,12 +29,24 @@ RUN apt-get update && \
 
 ENV _CUDA_COMPAT_TIMEOUT=90
 
-# Install other dependencies
-RUN pip install --no-cache-dir "h5py>=3.7.0" "netcdf4>=1.6.3" "ruamel.yaml>=0.17.22" "scikit-learn>=1.0.2" "cftime>=1.6.2" "einops>=0.7.0" "pyspng>=0.1.0"
-RUN pip install --no-cache-dir "hydra-core>=1.2.0" "termcolor>=2.1.1" "wandb>=0.13.7" "pydantic>=1.10.2" "imageio>=2.28.1" "moviepy>=1.0.3" "tqdm>=4.60.0" "gcsfs==2024.2.0"
-
 # copy physicsnemo source
 COPY . /physicsnemo/
+
+# Install pyspng for arm64
+ARG PYSPNG_ARM64_WHEEL
+ENV PYSPNG_ARM64_WHEEL=${PYSPNG_ARM64_WHEEL:-unknown}
+
+RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$PYSPNG_ARM64_WHEEL" != "unknown" ]; then \
+        echo "Custom pyspng wheel for $TARGETPLATFORM exists, installing!" && \
+        pip install --no-cache-dir /physicsnemo/deps/${PYSPNG_ARM64_WHEEL}; \
+    else \
+        echo "No custom wheel for pyspng found. Installing pyspng for: $TARGETPLATFORM from pypi" && \
+        pip install --no-cache-dir "pyspng>=0.1.0"; \
+    fi
+
+# Install other dependencies
+RUN pip install --no-cache-dir "h5py>=3.7.0" "netcdf4>=1.6.3" "ruamel.yaml>=0.17.22" "scikit-learn>=1.0.2" "cftime>=1.6.2" "einops>=0.7.0"
+RUN pip install --no-cache-dir "hydra-core>=1.2.0" "termcolor>=2.1.1" "wandb>=0.13.7" "pydantic>=1.10.2" "imageio>=2.28.1" "moviepy>=1.0.3" "tqdm>=4.60.0" "gcsfs==2024.2.0"
 
 # Install Numcodecs (This needs a separate install because Numcodecs ARM pip install has issues)
 # A fix is being added here: https://github.com/zarr-developers/numcodecs/pull/315 but the public release is not ready yet.
