@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from importlib.metadata import EntryPoint, entry_points
 from typing import List, Union
 
@@ -40,6 +41,22 @@ class ModelRegistry:
         entrypoints = entry_points(group="physicsnemo.models")
         for entry_point in entrypoints:
             registry[entry_point.name] = entry_point
+
+        # Pull in any modulus models for backwards compatibility
+        entrypoints = entry_points(group="modulus.models")
+        for entry_point in entrypoints:
+            if entry_point.name not in registry:
+                # Add depricated warning
+                warnings.warn(
+                    f"Model {entry_point.name} is being loaded from the 'modulus.models' group. "
+                    f"This probably means it is being exposed from a package that has not yet been "
+                    f"updated to use the 'physicsnemo.models' group. This group may be removed in a "
+                    f"future release. Please contact the package maintainer to update the entry point.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                registry[entry_point.name] = entry_point
+
         return registry
 
     def register(
