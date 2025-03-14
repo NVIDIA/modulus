@@ -19,7 +19,7 @@ import os
 # Mounted under /data
 isd_path = "/data/datasets/gridded_isd_oklahoma/2017_corrected.nc"
 path_to_pretrained = "/data/datasets/hrrr_oklahoma/hrrr_v3/model_state_dict.pth"
-path_to_model_state = "/expts/0-unconditional_diffusion_downscaling_a2s_v3_1_oklahoma-hrrr-gpus1/training-state-000002.pt"
+path_to_model_state = "/path/to/my/training-state-000000.pt"
 path_to_hrrr = "/data/datasets/hrrr_oklahoma/hrrr_v3/2017.zarr"
 path_to_isp = "/data/sda/obs_data/3611864.csv"
 
