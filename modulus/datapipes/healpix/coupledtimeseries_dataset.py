@@ -69,6 +69,9 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         forecast_init_times: Optional[Sequence] = None,
         couplings: Sequence = [],
         meta: DatapipeMetaData = MetaData(),
+        add_train_noise: bool = False,
+        train_noise_params: DictConfig = None,
+        train_noise_seed: int = 42,
     ):
         """
         Parameters
@@ -114,21 +117,29 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         couplings: Sequence, optional
             a Sequence of dictionaries that define the mechanics of couplings with other earth system
             components
+        add_train_noise: bool, optional
+            Add noise to the training data to inputs and integrated couplings to improve generalization, default False
+        train_noise_params: DictConfig, optional
+            Dictionary containing parameters for adding noise to the training data
+        train_noise_seed: int, optional
+            Seed for the random number generator for adding noise to the training data, default 42
         """
         self.input_variables = input_variables
         self.output_variables = (
             input_variables if output_variables is None else output_variables
         )
-        if couplings is not None:
-            self.couplings = [
-                getattr(couplers, c["coupler"])(
-                    dataset,
-                    **OmegaConf.to_object(DictConfig(c))["params"],
-                )
-                for c in couplings
-            ]
-        else:
-            self.couplings = None
+        self.add_train_noise = add_train_noise
+        self.train_noise_params = train_noise_params
+        if self.add_train_noise:
+            self.rng = np.random.default_rng(train_noise_seed)
+
+        self.couplings = [
+            getattr(couplers, c["coupler"])(
+                dataset,
+                **OmegaConf.to_object(DictConfig(c))["params"],
+            )
+            for c in couplings
+        ]
         super().__init__(
             dataset=dataset,
             scaling=scaling,
@@ -157,43 +168,10 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         scaling_df.loc["zeros"] = {"mean": 0.0, "std": 1.0}
         scaling_da = scaling_df.to_xarray().astype("float32")
 
+        # only thing we do different here is get the scaling for the coupled values
         for c in self.couplings:
             c.set_scaling(scaling_da)
-        # REMARK: we remove the xarray overhead from these
-        try:
-            self.input_scaling = scaling_da.sel(index=self.input_variables).rename(
-                {"index": "channel_in"}
-            )
-            self.input_scaling = {
-                "mean": np.expand_dims(
-                    self.input_scaling["mean"].to_numpy(), (0, 2, 3, 4)
-                ),
-                "std": np.expand_dims(
-                    self.input_scaling["std"].to_numpy(), (0, 2, 3, 4)
-                ),
-            }
-        except (ValueError, KeyError):
-            raise KeyError(
-                f"one or more of the input data variables f{list(self.ds.channel_in)} not found in the "
-                f"scaling config dict data.scaling ({list(self.scaling.keys())})"
-            )
-        try:
-            self.target_scaling = scaling_da.sel(index=self.input_variables).rename(
-                {"index": "channel_out"}
-            )
-            self.target_scaling = {
-                "mean": np.expand_dims(
-                    self.target_scaling["mean"].to_numpy(), (0, 2, 3, 4)
-                ),
-                "std": np.expand_dims(
-                    self.target_scaling["std"].to_numpy(), (0, 2, 3, 4)
-                ),
-            }
-        except (ValueError, KeyError):
-            raise KeyError(
-                f"one or more of the target data variables f{list(self.ds.channel_out)} not found in the "
-                f"scaling config dict data.scaling ({list(self.scaling.keys())})"
-            )
+        super()._get_scaling_da()
 
     def __getitem__(self, item):
         # start range
@@ -251,7 +229,6 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         torch.cuda.nvtx.range_pop()
 
         torch.cuda.nvtx.range_push("CoupledTimeSeriesDataset:__getitem__:process_batch")
-        compute_time = time.time()
         # Insolation
         if self.add_insolation:
             sol = insolation(
@@ -294,6 +271,25 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
                     else sol[self._input_indices[sample] + self._output_indices[sample]]
                 )
 
+        if not self.forecast_mode and self.add_train_noise:
+            logger.log(5, "Adding gaussian noise to inputs and integrated_couplings")
+            # Iterate over C: inputs.shape = [B, T, C, F, H, W]
+            for i in range(inputs.shape[2]):
+                inputs[:, :, i] += self.rng.normal(
+                    loc=0,
+                    scale=self.train_noise_params["inputs"][self.input_variables[i]][
+                        "std"
+                    ],
+                    size=inputs[:, :, i].shape,
+                )
+            for c in self.couplings:
+                for i, v in enumerate(c.variables):
+                    integrated_couplings[i, :, :] += self.rng.normal(
+                        loc=0,
+                        scale=self.train_noise_params["couplings"][v]["std"],
+                        size=integrated_couplings[i, :, :].shape,
+                    )
+
         inputs_result = [inputs]
         if self.add_insolation:
             inputs_result.append(decoder_inputs)
@@ -305,14 +301,13 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
             np.transpose(x, axes=(0, 3, 1, 2, 4, 5)) for x in inputs_result
         ]
 
-        if "constants" in self.ds.data_vars:
+        if self.constants is not None:
             # Add the constants as [F, C, H, W]
-            inputs_result.append(np.swapaxes(self.ds.constants.values, 0, 1))
-            # inputs_result.append(self.ds.constants.values)
-        logger.log(5, "computed batch in %0.2f s", time.time() - compute_time)
+            inputs_result.append(self.constants)
 
         # append integrated couplings
-        inputs_result.append(integrated_couplings)
+        if len(self.couplings) > 0:
+            inputs_result.append(integrated_couplings)
 
         torch.cuda.nvtx.range_pop()
 
@@ -328,7 +323,6 @@ class CoupledTimeSeriesDataset(TimeSeriesDataset):
         return inputs_result, targets
 
     def next_integration(self, model_outputs, constants):
-
         inputs_result = []
 
         # grab last few model outputs for re-initialization

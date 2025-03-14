@@ -81,6 +81,9 @@ format. Install with
 pip install tensorflow
 ```
 
+Note: If installing tensorflow inside the Modulus docker container, it's recommended
+to use `pip install "tensorflow<=2.17.1"`
+
 To download the data from DeepMind's repo, run
 
 ```bash

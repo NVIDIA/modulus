@@ -14,12 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import dgl
 import pytest
 import torch
 from pytest_utils import import_or_fail, nfsdata_or_fail
 
 from . import common
+
+dgl = pytest.importorskip("dgl")
+
 
 Tensor = torch.Tensor
 
@@ -39,7 +41,7 @@ def test_lagrangian_dataset_constructor(data_dir, device, pytestconfig):
     dataset = LagrangianDataset(
         data_dir=data_dir,
         split="valid",
-        num_samples=2,  # Use a small number for testing
+        num_sequences=2,  # Use a small number for testing
         num_steps=10,  # Use a small number for testing
     )
 
@@ -47,7 +49,7 @@ def test_lagrangian_dataset_constructor(data_dir, device, pytestconfig):
     common.check_datapipe_iterable(dataset)
 
     # Test getting an item
-    graph = dataset[0][0]
+    graph = dataset[0]
     # new DGL (2.4+) uses dgl.heterograph.DGLGraph, previous DGL is dgl.DGLGraph
     assert isinstance(graph, dgl.DGLGraph) or isinstance(
         graph, dgl.heterograph.DGLGraph
@@ -60,8 +62,9 @@ def test_lagrangian_dataset_constructor(data_dir, device, pytestconfig):
     assert graph.ndata["y"].shape[-1] > 0  # node targets
 
 
+@import_or_fail(["tensorflow", "dgl"])
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_graph_construction(device):
+def test_graph_construction(device, pytestconfig):
     from modulus.datapipes.gnn.lagrangian_dataset import compute_edge_index
 
     mesh_pos = torch.tensor([[0.0, 0.0], [0.01, 0.0], [1.0, 1.0]], device=device)

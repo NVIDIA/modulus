@@ -25,6 +25,7 @@ import modulus.metrics.general.crps as crps
 import modulus.metrics.general.ensemble_metrics as em
 import modulus.metrics.general.entropy as ent
 import modulus.metrics.general.histogram as hist
+import modulus.metrics.general.power_spectrum as ps
 import modulus.metrics.general.wasserstein as w
 from modulus.distributed.manager import DistributedManager
 
@@ -842,3 +843,27 @@ def test_entropy(device, rtol: float = 1e-2, atol: float = 1e-2):
             torch.zeros((1,) + x_bin_counts.shape[1:], device=device),
             bin_edges,
         )
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cpu"])
+def test_power_spectrum(device):
+    """Test the 2D power spectrum routine for correctness using a sine wave"""
+    h, w = 64, 64
+    kx, ky = 4, 4
+    amplitude = 1.0
+
+    # Create input sine wave
+    x = torch.arange(w).view(1, -1).repeat(h, 1).float()
+    y = torch.arange(h).view(-1, 1).repeat(1, w).float()
+    signal = amplitude * torch.sin(2 * np.pi * kx * x / w + 2 * np.pi * ky * y / h)
+
+    # Compute the power spectrum (added batch/channel dims)
+    k, power = ps.power_spectrum(signal.unsqueeze(0).unsqueeze(0))
+
+    # Assert that the power at expected wavenumber is dominant
+    k_total = np.sqrt(kx**2 + ky**2)
+    k_index = (torch.abs(k - k_total)).argmin()
+    assert power[0, 0, k_index] > 0.9 * power[0, 0].max()  # Dominant peak
+    assert (power[0, 0] < 1e-6).sum() > (
+        power[0, 0].numel() * 0.9
+    )  # Most bins are zero
