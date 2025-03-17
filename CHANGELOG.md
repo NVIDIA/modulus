@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Update pytests to skip when the required dependencies are not present
 - Bug in data processing script in domino training example
+- Fixed NCCL_ASYNC_ERROR_HANDLING deprecation warning
 
 ### Security
 
