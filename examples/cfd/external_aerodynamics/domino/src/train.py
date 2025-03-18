@@ -44,11 +44,13 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
+from nvtx import annotate as nvtx_annotate
+import torch.cuda.nvtx as nvtx
 
 from modulus.distributed import DistributedManager
 from modulus.launch.utils import load_checkpoint, save_checkpoint
 
-from modulus.datapipes.cae.domino_datapipe import DoMINODataPipe
+from modulus.datapipes.cae.domino_datapipe import DoMINODataPipe, CachedDoMINODataset, compute_scaling_factors
 from modulus.models.domino.model import DoMINO
 from modulus.utils.domino.utils import *
 
@@ -465,8 +467,10 @@ def train_epoch(
         sampled_batched = dict_to_device(sample_batched, device)
 
         with autocast(enabled=False):
-            prediction_vol, prediction_surf = model(sampled_batched)
+            with nvtx.range("Model Forward Pass"):
+                prediction_vol, prediction_surf = model(sampled_batched)
 
+            nvtx.range_push("Loss Calculation")
             if prediction_vol is not None:
                 target_vol = sampled_batched["volume_fields"]
                 if loss_fn_type == "rmse":
@@ -528,6 +532,7 @@ def train_epoch(
                 loss_norm = (
                     0.5 * loss_norm_surf + loss_integral + 0.5 * loss_norm_surf_area
                 )
+            nvtx.range_pop()
 
         loss = loss_norm
         loss = loss / loss_interval
@@ -563,211 +568,10 @@ def train_epoch(
     return last_loss
 
 
-def compute_scaling_factors(cfg: DictConfig):
-
-    model_type = cfg.model.model_type
-
-    if model_type == "volume" or model_type == "combined":
-        vol_save_path = os.path.join(
-            "outputs", cfg.project.name, "volume_scaling_factors.npy"
-        )
-        if not os.path.exists(vol_save_path):
-            input_path = cfg.data.input_dir
-
-            volume_variable_names = list(cfg.variables.volume.solution.keys())
-
-            fm_dict = DoMINODataPipe(
-                input_path,
-                phase="train",
-                grid_resolution=cfg.model.interp_res,
-                volume_variables=volume_variable_names,
-                surface_variables=None,
-                normalize_coordinates=True,
-                sampling=False,
-                sample_in_bbox=True,
-                volume_points_sample=cfg.model.volume_points_sample,
-                geom_points_sample=cfg.model.geom_points_sample,
-                positional_encoding=cfg.model.positional_encoding,
-                model_type=cfg.model.model_type,
-                bounding_box_dims=cfg.data.bounding_box,
-                bounding_box_dims_surf=cfg.data.bounding_box_surface,
-                compute_scaling_factors=True,
-            )
-
-            # Calculate mean
-            if cfg.model.normalization == "mean_std_scaling":
-                for j in range(len(fm_dict)):
-                    d_dict = fm_dict[j]
-                    vol_fields = d_dict["volume_fields"]
-
-                    if vol_fields is not None:
-                        if j == 0:
-                            vol_fields_sum = np.mean(vol_fields, 0)
-                        else:
-                            vol_fields_sum += np.mean(vol_fields, 0)
-                    else:
-                        vol_fields_sum = 0.0
-
-                vol_fields_mean = vol_fields_sum / len(fm_dict)
-
-                for j in range(len(fm_dict)):
-                    d_dict = fm_dict[j]
-                    vol_fields = d_dict["volume_fields"]
-
-                    if vol_fields is not None:
-                        if j == 0:
-                            vol_fields_sum_square = np.mean(
-                                (vol_fields - vol_fields_mean) ** 2.0, 0
-                            )
-                        else:
-                            vol_fields_sum_square += np.mean(
-                                (vol_fields - vol_fields_mean) ** 2.0, 0
-                            )
-                    else:
-                        vol_fields_sum_square = 0.0
-
-                vol_fields_std = np.sqrt(vol_fields_sum_square / len(fm_dict))
-
-                vol_scaling_factors = [vol_fields_mean, vol_fields_std]
-
-            if cfg.model.normalization == "min_max_scaling":
-                for j in range(len(fm_dict)):
-                    d_dict = fm_dict[j]
-                    vol_fields = d_dict["volume_fields"]
-
-                    if vol_fields is not None:
-                        vol_mean = np.mean(vol_fields, 0)
-                        vol_std = np.std(vol_fields, 0)
-                        vol_idx = mean_std_sampling(
-                            vol_fields, vol_mean, vol_std, tolerance=12.0
-                        )
-                        vol_fields_sampled = np.delete(vol_fields, vol_idx, axis=0)
-                        if j == 0:
-                            vol_fields_max = np.amax(vol_fields_sampled, 0)
-                            vol_fields_min = np.amin(vol_fields_sampled, 0)
-                        else:
-                            vol_fields_max1 = np.amax(vol_fields_sampled, 0)
-                            vol_fields_min1 = np.amin(vol_fields_sampled, 0)
-
-                            for k in range(vol_fields.shape[-1]):
-                                if vol_fields_max1[k] > vol_fields_max[k]:
-                                    vol_fields_max[k] = vol_fields_max1[k]
-
-                                if vol_fields_min1[k] < vol_fields_min[k]:
-                                    vol_fields_min[k] = vol_fields_min1[k]
-                    else:
-                        vol_fields_max = 0.0
-                        vol_fields_min = 0.0
-
-                    if j > 20:
-                        break
-                vol_scaling_factors = [vol_fields_max, vol_fields_min]
-            np.save(vol_save_path, vol_scaling_factors)
-
-    if model_type == "surface" or model_type == "combined":
-        surf_save_path = os.path.join(
-            "outputs", cfg.project.name, "surface_scaling_factors.npy"
-        )
-
-        if not os.path.exists(surf_save_path):
-            input_path = cfg.data.input_dir
-
-            volume_variable_names = list(cfg.variables.volume.solution.keys())
-            surface_variable_names = list(cfg.variables.surface.solution.keys())
-
-            fm_dict = DoMINODataPipe(
-                input_path,
-                phase="train",
-                grid_resolution=cfg.model.interp_res,
-                volume_variables=None,
-                surface_variables=surface_variable_names,
-                normalize_coordinates=True,
-                sampling=False,
-                sample_in_bbox=True,
-                volume_points_sample=cfg.model.volume_points_sample,
-                geom_points_sample=cfg.model.geom_points_sample,
-                positional_encoding=cfg.model.positional_encoding,
-                model_type=cfg.model.model_type,
-                bounding_box_dims=cfg.data.bounding_box,
-                bounding_box_dims_surf=cfg.data.bounding_box_surface,
-                compute_scaling_factors=True,
-            )
-
-            # Calculate mean
-            if cfg.model.normalization == "mean_std_scaling":
-                for j in range(len(fm_dict)):
-                    d_dict = fm_dict[j]
-                    surf_fields = d_dict["surface_fields"]
-
-                    if surf_fields is not None:
-                        if j == 0:
-                            surf_fields_sum = np.mean(surf_fields, 0)
-                        else:
-                            surf_fields_sum += np.mean(surf_fields, 0)
-                    else:
-                        surf_fields_sum = 0.0
-
-                surf_fields_mean = surf_fields_sum / len(fm_dict)
-
-                for j in range(len(fm_dict)):
-                    d_dict = fm_dict[j]
-                    surf_fields = d_dict["surface_fields"]
-
-                    if surf_fields is not None:
-                        if j == 0:
-                            surf_fields_sum_square = np.mean(
-                                (surf_fields - surf_fields_mean) ** 2.0, 0
-                            )
-                        else:
-                            surf_fields_sum_square += np.mean(
-                                (surf_fields - surf_fields_mean) ** 2.0, 0
-                            )
-                    else:
-                        surf_fields_sum_square = 0.0
-
-                surf_fields_std = np.sqrt(surf_fields_sum_square / len(fm_dict))
-
-                surf_scaling_factors = [surf_fields_mean, surf_fields_std]
-
-            if cfg.model.normalization == "min_max_scaling":
-                for j in range(len(fm_dict)):
-                    d_dict = fm_dict[j]
-                    surf_fields = d_dict["surface_fields"]
-
-                    if surf_fields is not None:
-                        surf_mean = np.mean(surf_fields, 0)
-                        surf_std = np.std(surf_fields, 0)
-                        surf_idx = mean_std_sampling(
-                            surf_fields, surf_mean, surf_std, tolerance=12.0
-                        )
-                        surf_fields_sampled = np.delete(surf_fields, surf_idx, axis=0)
-                        if j == 0:
-                            surf_fields_max = np.amax(surf_fields_sampled, 0)
-                            surf_fields_min = np.amin(surf_fields_sampled, 0)
-                        else:
-                            surf_fields_max1 = np.amax(surf_fields_sampled, 0)
-                            surf_fields_min1 = np.amin(surf_fields_sampled, 0)
-
-                            for k in range(surf_fields.shape[-1]):
-                                if surf_fields_max1[k] > surf_fields_max[k]:
-                                    surf_fields_max[k] = surf_fields_max1[k]
-
-                                if surf_fields_min1[k] < surf_fields_min[k]:
-                                    surf_fields_min[k] = surf_fields_min1[k]
-                    else:
-                        surf_fields_max = 0.0
-                        surf_fields_min = 0.0
-
-                    if j > 20:
-                        break
-
-                surf_scaling_factors = [surf_fields_max, surf_fields_min]
-            np.save(surf_save_path, surf_scaling_factors)
-
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    compute_scaling_factors(cfg)
+    compute_scaling_factors(cfg, cfg.data_processor.output_dir)
     input_path = cfg.data.input_dir
     input_path_val = cfg.data.input_dir_val
     model_type = cfg.model.model_type
@@ -816,49 +620,50 @@ def main(cfg: DictConfig) -> None:
         vol_factors = None
         surf_factors = None
 
-    train_dataset = DoMINODataPipe(
-        input_path,
-        phase="train",
-        grid_resolution=cfg.model.interp_res,
-        volume_variables=volume_variable_names,
-        surface_variables=surface_variable_names,
-        normalize_coordinates=True,
-        sampling=True,
-        sample_in_bbox=True,
-        volume_points_sample=cfg.model.volume_points_sample,
-        surface_points_sample=cfg.model.surface_points_sample,
-        geom_points_sample=cfg.model.geom_points_sample,
-        positional_encoding=cfg.model.positional_encoding,
-        volume_factors=vol_factors,
-        surface_factors=surf_factors,
-        scaling_type=cfg.model.normalization,
-        model_type=cfg.model.model_type,
-        bounding_box_dims=cfg.data.bounding_box,
-        bounding_box_dims_surf=cfg.data.bounding_box_surface,
-        num_surface_neighbors=cfg.model.num_surface_neighbors,
-    )
+    def get_dataset(cfg, phase):
+        if phase == "train":
+            input_path = cfg.data.input_dir
+        elif phase == "val":
+            input_path = cfg.data.input_dir_val
+        else:
+            raise ValueError(f"Invalid phase {phase}")
 
-    val_dataset = DoMINODataPipe(
-        input_path_val,
-        phase="val",
-        grid_resolution=cfg.model.interp_res,
-        volume_variables=volume_variable_names,
-        surface_variables=surface_variable_names,
-        normalize_coordinates=True,
-        sampling=True,
-        sample_in_bbox=True,
-        volume_points_sample=cfg.model.volume_points_sample,
-        surface_points_sample=cfg.model.surface_points_sample,
-        geom_points_sample=cfg.model.geom_points_sample,
-        positional_encoding=cfg.model.positional_encoding,
-        volume_factors=vol_factors,
-        surface_factors=surf_factors,
-        scaling_type=cfg.model.normalization,
-        model_type=cfg.model.model_type,
-        bounding_box_dims=cfg.data.bounding_box,
-        bounding_box_dims_surf=cfg.data.bounding_box_surface,
-        num_surface_neighbors=cfg.model.num_surface_neighbors,
-    )
+        if cfg.data_processor.use_cache:
+            return CachedDoMINODataset(
+                input_path,
+                phase=phase,
+                sampling=True,
+                volume_points_sample=cfg.model.volume_points_sample,
+                surface_points_sample=cfg.model.surface_points_sample,
+                geom_points_sample=cfg.model.geom_points_sample,
+                model_type=cfg.model.model_type,
+                deterministic_seed=False,
+            )
+        else:
+            return DoMINODataPipe(
+                input_path,
+                phase=phase,
+                grid_resolution=cfg.model.interp_res,
+                volume_variables=volume_variable_names,
+                surface_variables=surface_variable_names,
+                normalize_coordinates=True,
+                sampling=True,
+                sample_in_bbox=True,
+                volume_points_sample=cfg.model.volume_points_sample,
+                surface_points_sample=cfg.model.surface_points_sample,
+                geom_points_sample=cfg.model.geom_points_sample,
+                positional_encoding=cfg.model.positional_encoding,
+                volume_factors=vol_factors,
+                surface_factors=surf_factors,
+                scaling_type=cfg.model.normalization,
+                model_type=cfg.model.model_type,
+                bounding_box_dims=cfg.data.bounding_box,
+                bounding_box_dims_surf=cfg.data.bounding_box_surface,
+                num_surface_neighbors=cfg.model.num_surface_neighbors,
+                deterministic_seed=False,
+            )
+    train_dataset = get_dataset(cfg, "train")
+    val_dataset = get_dataset(cfg, "val")
 
     train_sampler = DistributedSampler(
         train_dataset,
@@ -950,7 +755,7 @@ def main(cfg: DictConfig) -> None:
     initial_integral_factor_orig = cfg.model.integral_loss_scaling_factor
 
     for epoch in range(init_epoch, cfg.train.epochs):
-        start_time = time.time()
+        start_time = time.perf_counter()
         print(f"Device {dist.device}, epoch {epoch_number}:")
 
         train_sampler.set_epoch(epoch)
@@ -959,6 +764,7 @@ def main(cfg: DictConfig) -> None:
         initial_integral_factor = initial_integral_factor_orig
 
         model.train(True)
+        epoch_start_time = time.perf_counter()
         avg_loss = train_epoch(
             dataloader=train_dataloader,
             model=model,
@@ -969,6 +775,10 @@ def main(cfg: DictConfig) -> None:
             device=dist.device,
             integral_scaling_factor=initial_integral_factor,
             loss_fn_type=cfg.model.loss_function,
+        )
+        epoch_end_time = time.perf_counter()
+        print(
+            f"Device {dist.device}, Epoch {epoch_number} took {epoch_end_time - epoch_start_time} seconds"
         )
 
         model.eval()
@@ -1017,7 +827,7 @@ def main(cfg: DictConfig) -> None:
                 ),  # hacky way of using epoch to store metadata
             )
         print(
-            f"Device { dist.device}, Best val loss {best_vloss}, Time taken {time.time() - start_time}"
+            f"Device { dist.device}, Best val loss {best_vloss}, Time taken {time.perf_counter() - start_time}"
         )
 
         if dist.rank == 0 and (epoch + 1) % cfg.train.checkpoint_interval == 0.0:

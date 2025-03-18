@@ -25,7 +25,8 @@ be fixed: velocity, pressure, turbulent viscosity for volume variables and
 pressure, wall-shear-stress for surface variables. The different parameters such as 
 variable names, domain resolution, sampling size etc. are configurable in config.yaml. 
 """
-
+import os
+import time
 from pathlib import Path
 from typing import (
     Literal,
@@ -35,6 +36,10 @@ from typing import (
 )
 
 import numpy as np
+import torch.cuda.nvtx as nvtx
+from nvtx import annotate as nvtx_annotate
+from omegaconf import DictConfig
+from torch import Tensor
 from torch.utils.data import Dataset
 
 from modulus.utils.domino.utils import (
@@ -44,8 +49,10 @@ from modulus.utils.domino.utils import (
     calculate_normal_positional_encoding,
     create_grid,
     get_filenames,
+    mean_std_sampling,
     normalize,
     pad,
+    sample_array,
     shuffle_array,
     standardize,
 )
@@ -91,10 +98,25 @@ class DoMINODataPipe(Dataset):
         bounding_box_dims_surf=None,  # Dimensions of bounding box
         compute_scaling_factors=False,
         num_surface_neighbors=11,  # Surface neighbors to consider
+        for_caching=False,
+        deterministic_seed=False,
     ):
         if isinstance(data_path, str):
             data_path = Path(data_path)
         data_path = data_path.expanduser()
+        self.for_caching = for_caching
+        if self.for_caching:
+            if sampling:
+                raise AssertionError("Sampling should be False for caching")
+            if compute_scaling_factors:
+                raise AssertionError(
+                    "Compute scaling factors should be False for caching"
+                )
+
+        if deterministic_seed:
+            np.random.seed(42)
+        else:
+            np.random.seed(seed=int(time.time()))
 
         self.data_path = data_path
 
@@ -125,7 +147,7 @@ class DoMINODataPipe(Dataset):
         self.bounding_box_dims_surf.append(np.asarray(bounding_box_dims_surf.max))
         self.bounding_box_dims_surf.append(np.asarray(bounding_box_dims_surf.min))
 
-        self.filenames = get_filenames(self.data_path)
+        self.filenames = get_filenames(self.data_path, exclude_dirs=True)
         total_files = len(self.filenames)
 
         self.phase = phase
@@ -150,16 +172,23 @@ class DoMINODataPipe(Dataset):
         self.scaling_type = scaling_type
         self.compute_scaling_factors = compute_scaling_factors
         self.num_surface_neighbors = num_surface_neighbors
+        self.deterministic_seed = deterministic_seed
 
     def __len__(self):
         return len(self.indices)
 
+    @nvtx_annotate(message="DoMINODataPipe __getitem__")
     def __getitem__(self, idx):
+        if self.deterministic_seed:
+            np.random.seed(idx)
+
         index = self.indices[idx]
         cfd_filename = self.filenames[index]
 
         filepath = self.data_path / cfd_filename
+        nvtx.range_push("Read .npy")
         data_dict = np.load(filepath, allow_pickle=True).item()
+        nvtx.range_pop()
 
         stl_vertices = data_dict["stl_coordinates"]
         stl_centers = data_dict["stl_centers"]
@@ -189,6 +218,7 @@ class DoMINODataPipe(Dataset):
 
         nx, ny, nz = self.grid_resolution
 
+        nvtx.range_push("Surface SDF")
         surf_grid = create_grid(s_max, s_min, [nx, ny, nz])
         surf_grid_reshaped = surf_grid.reshape(nx * ny * nz, 3)
 
@@ -206,6 +236,7 @@ class DoMINODataPipe(Dataset):
         surf_grid = np.float32(surf_grid)
         sdf_surf_grid = np.float32(sdf_surf_grid)
         surf_grid_max_min = np.float32(np.asarray([s_min, s_max]))
+        nvtx.range_pop()
 
         if self.model_type == "volume" or self.model_type == "combined":
             volume_coordinates = data_dict["volume_mesh_centers"]
@@ -257,7 +288,9 @@ class DoMINODataPipe(Dataset):
                 )
 
                 if self.sampling:
-                    volume_coordinates_sampled, idx_volume = shuffle_array(
+                    if self.deterministic_seed:
+                        np.random.seed(idx)
+                    volume_coordinates_sampled, idx_volume = sample_array(
                         volume_coordinates, self.volume_points
                     )
                     if volume_coordinates_sampled.shape[0] < self.volume_points:
@@ -362,18 +395,17 @@ class DoMINODataPipe(Dataset):
                 surface_fields = surface_fields[ids_in_bbox]
 
                 # Get neighbors
+                nvtx.range_push("Get Neighbors")
                 interp_func = KDTree(surface_coordinates)
                 dd, ii = interp_func.query(
                     surface_coordinates, k=self.num_surface_neighbors
                 )
+                # Slice the indices once to remove the self-reference
+                ii = ii[:, 1:]
                 surface_neighbors = surface_coordinates[ii]
-                surface_neighbors = surface_neighbors[:, 1:]
-
                 surface_neighbors_normals = surface_normals[ii]
-                surface_neighbors_normals = surface_neighbors_normals[:, 1:]
                 surface_neighbors_sizes = surface_sizes[ii]
-                surface_neighbors_sizes = surface_neighbors_sizes[:, 1:]
-
+                nvtx.range_pop()
                 dx, dy, dz = (
                     (s_max[0] - s_min[0]) / nx,
                     (s_max[1] - s_min[1]) / ny,
@@ -393,6 +425,7 @@ class DoMINODataPipe(Dataset):
                     surf_grid = normalize(surf_grid, s_max, s_min)
 
                 if self.sampling:
+                    nvtx.range_push("Surface Sampling")
                     (
                         surface_coordinates_sampled,
                         idx_surface,
@@ -414,6 +447,7 @@ class DoMINODataPipe(Dataset):
                     surface_neighbors_normals = surface_neighbors_normals[idx_surface]
                     surface_neighbors_sizes = surface_neighbors_sizes[idx_surface]
                     surface_coordinates = surface_coordinates_sampled
+                    nvtx.range_pop()
 
                 if self.scaling_type is not None:
                     if self.surface_factors is not None:
@@ -457,6 +491,7 @@ class DoMINODataPipe(Dataset):
             pos_normals_com_surface = None
 
         if self.sampling:
+            nvtx.range_push("Geometry Sampling")
             geometry_points = self.geom_points_sample
             geometry_coordinates_sampled, idx_geometry = shuffle_array(
                 stl_vertices, geometry_points
@@ -466,86 +501,410 @@ class DoMINODataPipe(Dataset):
                     geometry_coordinates_sampled, geometry_points, pad_value=-100.0
                 )
             geom_centers = geometry_coordinates_sampled
+            nvtx.range_pop()
         else:
             geom_centers = stl_vertices
 
         geom_centers = np.float32(geom_centers)
 
+        return_data = {
+            "geometry_coordinates": geom_centers,
+            "surf_grid": surf_grid,
+            "sdf_surf_grid": sdf_surf_grid,
+            "surface_min_max": surf_grid_max_min,
+            "length_scale": length_scale,
+            "stream_velocity": np.expand_dims(
+                np.array(STREAM_VELOCITY, dtype=np.float32), -1
+            ),
+            "air_density": np.expand_dims(np.array(AIR_DENSITY, dtype=np.float32), -1),
+            "filename": cfd_filename,  # Specifically for debugging outputs, excluded from device load
+        }
+
+        neighbor_data = {
+            "surface_mesh_neighbors": surface_neighbors,
+            "surface_neighbors_normals": surface_neighbors_normals,
+            "surface_neighbors_areas": surface_neighbors_sizes,
+        }
+
+        volume_data = {
+            "pos_volume_closest": pos_normals_closest_vol,
+            "pos_volume_center_of_mass": pos_normals_com_vol,
+            "grid": grid,
+            "sdf_grid": sdf_grid,
+            "sdf_nodes": sdf_nodes,
+            "volume_fields": volume_fields,
+            "volume_mesh_centers": volume_coordinates,
+            "volume_min_max": vol_grid_max_min,
+        }
+
+        surface_data = {
+            "pos_surface_center_of_mass": pos_normals_com_surface,
+            "surface_mesh_centers": surface_coordinates,
+            "surface_normals": surface_normals,
+            "surface_areas": surface_sizes,
+            "surface_fields": surface_fields,
+        }
+
+        if self.for_caching:
+            return_data.update(
+                {
+                    "file_index": index,
+                }
+            )
+        if self.model_type in ["surface", "combined"]:
+            if self.for_caching:
+                surface_data.update(
+                    {
+                        "neighbor_indices": ii,
+                    }
+                )
+            else:
+                surface_data.update(neighbor_data)
+
         if self.model_type == "combined":
-            # Add the parameters to the dictionary
-            return {
-                "pos_volume_closest": pos_normals_closest_vol,
-                "pos_volume_center_of_mass": pos_normals_com_vol,
-                "pos_surface_center_of_mass": pos_normals_com_surface,
-                "geometry_coordinates": geom_centers,
-                "grid": grid,
-                "surf_grid": surf_grid,
-                "sdf_grid": sdf_grid,
-                "sdf_surf_grid": sdf_surf_grid,
-                "sdf_nodes": sdf_nodes,
-                "surface_mesh_centers": surface_coordinates,
-                "surface_mesh_neighbors": surface_neighbors,
-                "surface_normals": surface_normals,
-                "surface_neighbors_normals": surface_neighbors_normals,
-                "surface_areas": surface_sizes,
-                "surface_neighbors_areas": surface_neighbors_sizes,
-                "volume_fields": volume_fields,
-                "volume_mesh_centers": volume_coordinates,
-                "surface_fields": surface_fields,
-                "volume_min_max": vol_grid_max_min,
-                "surface_min_max": surf_grid_max_min,
-                "length_scale": length_scale,
-                "stream_velocity": np.expand_dims(
-                    np.array(STREAM_VELOCITY, dtype=np.float32), -1
-                ),
-                "air_density": np.expand_dims(
-                    np.array(AIR_DENSITY, dtype=np.float32), -1
-                ),
-            }
+            return_data.update(surface_data)
+            return_data.update(volume_data)
         elif self.model_type == "surface":
-            return {
-                "pos_surface_center_of_mass": pos_normals_com_surface,
-                "geometry_coordinates": geom_centers,
-                "surf_grid": surf_grid,
-                "sdf_surf_grid": sdf_surf_grid,
-                "surface_mesh_centers": surface_coordinates,
-                "surface_mesh_neighbors": surface_neighbors,
-                "surface_normals": surface_normals,
-                "surface_neighbors_normals": surface_neighbors_normals,
-                "surface_areas": surface_sizes,
-                "surface_neighbors_areas": surface_neighbors_sizes,
-                "surface_fields": surface_fields,
-                "surface_min_max": surf_grid_max_min,
-                "length_scale": length_scale,
-                "stream_velocity": np.expand_dims(
-                    np.array(STREAM_VELOCITY, dtype=np.float32), -1
-                ),
-                "air_density": np.expand_dims(
-                    np.array(AIR_DENSITY, dtype=np.float32), -1
-                ),
-            }
+            return_data.update(surface_data)
         elif self.model_type == "volume":
-            return {
-                "pos_volume_closest": pos_normals_closest_vol,
-                "pos_volume_center_of_mass": pos_normals_com_vol,
-                "geometry_coordinates": geom_centers,
-                "grid": grid,
-                "surf_grid": surf_grid,
-                "sdf_grid": sdf_grid,
-                "sdf_surf_grid": sdf_surf_grid,
-                "sdf_nodes": sdf_nodes,
-                "volume_fields": volume_fields,
-                "volume_mesh_centers": volume_coordinates,
-                "volume_min_max": vol_grid_max_min,
-                "surface_min_max": surf_grid_max_min,
-                "length_scale": length_scale,
-                "stream_velocity": np.expand_dims(
-                    np.array(STREAM_VELOCITY, dtype=np.float32), -1
-                ),
-                "air_density": np.expand_dims(
-                    np.array(AIR_DENSITY, dtype=np.float32), -1
-                ),
-            }
+            return_data.update(volume_data)
+        return return_data
+
+
+def compute_scaling_factors(cfg: DictConfig, input_path: str) -> None:
+
+    model_type = cfg.model.model_type
+
+    if model_type == "volume" or model_type == "combined":
+        vol_save_path = os.path.join(cfg.output, "volume_scaling_factors.npy")
+        if not os.path.exists(vol_save_path):
+            volume_variable_names = list(cfg.variables.volume.solution.keys())
+
+            fm_dict = DoMINODataPipe(
+                input_path,
+                phase="train",
+                grid_resolution=cfg.model.interp_res,
+                volume_variables=volume_variable_names,
+                surface_variables=None,
+                normalize_coordinates=True,
+                sampling=False,
+                sample_in_bbox=True,
+                volume_points_sample=cfg.model.volume_points_sample,
+                geom_points_sample=cfg.model.geom_points_sample,
+                positional_encoding=cfg.model.positional_encoding,
+                model_type=cfg.model.model_type,
+                bounding_box_dims=cfg.data.bounding_box,
+                bounding_box_dims_surf=cfg.data.bounding_box_surface,
+                compute_scaling_factors=True,
+            )
+
+            # Calculate mean
+            if cfg.model.normalization == "mean_std_scaling":
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    vol_fields = d_dict["volume_fields"]
+
+                    if vol_fields is not None:
+                        if j == 0:
+                            vol_fields_sum = np.mean(vol_fields, 0)
+                        else:
+                            vol_fields_sum += np.mean(vol_fields, 0)
+                    else:
+                        vol_fields_sum = 0.0
+
+                vol_fields_mean = vol_fields_sum / len(fm_dict)
+
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    vol_fields = d_dict["volume_fields"]
+
+                    if vol_fields is not None:
+                        if j == 0:
+                            vol_fields_sum_square = np.mean(
+                                (vol_fields - vol_fields_mean) ** 2.0, 0
+                            )
+                        else:
+                            vol_fields_sum_square += np.mean(
+                                (vol_fields - vol_fields_mean) ** 2.0, 0
+                            )
+                    else:
+                        vol_fields_sum_square = 0.0
+
+                vol_fields_std = np.sqrt(vol_fields_sum_square / len(fm_dict))
+
+                vol_scaling_factors = [vol_fields_mean, vol_fields_std]
+
+            if cfg.model.normalization == "min_max_scaling":
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    vol_fields = d_dict["volume_fields"]
+
+                    if vol_fields is not None:
+                        vol_mean = np.mean(vol_fields, 0)
+                        vol_std = np.std(vol_fields, 0)
+                        vol_idx = mean_std_sampling(
+                            vol_fields, vol_mean, vol_std, tolerance=12.0
+                        )
+                        vol_fields_sampled = np.delete(vol_fields, vol_idx, axis=0)
+                        if j == 0:
+                            vol_fields_max = np.amax(vol_fields_sampled, 0)
+                            vol_fields_min = np.amin(vol_fields_sampled, 0)
+                        else:
+                            vol_fields_max1 = np.amax(vol_fields_sampled, 0)
+                            vol_fields_min1 = np.amin(vol_fields_sampled, 0)
+
+                            for k in range(vol_fields.shape[-1]):
+                                if vol_fields_max1[k] > vol_fields_max[k]:
+                                    vol_fields_max[k] = vol_fields_max1[k]
+
+                                if vol_fields_min1[k] < vol_fields_min[k]:
+                                    vol_fields_min[k] = vol_fields_min1[k]
+                    else:
+                        vol_fields_max = 0.0
+                        vol_fields_min = 0.0
+
+                    if j > 20:
+                        break
+                vol_scaling_factors = [vol_fields_max, vol_fields_min]
+            np.save(vol_save_path, vol_scaling_factors)
+
+    if model_type == "surface" or model_type == "combined":
+        surf_save_path = os.path.join(cfg.output, "surface_scaling_factors.npy")
+
+        if not os.path.exists(surf_save_path):
+
+            volume_variable_names = list(cfg.variables.volume.solution.keys())
+            surface_variable_names = list(cfg.variables.surface.solution.keys())
+
+            fm_dict = DoMINODataPipe(
+                input_path,
+                phase="train",
+                grid_resolution=cfg.model.interp_res,
+                volume_variables=None,
+                surface_variables=surface_variable_names,
+                normalize_coordinates=True,
+                sampling=False,
+                sample_in_bbox=True,
+                volume_points_sample=cfg.model.volume_points_sample,
+                geom_points_sample=cfg.model.geom_points_sample,
+                positional_encoding=cfg.model.positional_encoding,
+                model_type=cfg.model.model_type,
+                bounding_box_dims=cfg.data.bounding_box,
+                bounding_box_dims_surf=cfg.data.bounding_box_surface,
+                compute_scaling_factors=True,
+            )
+
+            # Calculate mean
+            if cfg.model.normalization == "mean_std_scaling":
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    surf_fields = d_dict["surface_fields"]
+
+                    if surf_fields is not None:
+                        if j == 0:
+                            surf_fields_sum = np.mean(surf_fields, 0)
+                        else:
+                            surf_fields_sum += np.mean(surf_fields, 0)
+                    else:
+                        surf_fields_sum = 0.0
+
+                surf_fields_mean = surf_fields_sum / len(fm_dict)
+
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    surf_fields = d_dict["surface_fields"]
+
+                    if surf_fields is not None:
+                        if j == 0:
+                            surf_fields_sum_square = np.mean(
+                                (surf_fields - surf_fields_mean) ** 2.0, 0
+                            )
+                        else:
+                            surf_fields_sum_square += np.mean(
+                                (surf_fields - surf_fields_mean) ** 2.0, 0
+                            )
+                    else:
+                        surf_fields_sum_square = 0.0
+
+                surf_fields_std = np.sqrt(surf_fields_sum_square / len(fm_dict))
+
+                surf_scaling_factors = [surf_fields_mean, surf_fields_std]
+
+            if cfg.model.normalization == "min_max_scaling":
+                for j in range(len(fm_dict)):
+                    d_dict = fm_dict[j]
+                    surf_fields = d_dict["surface_fields"]
+
+                    if surf_fields is not None:
+                        surf_mean = np.mean(surf_fields, 0)
+                        surf_std = np.std(surf_fields, 0)
+                        surf_idx = mean_std_sampling(
+                            surf_fields, surf_mean, surf_std, tolerance=12.0
+                        )
+                        surf_fields_sampled = np.delete(surf_fields, surf_idx, axis=0)
+                        if j == 0:
+                            surf_fields_max = np.amax(surf_fields_sampled, 0)
+                            surf_fields_min = np.amin(surf_fields_sampled, 0)
+                        else:
+                            surf_fields_max1 = np.amax(surf_fields_sampled, 0)
+                            surf_fields_min1 = np.amin(surf_fields_sampled, 0)
+
+                            for k in range(surf_fields.shape[-1]):
+                                if surf_fields_max1[k] > surf_fields_max[k]:
+                                    surf_fields_max[k] = surf_fields_max1[k]
+
+                                if surf_fields_min1[k] < surf_fields_min[k]:
+                                    surf_fields_min[k] = surf_fields_min1[k]
+                    else:
+                        surf_fields_max = 0.0
+                        surf_fields_min = 0.0
+
+                    if j > 20:
+                        break
+
+                surf_scaling_factors = [surf_fields_max, surf_fields_min]
+            np.save(surf_save_path, surf_scaling_factors)
+
+
+class CachedDoMINODataset(Dataset):
+    """
+    Dataset for reading cached DoMINO data files, with optional resampling.
+    Acts as a drop-in replacement for DoMINODataPipe.
+    """
+
+    @nvtx_annotate(message="CachedDoMINODataset __init__")
+    def __init__(
+        self,
+        data_path: Union[str, Path],
+        phase: Literal["train", "val", "test"] = "train",
+        sampling: bool = False,
+        volume_points_sample: Optional[int] = None,
+        surface_points_sample: Optional[int] = None,
+        geom_points_sample: Optional[int] = None,
+        model_type=None,  # Model_type, surface, volume or combined
+        deterministic_seed=False,
+    ):
+        super().__init__()
+
+        self.model_type = model_type
+        if deterministic_seed:
+            np.random.seed(42)
+
+        if isinstance(data_path, str):
+            data_path = Path(data_path)
+        self.data_path = data_path.expanduser()
+
+        if not self.data_path.exists():
+            raise AssertionError(f"Path {self.data_path} does not exist")
+        if not self.data_path.is_dir():
+            raise AssertionError(f"Path {self.data_path} is not a directory")
+
+        self.deterministic_seed = deterministic_seed
+        self.sampling = sampling
+        self.volume_points = volume_points_sample
+        self.surface_points = surface_points_sample
+        self.geom_points = geom_points_sample
+
+        self.filenames = get_filenames(self.data_path, exclude_dirs=True)
+
+        total_files = len(self.filenames)
+
+        self.phase = phase
+        self.indices = np.array(range(total_files))
+
+        np.random.shuffle(self.indices)
+
+        if not self.filenames:
+            raise AssertionError(f"No cached files found in {self.data_path}")
+
+    def __len__(self):
+        return len(self.indices)
+
+    @nvtx_annotate(message="CachedDoMINODataset __getitem__")
+    def __getitem__(self, idx):
+        if self.deterministic_seed:
+            np.random.seed(idx)
+        nvtx.range_push("Load cached file")
+
+        index = self.indices[idx]
+        cfd_filename = self.filenames[index]
+
+        filepath = self.data_path / cfd_filename
+        result = np.load(filepath, allow_pickle=True).item()
+        result = {
+            k: v.numpy() if isinstance(v, Tensor) else v for k, v in result.items()
+        }
+
+        nvtx.range_pop()
+        if not self.sampling:
+            return result
+
+        nvtx.range_push("Sample points")
+
+        # Sample volume points if present
+        if "volume_mesh_centers" in result and self.volume_points:
+            coords_sampled, idx_volume = sample_array(
+                result["volume_mesh_centers"], self.volume_points
+            )
+            if coords_sampled.shape[0] < self.volume_points:
+                coords_sampled = pad(
+                    coords_sampled, self.volume_points, pad_value=-10.0
+                )
+
+            result["volume_mesh_centers"] = coords_sampled
+            for key in [
+                "volume_fields",
+                "pos_volume_closest",
+                "pos_volume_center_of_mass",
+                "sdf_nodes",
+            ]:
+                if key in result:
+                    result[key] = result[key][idx_volume]
+
+        # Sample surface points if present
+        if "surface_mesh_centers" in result and self.surface_points:
+            coords_sampled, idx_surface = area_weighted_shuffle_array(
+                result["surface_mesh_centers"],
+                self.surface_points,
+                result["surface_areas"],
+            )
+            if coords_sampled.shape[0] < self.surface_points:
+                coords_sampled = pad(
+                    coords_sampled, self.surface_points, pad_value=-10.0
+                )
+
+            ii = result["neighbor_indices"]
+            result["surface_mesh_neighbors"] = result["surface_mesh_centers"][ii]
+            result["surface_neighbors_normals"] = result["surface_normals"][ii]
+            result["surface_neighbors_areas"] = result["surface_areas"][ii]
+
+            result["surface_mesh_centers"] = coords_sampled
+
+            for key in [
+                "surface_fields",
+                "surface_areas",
+                "surface_normals",
+                "pos_surface_center_of_mass",
+                "surface_mesh_neighbors",
+                "surface_neighbors_normals",
+                "surface_neighbors_areas",
+            ]:
+                if key in result:
+                    result[key] = result[key][idx_surface]
+
+            del result["neighbor_indices"]
+
+        # Sample geometry points if present
+        if "geometry_coordinates" in result and self.geom_points:
+            coords_sampled, _ = shuffle_array(
+                result["geometry_coordinates"], self.geom_points
+            )
+            if coords_sampled.shape[0] < self.geom_points:
+                coords_sampled = pad(coords_sampled, self.geom_points, pad_value=-100.0)
+            result["geometry_coordinates"] = coords_sampled
+
+        nvtx.range_pop()
+        return result
 
 
 if __name__ == "__main__":

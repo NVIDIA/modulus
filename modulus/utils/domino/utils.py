@@ -19,7 +19,6 @@ Important utilities for data processing and training, testing DoMINO.
 """
 
 import os
-import time
 
 import numpy as np
 from scipy.spatial import KDTree
@@ -282,10 +281,15 @@ def pad_inp(arr, npoin, pad_value=0.0):
 
 def shuffle_array(arr, npoin):
     """Function for shuffling arrays"""
-    np.random.seed(seed=int(time.time()))
     idx = np.arange(arr.shape[0])
     np.random.shuffle(idx)
     idx = idx[:npoin]
+    return arr[idx], idx
+
+
+def sample_array(arr, n_samples):
+    """Function for sampling arrays without replacement"""
+    idx = np.random.choice(arr.shape[0], size=n_samples, replace=False)
     return arr[idx], idx
 
 
@@ -302,10 +306,14 @@ def create_directory(filepath):
         os.makedirs(filepath)
 
 
-def get_filenames(filepath):
+def get_filenames(filepath, exclude_dirs=False):
     """Function to get filenames from a directory"""
     if os.path.exists(filepath):
-        filenames = os.listdir(filepath)
+        filenames = []
+        for item in os.listdir(filepath):
+            if exclude_dirs and os.path.isdir(os.path.join(filepath, item)):
+                continue
+            filenames.append(item)
         return filenames
     else:
         FileNotFoundError()
@@ -366,11 +374,12 @@ def mean_std_sampling(field, mean, std, tolerance=3.0):
     return idx_all
 
 
-def dict_to_device(state_dict, device):
+def dict_to_device(state_dict, device, exclude_keys=["filename"]):
     """Function to load dictionary to device"""
     new_state_dict = {}
     for k, v in state_dict.items():
-        new_state_dict[k] = v.to(device)
+        if k not in exclude_keys:
+            new_state_dict[k] = v.to(device)
     return new_state_dict
 
 
@@ -378,8 +387,6 @@ def area_weighted_shuffle_array(arr, npoin, area):
     factor = 1.0
     total_area = np.sum(area**factor)
     probs = area**factor / total_area
-    np.random.seed(seed=int(time.time()))
     idx = np.arange(arr.shape[0])
-    np.random.shuffle(idx)
     ids = np.random.choice(idx, npoin, p=probs[idx])
     return arr[ids], ids
