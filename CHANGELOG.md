@@ -6,7 +6,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.10.0a0] - 2025-01-XX
+## [1.1.0a0] - 2025-05-XX
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+## [1.0.0] - 2025-03-18
 
 ### Added
 
@@ -36,15 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ProcessGroupConfig is tagged for future deprecation in favor of DeviceMesh.
 
-### Removed
-
 ### Fixed
 
 - Update pytests to skip when the required dependencies are not present
 - Bug in data processing script in domino training example
 - Fixed NCCL_ASYNC_ERROR_HANDLING deprecation warning
-
-### Security
 
 ### Dependencies
 

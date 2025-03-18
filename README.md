@@ -12,6 +12,7 @@
 | [**Install guide**](#installation)
 | [**Contributing Guidelines**](#contributing-to-physicsnemo)
 | [**Resources**](#resources)
+| [**PhysicsNeMo Migration Guide**](#physicsnemo-migration-guide)
 | [**Communication**](#communication)
 | [**License**](#license)
 
@@ -61,7 +62,7 @@ At a granular level, PhysicsNeMo provides a library of a few key components:
 <!-- markdownlint-disable -->
 Component | Description |
 ---- | --- |
-[**modules.models**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html) | A collection of optimized, customizable, and easy-to-use models such as Fourier Neural Operators, Graph Neural Networks, and many more|
+[**physicsnemo.models**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.models.html) | A collection of optimized, customizable, and easy-to-use models such as Fourier Neural Operators, Graph Neural Networks, and many more|
 [**physicsnemo.datapipes**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.datapipes.html) | A data pipeline and data loader library, including benchmark datapipes, weather daptapipes, and graph datapipes|
 [**physicsnemo.distributed**](https://docs.nvidia.com/deeplearning/modulus/modulus-core/api/modulus.distributed.html) | A distributed computing library build on top of `torch.distributed` to enable parallel training with just a few steps|
 [**physicsnemo.sym.geometry**](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/features/csg_and_tessellated_module.html) | A library to handle geometry for DL training using the Constructive Solid Geometry modeling and CAD files in STL format.|
@@ -338,6 +339,25 @@ Alternatively, you can run `make container-ci`.
 
 Currently, only `linux/amd64` and `linux/arm64` platforms are supported. If using
 `linux/arm64`, some dependencies like `warp-lang` might not install correctly.
+
+## PhysicsNeMo Migration Guide
+
+NVIDIA Modulus has been renamed to NVIDIA PhysicsNeMo. For migration:
+
+- Use `pip install nvidia-physicsnemo` rather than `pip install nvidia-modulus`
+  for PyPi wheels.
+- Use `nvcr.io/nvidia/physicsnemo/physicsnemo:<tag>` rather than
+  `nvcr.io/nvidia/modulus/modulus:<tag>` for Docker containers.
+- Replace `nvidia-modulus` by `nvidia-physicsnemo` in your pip requirements
+  files (`requirements.txt`, `setup.py`, `setup.cfg`, `pyproject.toml`, etc.)
+- In your code, change the import statements from `import modulus` to
+  `import physicsnemo`
+
+The old PyPi registry and the NGC container registry will be deprecated soon
+and will not receive any bug fixes/updates. The old checkpoints will remain
+compatible with these updates.
+
+More details to follow soon.
 
 ## Contributing to PhysicsNeMo
 
