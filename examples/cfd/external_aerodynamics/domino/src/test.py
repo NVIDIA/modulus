@@ -111,29 +111,25 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
 
             # Normalize based on computational domain
             geo_centers_vol = 2.0 * (geo_centers - vol_min) / (vol_max - vol_min) - 1
-            encoding_g_vol = model.module.geo_rep(geo_centers_vol, p_grid, sdf_grid)
+            encoding_g_vol = model.module.geo_rep_volume(geo_centers_vol, p_grid, sdf_grid)
 
             # Normalize based on BBox around surface (car)
             geo_centers_surf = (
                 2.0 * (geo_centers - surf_min) / (surf_max - surf_min) - 1
             )
-            encoding_g_surf = model.module.geo_rep(
+            encoding_g_surf = model.module.geo_rep_surface1(
                 geo_centers_surf, s_grid, sdf_surf_grid
             )
+            encoding_g_vol += encoding_g_surf
 
         if output_features_surf is not None:
             # Represent geometry on bounding box
             geo_centers_surf = (
                 2.0 * (geo_centers - surf_min) / (surf_max - surf_min) - 1
             )
-            encoding_g_surf = model.module.geo_rep(
+            encoding_g_surf = model.module.geo_rep_surface(
                 geo_centers_surf, s_grid, sdf_surf_grid
             )
-
-        geo_encoding = 0.5 * encoding_g_surf
-        # Average the encodings
-        if output_features_vol is not None:
-            geo_encoding += 0.5 * encoding_g_vol
 
         if output_features_vol is not None:
             # First calculate volume predictions if required
@@ -167,7 +163,7 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                         :, start_idx:end_idx
                     ]
                     geo_encoding_local = model.module.geo_encoding_local(
-                        geo_encoding, volume_mesh_centers_batch, p_grid
+                        0.5 * encoding_g_vol, volume_mesh_centers_batch, p_grid, mode="volume"
                     )
                     if cfg.model.use_sdf_in_basis_func:
                         pos_encoding = torch.cat(
@@ -237,9 +233,6 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
 
             start_time = time.time()
 
-            surface_areas = torch.unsqueeze(surface_areas, -1)
-            surface_neighbors_areas = torch.unsqueeze(surface_neighbors_areas, -1)
-
             for p in range(subdomain_points + 1):
                 start_idx = p * point_batch_size
                 end_idx = (p + 1) * point_batch_size
@@ -262,8 +255,8 @@ def test_step(data_dict, model, device, cfg, vol_factors, surf_factors):
                     pos_surface_center_of_mass_batch = pos_surface_center_of_mass[
                         :, start_idx:end_idx
                     ]
-                    geo_encoding_local = model.module.geo_encoding_local_surface(
-                        0.5 * encoding_g_surf, surface_mesh_centers_batch, s_grid
+                    geo_encoding_local = model.module.geo_encoding_local(
+                        0.5 * encoding_g_surf, surface_mesh_centers_batch, s_grid, mode="surface"
                     )
                     pos_encoding = pos_surface_center_of_mass_batch
                     pos_encoding = model.module.position_encoder(
@@ -347,17 +340,23 @@ def main(cfg: DictConfig):
         num_surf_vars = None
 
     vol_save_path = os.path.join(
-        "outputs", cfg.project.name, "volume_scaling_factors.npy"
+        cfg.eval.scaling_param_path, "volume_scaling_factors.npy"
     )
     surf_save_path = os.path.join(
-        "outputs", cfg.project.name, "surface_scaling_factors.npy"
+        cfg.eval.scaling_param_path, "surface_scaling_factors.npy"
     )
-    if os.path.exists(vol_save_path) and os.path.exists(surf_save_path):
+    if os.path.exists(vol_save_path):
         vol_factors = np.load(vol_save_path)
-        surf_factors = np.load(surf_save_path)
     else:
         vol_factors = None
+
+    if os.path.exists(surf_save_path):
+        surf_factors = np.load(surf_save_path)
+    else:
         surf_factors = None
+
+    print("Vol factors:", vol_factors)
+    print("Surf factors:", surf_factors)
 
     model = DoMINO(
         input_features=3,
@@ -734,8 +733,6 @@ def main(cfg: DictConfig):
             print(
                 "L-2 norm:",
                 dirname,
-                np.sqrt(l2_error),
-                np.sqrt(l2_gt),
                 np.sqrt(l2_error) / np.sqrt(l2_gt),
             )
 
