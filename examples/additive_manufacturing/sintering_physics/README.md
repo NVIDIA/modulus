@@ -125,6 +125,11 @@ Then run:
 python train.py
 ```
 
+### Access to the pre-trained model checkpoint: 
+
+[Download the pre-trained checkpoint in the paper](https://drive.google.com/file/d/1vxgigx0jz81EhD97uFDZWIdnwnr9IkBp/view?usp=drive_link)
+
+
 ## Visualize test result
 
 Change the params in conf/config.yaml:
@@ -157,6 +162,8 @@ python inference.py
 ```
 
 ## Data
+
+[To download the pre-processed deformation simulation data in the paper](https://drive.google.com/file/d/1vxgigx0jz81EhD97uFDZWIdnwnr9IkBp/view?usp=drive_link)
 
 - Test data
 
@@ -203,9 +210,25 @@ and scaling for different process parameter configurations.
 
 ## Reference
 
+[Virtual Foundry Graphnet
+for Predicting Metal Sintering Deformation](https://sensors.myu-group.co.jp/sm_pdf/SM3704.pdf)
+
 [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405)
 
 ```text
+@article{Chen_2024,
+   title={Virtual Foundry Graphnet for Predicting Metal Sintering Deformation},
+   volume={36},
+   ISSN={2435-0869},
+   url={http://dx.doi.org/10.18494/SAM4883},
+   DOI={10.18494/sam4883},
+   number={7},
+   journal={Sensors and Materials},
+   publisher={MYU K.K.},
+   author={Chen, Rachel (Lei) and Gan, Chuang and Lee, Juheon and Yang, Zijiang and Nabian, Mohammad Amin and Zeng, Jun},
+   year={2024},
+   month=jul, pages={2835} }
+
 @inproceedings{sanchezgonzalez2020learning,
   title={Learning to Simulate Complex Physics with Graph Networks},
   author={Alvaro Sanchez-Gonzalez and
