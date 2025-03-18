@@ -40,7 +40,11 @@ Filesystem utils
 Generative utils
 ----------------
 
-.. automodule:: modulus.utils.generative.sampler
+.. automodule:: modulus.utils.generative.deterministic_sampler
+    :members:
+    :show-inheritance:
+
+.. automodule:: modulus.utils.generative.stochastic_sampler
     :members:
     :show-inheritance:
 
@@ -66,4 +70,11 @@ Weather / Climate utils
     :show-inheritance:
 
 .. automodule:: modulus.utils.zenith_angle
+    :show-inheritance:
+
+Patching utils
+--------------
+
+.. automodule:: modulus.utils.patching
+    :members:
     :show-inheritance:

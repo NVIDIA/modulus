@@ -1,3 +1,5 @@
+# @package _global_.model
+
 # SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
 # SPDX-FileCopyrightText: All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -14,14 +16,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fid import calculate_fid_from_inception_stats
-from .loss import (
-    EDMLoss,
-    EDMLossSR,
-    RegressionLoss,
-    RegressionLossCE,
-    ResidualLoss,
-    VELoss,
-    VELoss_dfsr,
-    VPLoss,
-)
+
+model_args:
+  # Base multiplier for the number of channels across the network.
+  model_channels: 128
+  # Per-resolution multipliers for the number of channels.
+  channel_mult: [1, 2, 2, 2, 2]
+  # Resolutions at which self-attention layers are applied.
+  attention_levels: [28]

@@ -14,14 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fid import calculate_fid_from_inception_stats
-from .loss import (
-    EDMLoss,
-    EDMLossSR,
-    RegressionLoss,
-    RegressionLossCE,
-    ResidualLoss,
-    VELoss,
-    VELoss_dfsr,
-    VPLoss,
-)
+# Dataset type. Do not modify.
+type: cwb
+# Path to data file. Must be overridden.
+data_path: ???
+# Indices of input channels
+in_channels: [0, 1, 2, 3, 4, 9, 10, 11, 12, 17, 18, 19]
+# Indices of output channels
+out_channels: [0, 1, 2, 3]
+# Shape of the image
+img_shape_x: 448
+img_shape_y: 448
+# Add grid coordinates to the image
+add_grid: true
+# Factor to downscale the image
+ds_factor: 4
+# Path to min and max values of the data
+min_path: null
+max_path: null
+# Path to global means of the data
+global_means_path: null
+# Path to global stds of the data
+global_stds_path: null

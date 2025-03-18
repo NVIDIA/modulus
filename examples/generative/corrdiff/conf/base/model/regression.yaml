@@ -14,14 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fid import calculate_fid_from_inception_stats
-from .loss import (
-    EDMLoss,
-    EDMLossSR,
-    RegressionLoss,
-    RegressionLossCE,
-    ResidualLoss,
-    VELoss,
-    VELoss_dfsr,
-    VPLoss,
-)
+name: regression
+# Model type.
+hr_mean_conditioning: false
+# No high-res conditioning for regression.
+
+# Default regression model parameters. Do not modify.
+model_args:
+  "img_channels": 4
+  # Number of color channels in the model
+  "N_grid_channels": 4
+  # Number of channels for positional grid embeddings
+  "embedding_type": "zero"
+  # Type of timestep embedding: 'positional' for DDPM++, 'fourier' for NCSN++,
+  # 'zero' for none

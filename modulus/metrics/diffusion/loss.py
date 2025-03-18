@@ -18,11 +18,13 @@
 """Loss functions used in the paper
 "Elucidating the Design Space of Diffusion-Based Generative Models"."""
 
-import random
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 import torch
+from torch import Tensor
+
+from modulus.utils.patching import RandomPatching2D
 
 
 class VPLoss:
@@ -333,7 +335,7 @@ class EDMLossSR:
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
 
-        # augment for conditional generaiton
+        # augment for conditional generation
         img_tot = torch.cat((img_clean, img_lr), dim=1)
         y_tot, augment_labels = (
             augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
@@ -350,15 +352,12 @@ class EDMLossSR:
 class RegressionLoss:
     """
     Regression loss function for the U-Net for deterministic predictions.
+    Note: this loss does not apply any reduction.
 
     Parameters
     ----------
-    P_mean: float, optional
-        Mean value for `sigma` computation, by default -1.2.
-    P_std: float, optional:
-        Standard deviation for `sigma` computation, by default 1.2.
     sigma_data: float, optional
-        Standard deviation for data, by default 0.5.
+        Standard deviation for data. Deprecated and ignored. By default 0.5.
 
     Note
     ----
@@ -368,16 +367,13 @@ class RegressionLoss:
     arXiv preprint arXiv:2309.15214.
     """
 
-    def __init__(
-        self, P_mean: float = -1.2, P_std: float = 1.2, sigma_data: float = 0.5
-    ):
-        self.P_mean = P_mean
-        self.P_std = P_std
+    def __init__(self, sigma_data: float = 0.5):
         self.sigma_data = sigma_data
 
     def __call__(self, net, img_clean, img_lr, labels=None, augment_pipe=None):
         """
-        Calculate and return the loss for the U-Net for deterministic predictions.
+        Calculate and return the regression loss for the U-Net for
+        deterministic predictions.
 
         Parameters:
         ----------
@@ -385,26 +381,29 @@ class RegressionLoss:
             The neural network model that will make predictions.
 
         img_clean: torch.Tensor
-            Input images (high resolution) to the neural network.
+            Input images (high resolution). Used as ground truth and for data
+            augmentation if 'augment_pipe' is provided.
 
         img_lr: torch.Tensor
-            Input images (low resolution) to the neural network.
+            Input images (low resolution). Used as input to the neural network.
 
         labels: torch.Tensor
-            Ground truth labels for the input images.
+            Not used. Only present for compatibility with other loss functions.
 
         augment_pipe: callable, optional
-            An optional data augmentation function that takes images as input and
-            returns augmented images. If not provided, no data augmentation is applied.
+            An optional data augmentation function that takes concatenated high
+            and low resolution images as input and returns augmented images. If
+            not provided, no data augmentation is applied.
 
         Returns:
         -------
         torch.Tensor
-            A tensor representing the loss calculated based on the network's
-            predictions.
+            A tensor representing the per-sample element-wise squared
+            difference between the network's  predictions and the (possibly
+            data-augmented by 'augment_pipe') high resolution images. This
+            tensor can then be used to compute the loss by sum, mean, or other
+            appropriate reduction function.
         """
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (
             1.0  # (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
         )
@@ -416,42 +415,71 @@ class RegressionLoss:
         y = y_tot[:, : img_clean.shape[1], :, :]
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
 
-        input = torch.zeros_like(y, device=img_clean.device)
-        D_yn = net(input, y_lr, sigma, labels, augment_labels=augment_labels)
+        zero_input = torch.zeros_like(y, device=img_clean.device)
+        D_yn = net(
+            x=zero_input, img_lr=y_lr, force_fp32=False, augment_labels=augment_labels
+        )
         loss = weight * ((D_yn - y) ** 2)
 
         return loss
 
 
-class ResLoss:
+class ResidualLoss:
     """
     Mixture loss function for denoising score matching.
 
+    This class implements a loss function that combines deterministic
+    regression with denoising score matching for improved super-resolution. It
+    uses a pre-trained regression network to compute residuals before applying
+    the diffusion process.
+
     Parameters
     ----------
-    P_mean: float, optional
-        Mean value for `sigma` computation, by default -1.2.
-    P_std: float, optional:
-        Standard deviation for `sigma` computation, by default 1.2.
-    sigma_data: float, optional
-        Standard deviation for data, by default 0.5.
+    regression_net : torch.nn.Module
+        Pre-trained regression network used to compute residuals.
+    img_shape_y : int
+        Height of the input images.
+    img_shape_x : int
+        Width of the input images.
+    P_mean : float, optional
+        Mean value for noise level computation, by default 0.0.
+    P_std : float, optional
+        Standard deviation for noise level computation, by default 1.2.
+    sigma_data : float, optional
+        Standard deviation for data weighting, by default 0.5.
+    hr_mean_conditioning : bool, optional
+        Whether to use high-resolution mean for conditioning, by default False.
+
+    Attributes
+    ----------
+    unet : torch.nn.Module
+        The regression network used for computing residuals.
+    P_mean : float
+        Mean value for noise level computation.
+    P_std : float
+        Standard deviation for noise level computation.
+    sigma_data : float
+        Standard deviation for data weighting.
+    img_shape_x : int
+        Width of the input images.
+    img_shape_y : int
+        Height of the input images.
+    hr_mean_conditioning : bool
+        Flag indicating whether to use high-resolution mean for conditioning.
 
     Note
     ----
     Reference: Mardani, M., Brenowitz, N., Cohen, Y., Pathak, J., Chen, C.Y.,
-    Liu, C.C.,Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
-    Generative Residual Diffusion Modeling for Km-scale Atmospheric Downscaling.
-    arXiv preprint arXiv:2309.15214.
+    Liu, C.C., Vahdat, A., Kashinath, K., Kautz, J. and Pritchard, M., 2023.
+    Generative Residual Diffusion Modeling for Km-scale Atmospheric
+    Downscaling. arXiv preprint arXiv:2309.15214.
     """
 
     def __init__(
         self,
-        regression_net,
-        img_shape_x,
-        img_shape_y,
-        patch_shape_x,
-        patch_shape_y,
-        patch_num,
+        regression_net: torch.nn.Module,
+        img_shape_y: int,
+        img_shape_x: int,
         P_mean: float = 0.0,
         P_std: float = 1.2,
         sigma_data: float = 0.5,
@@ -463,53 +491,80 @@ class ResLoss:
         self.sigma_data = sigma_data
         self.img_shape_x = img_shape_x
         self.img_shape_y = img_shape_y
-        self.patch_shape_x = patch_shape_x
-        self.patch_shape_y = patch_shape_y
-        self.patch_num = patch_num
         self.hr_mean_conditioning = hr_mean_conditioning
 
     def __call__(
         self,
-        net,
-        img_clean,
-        img_lr,
-        labels=None,
-        lead_time_label=None,
-        augment_pipe=None,
+        net: torch.nn.Module,
+        img_clean: Tensor,
+        img_lr: Tensor,
+        patching: Optional[RandomPatching2D] = None,
+        labels: Optional[Tensor] = None,
+        lead_time_label: Optional[Tensor] = None,
+        augment_pipe: Optional[Callable[[Tensor], Tuple[Tensor, Tensor]]] = None,
     ):
         """
         Calculate and return the loss for denoising score matching.
 
-        Parameters:
+        This method computes a mixture loss that combines deterministic
+        regression with denoising score matching. It first computes residuals
+        using the regression network, then applies the diffusion process to
+        these residuals.
+
+        Parameters
         ----------
-        net: torch.nn.Module
+        net : torch.nn.Module
             The neural network model that will make predictions.
+        img_clean : Tensor
+            High-resolution input images of shape (batch_size, c_hr,
+            img_shape_y, img_shape_x).
+        img_lr : Tensor
+            Low-resolution input images of shape (batch_size, c_lr,
+            img_shape_y, img_shape_x).
+        patching : Optional[RandomPatching2D], optional
+            Patching strategy for processing large images, by default None. See
+            :class:`modulus.utils.patching.RandomPatching2D` for details.
+            When provided, the patching strategy is used for both image patches
+            and positional embeddings selection in the model `net`.
+        labels : Optional[Tensor], optional
+            Ground truth labels for the input images, by default None.
+        lead_time_label : Optional[Tensor], optional
+            Lead time labels for temporal predictions, by default None.
+        augment_pipe : Optional[Callable[[Tensor], Tuple[Tensor, Tensor]]]
+            Data augmentation function that takes images as input and returns
+            augmented images and labels, by default None.
 
-        img_clean: torch.Tensor
-            Input images (high resolution) to the neural network.
-
-        img_lr: torch.Tensor
-            Input images (low resolution) to the neural network.
-
-        labels: torch.Tensor
-            Ground truth labels for the input images.
-
-        augment_pipe: callable, optional
-            An optional data augmentation function that takes images as input and
-            returns augmented images. If not provided, no data augmentation is applied.
-
-        Returns:
+        Returns
         -------
-        torch.Tensor
-            A tensor representing the loss calculated based on the network's
-            predictions.
+        Tensor
+            A tensor representing the computed loss with shape (batch_size [*
+            patch_num], c_hr, patch_shape_y, patch_shape_x).
+
+        Raises
+        ------
+        ValueError
+            If patching is provided but is not an instance of RandomPatching2D.
         """
+
+        # Safety check: enforce patching object
+        if patching and not isinstance(patching, RandomPatching2D):
+            raise ValueError("patching must be a 'RandomPatching2D' object.")
+        # Safety check: enforce shapes
+        if (
+            img_clean.shape[0] != img_lr.shape[0]
+            or img_clean.shape[2:] != img_lr.shape[2:]
+        ):
+            raise ValueError(
+                f"Shape mismatch between img_clean {img_clean.shape} and "
+                f"img_lr {img_lr.shape}. "
+                f"Batch size, height and width must match."
+            )
 
         rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
         sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
 
-        # augment for conditional generaiton
+        # augment for conditional generation
         img_tot = torch.cat((img_clean, img_lr), dim=1)
         y_tot, augment_labels = (
             augment_pipe(img_tot) if augment_pipe is not None else (img_tot, None)
@@ -517,14 +572,7 @@ class ResLoss:
         y = y_tot[:, : img_clean.shape[1], :, :]
         y_lr = y_tot[:, img_clean.shape[1] :, :, :]
         y_lr_res = y_lr
-
-        # global index
-        b = y.shape[0]
-        Nx = torch.arange(self.img_shape_x).int()
-        Ny = torch.arange(self.img_shape_y).int()
-        grid = torch.stack(torch.meshgrid(Ny, Nx, indexing="ij"), dim=0)[
-            None,
-        ].expand(b, -1, -1, -1)
+        batch_size = y.shape[0]
 
         # form residual
         if lead_time_label is not None:
@@ -549,82 +597,35 @@ class ResLoss:
 
         if self.hr_mean_conditioning:
             y_lr = torch.cat((y_mean, y_lr), dim=1).contiguous()
-        global_index = None
+
         # patchified training
         # conditioning: cat(y_mean, y_lr, input_interp, pos_embd), 4+12+100+4
-        if (
-            self.img_shape_x != self.patch_shape_x
-            or self.img_shape_y != self.patch_shape_y
-        ):
-            c_in = y_lr.shape[1]
-            c_out = y.shape[1]
-            rnd_normal = torch.randn(
-                [img_clean.shape[0] * self.patch_num, 1, 1, 1], device=img_clean.device
-            )
-            sigma = (rnd_normal * self.P_std + self.P_mean).exp()
-            weight = (sigma**2 + self.sigma_data**2) / (
-                sigma * self.sigma_data
-            ) ** 2
+        if patching:
+            # Patched residual
+            # (batch_size * patch_num, c_out, patch_shape_y, patch_shape_x)
+            y_patched = patching.apply(input=y)
+            # Patched conditioning on y_lr and interp(img_lr)
+            # (batch_size * patch_num, 2*c_in, patch_shape_y, patch_shape_x)
+            y_lr_patched = patching.apply(input=y_lr, additional_input=img_lr)
 
-            # global interpolation
-            input_interp = torch.nn.functional.interpolate(
-                img_lr,
-                (self.patch_shape_y, self.patch_shape_x),
-                mode="bilinear",
-            )
+            # Function to select the correct positional embedding for each
+            # patch
+            def patch_embedding_selector(emb):
+                # emb: (N_pe, image_shape_y, image_shape_x) or
+                # (batch_size * patch_num, N_pe, patch_shape_y, patch_shape_x)
+                return patching.apply(emb[None].expand(batch_size, -1, -1, -1))
 
-            # patch generation from a single sample (not from random samples due to memory consumption of regression)
-            y_new = torch.zeros(
-                b * self.patch_num,
-                c_out,
-                self.patch_shape_y,
-                self.patch_shape_x,
-                device=img_clean.device,
-            )
-            y_lr_new = torch.zeros(
-                b * self.patch_num,
-                c_in + input_interp.shape[1],
-                self.patch_shape_y,
-                self.patch_shape_x,
-                device=img_clean.device,
-            )
-            global_index = torch.zeros(
-                b * self.patch_num,
-                2,
-                self.patch_shape_y,
-                self.patch_shape_x,
-                dtype=torch.int,
-                device=img_clean.device,
-            )
-            for i in range(self.patch_num):
-                rnd_x = random.randint(0, self.img_shape_x - self.patch_shape_x)
-                rnd_y = random.randint(0, self.img_shape_y - self.patch_shape_y)
-                y_new[b * i : b * (i + 1),] = y[
-                    :,
-                    :,
-                    rnd_y : rnd_y + self.patch_shape_y,
-                    rnd_x : rnd_x + self.patch_shape_x,
-                ]
-                global_index[b * i : b * (i + 1),] = grid[
-                    :,
-                    :,
-                    rnd_y : rnd_y + self.patch_shape_y,
-                    rnd_x : rnd_x + self.patch_shape_x,
-                ]
-                y_lr_new[b * i : b * (i + 1),] = torch.cat(
-                    (
-                        y_lr[
-                            :,
-                            :,
-                            rnd_y : rnd_y + self.patch_shape_y,
-                            rnd_x : rnd_x + self.patch_shape_x,
-                        ],
-                        input_interp,
-                    ),
-                    1,
-                )
-            y = y_new
-            y_lr = y_lr_new
+            y = y_patched
+            y_lr = y_lr_patched
+        else:
+            patch_embedding_selector = None
+
+        # Noise
+        rnd_normal = torch.randn([y.shape[0], 1, 1, 1], device=img_clean.device)
+        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
+        weight = (sigma**2 + self.sigma_data**2) / (sigma * self.sigma_data) ** 2
+
+        # Input + noise
         latent = y + torch.randn_like(y) * sigma
 
         if lead_time_label is not None:
@@ -633,7 +634,7 @@ class ResLoss:
                 y_lr,
                 sigma,
                 labels,
-                global_index=global_index,
+                embedding_selector=patch_embedding_selector,
                 lead_time_label=lead_time_label,
                 augment_labels=augment_labels,
             )
@@ -643,7 +644,7 @@ class ResLoss:
                 y_lr,
                 sigma,
                 labels,
-                global_index=global_index,
+                embedding_selector=patch_embedding_selector,
                 augment_labels=augment_labels,
             )
         loss = weight * ((D_yn - y) ** 2)
@@ -792,9 +793,13 @@ class VELoss_dfsr:
 
 class RegressionLossCE:
     """
-    A regression loss function for the GEFS-HRRR model with probability channels, adapted
-    from RegressionLoss. In this version, probability channels are evaluated using
-    CrossEntropyLoss instead of MSELoss.
+    A regression loss function for the GEFS-HRRR model with probability
+    channels. Adapted from
+    :class:`modulus.metrics.diffusion.loss.RegressionLoss` to train
+    deterministic regression model. In this version,
+    probability channels are evaluated using CrossEntropyLoss instead of
+    squared error.
+    Note: this loss does not apply any reduction.
 
     Parameters
     ----------
@@ -817,14 +822,8 @@ class RegressionLossCE:
 
     def __init__(
         self,
-        P_mean: float = -1.2,
-        P_std: float = 1.2,
-        sigma_data: float = 0.5,
         prob_channels: list = [4, 5, 6, 7, 8],
     ):
-        self.P_mean = P_mean
-        self.P_std = P_std
-        self.sigma_data = sigma_data
         self.entropy = torch.nn.CrossEntropyLoss(reduction="none")
         self.prob_channels = prob_channels
 
@@ -838,7 +837,8 @@ class RegressionLossCE:
         augment_pipe=None,
     ):
         """
-        Calculate and return the loss for the U-Net for deterministic predictions.
+        Calculate and return the loss for the U-Net for deterministic
+        predictions.
 
         Parameters:
         ----------
@@ -846,33 +846,39 @@ class RegressionLossCE:
             The neural network model that will make predictions.
 
         img_clean: torch.Tensor
-            Input images (high resolution) to the neural network.
+            Input images (high resolution). Used as ground truth and for data
+            augmentation if 'augment_pipe' is provided.
 
         img_lr: torch.Tensor
-            Input images (low resolution) to the neural network.
+            Input images (low resolution). Used as input to the neural network.
 
         lead_time_label: torch.Tensor
             Lead time labels for input batches.
 
         labels: torch.Tensor
-            Ground truth labels for the input images.
+            Not used. Only present for compatibility with other loss functions.
 
         augment_pipe: callable, optional
-            An optional data augmentation function that takes images as input and
-            returns augmented images. If not provided, no data augmentation is applied.
+            An optional data augmentation function that takes concatenated high
+            and low resolution images as input and returns augmented images. If
+            not provided, no data augmentation is applied.
 
         Returns:
         -------
         torch.Tensor
-            A tensor representing the loss calculated based on the network's
-            predictions.
+            A tensor representing the per-sample element-wise loss between the
+            network's predictions and the (possibly
+            data-augmented by `augment_pipe`) high resolution images. Loss for
+            the probability channels is computed using cross entropy, and loss
+            for the scalar channels is computed using squared error. Both are
+            then concatenated along the channel dimension. This tensor can then
+            be used to compute the loss by sum, mean, or other appropriate
+            reduction function.
         """
         all_channels = list(range(img_clean.shape[1]))  # [0, 1, 2, ..., 10]
         scalar_channels = [
             item for item in all_channels if item not in self.prob_channels
         ]
-        rnd_normal = torch.randn([img_clean.shape[0], 1, 1, 1], device=img_clean.device)
-        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
         weight = (
             1.0  # (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
         )
@@ -890,8 +896,6 @@ class RegressionLossCE:
             D_yn = net(
                 input,
                 y_lr,
-                sigma,
-                labels,
                 lead_time_label=lead_time_label,
                 augment_labels=augment_labels,
             )
@@ -899,11 +903,10 @@ class RegressionLossCE:
             D_yn = net(
                 input,
                 y_lr,
-                sigma,
-                labels,
+                lead_time_label=lead_time_label,
                 augment_labels=augment_labels,
             )
-        loss1 = weight * ((D_yn[:, scalar_channels] - y[:, scalar_channels]) ** 2)
+        loss1 = weight * (D_yn[:, scalar_channels] - y[:, scalar_channels]) ** 2
         loss2 = (
             weight
             * self.entropy(D_yn[:, self.prob_channels], y[:, self.prob_channels])[

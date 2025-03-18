@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DrivAerML dataset support in FIGConvNet example.
 - Retraining recipe for DoMINO from a pretrained model checkpoint
 - Added Datacenter CFD use case.
+- General purpose patching API for patch-based diffusion
+- New positional embedding selection strategy for CorrDiff SongUNet models
 
 ### Changed
 
@@ -25,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated utils in `modulus.launch.logging` to avoid unnecessary `wandb` and `mlflow` imports
 - Moved to experiment-based Hydra config in Lagrangian-MGN example
 - Make data caching optional in `MeshDatapipe`
+- Simplified CorrDiff config files, updated default values
+- Refactored CorrDiff losses and samplers to use the patching API
+- Support for non-square images and patches in patch-based diffusion
 
 ### Deprecated
 

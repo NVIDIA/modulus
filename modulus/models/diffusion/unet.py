@@ -16,6 +16,7 @@
 
 import importlib
 from dataclasses import dataclass
+from typing import Literal, Tuple, Union
 
 import torch
 
@@ -45,12 +46,13 @@ class MetaData(ModelMetaData):
 
 class UNet(Module):  # TODO a lot of redundancy, need to clean up
     """
-    U-Net Wrapper for CorrDiff.
+    U-Net Wrapper for CorrDiff deterministic regression model.
 
     Parameters
     -----------
-    img_resolution : int
-        The resolution of the input/output image.
+    img_resolution : Union[int, Tuple[int, int]]
+        The resolution of the input/output image. If a single int is provided,
+        then the image is assumed to be square.
     img_channels : int
          Number of color channels.
     img_in_channels : int
@@ -58,7 +60,7 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
     img_out_channels : int
         Number of output color channels.
     use_fp16: bool, optional
-        Execute the underlying model at FP16 precision?, by default False.
+        Execute the underlying model at FP16 precision, by default False.
     sigma_min: float, optional
         Minimum supported noise level, by default 0.
     sigma_max: float, optional
@@ -66,10 +68,33 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
     sigma_data: float, optional
         Expected standard deviation of the training data, by default 0.5.
     model_type: str, optional
-        Class name of the underlying model, by default 'DhariwalUNet'.
+        Class name of the underlying model. Must be one of the following:
+        'SongUNet', 'SongUNetPosEmbd', 'SongUNetPosLtEmbd', 'DhariwalUNet'.
+        Defaults to 'SongUNetPosEmbd'.
     **model_kwargs : dict
-        Keyword arguments for the underlying model.
+        Keyword arguments to create the underlying model.
 
+    Examples
+    ---------
+    The model forward pass can be called with:
+    >>> model(x, img_lr, force_fp32=False, **forward_kwargs)
+    where:
+        x, img_lr: torch.Tensor
+            Passed as positional arguments to the underlying model. Refer
+            to the documentation for the class specified by `model_type`.
+        force_fp32: bool, optional
+            If True, force conversion of inputs to torch.float32. Defaults to
+            `False`.
+        **forward_kwargs: dict, optional
+            Additional keyword arguments to be passed to the underlying
+            model's forward pass.
+
+    See Also
+    --------
+    For possible `model_type` and their accepted `model_kwargs` and
+    `forward_kwargs`, see fo example:
+    :class:`~modulus.models.diffusion.SongUNetPosEmbd` or
+    :class:`modulus.models.diffusion.SongUNetPosLtEmbd`.
 
     Reference
     ----------
@@ -81,16 +106,18 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
 
     def __init__(
         self,
-        img_resolution,
-        img_channels,
-        img_in_channels,
-        img_out_channels,
-        use_fp16=False,
-        sigma_min=0,
-        sigma_max=float("inf"),
-        sigma_data=0.5,
-        model_type="SongUNetPosEmbd",
-        **model_kwargs,
+        img_resolution: Union[int, Tuple[int, int]],
+        img_channels: int,
+        img_in_channels: int,
+        img_out_channels: int,
+        use_fp16: bool = False,
+        sigma_min: float = 0,
+        sigma_max: float = float("inf"),
+        sigma_data: float = 0.5,
+        model_type: Literal[
+            "SongUNetPosEmbd", "SongUNetPosLtEmbd", "SongUNet", "DhariwalUNet"
+        ] = "SongUNetPosEmbd",
+        **model_kwargs: dict,
     ):
         super().__init__(meta=MetaData)
 
@@ -100,8 +127,8 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
         if isinstance(img_resolution, int):
             self.img_shape_x = self.img_shape_y = img_resolution
         else:
-            self.img_shape_x = img_resolution[0]
-            self.img_shape_y = img_resolution[1]
+            self.img_shape_y = img_resolution[0]
+            self.img_shape_x = img_resolution[1]
 
         self.img_in_channels = img_in_channels
         self.img_out_channels = img_out_channels
@@ -118,13 +145,11 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
             **model_kwargs,
         )
 
-    def forward(self, x, img_lr, sigma, force_fp32=False, **model_kwargs):
+    def forward(self, x, img_lr, force_fp32=False, **model_kwargs):
         # SR: concatenate input channels
         if img_lr is not None:
             x = torch.cat((x, img_lr), dim=1)
 
-        x = x.to(torch.float32)
-        sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
         dtype = (
             torch.float16
             if (self.use_fp16 and not force_fp32 and x.device.type == "cuda")
@@ -133,19 +158,17 @@ class UNet(Module):  # TODO a lot of redundancy, need to clean up
 
         F_x = self.model(
             x.to(dtype),  # (c_in * x).to(dtype),
-            torch.zeros(
-                sigma.numel(), dtype=sigma.dtype, device=sigma.device
-            ),  # c_noise.flatten()
+            torch.zeros(x.shape[0], dtype=dtype, device=x.device),  # c_noise.flatten()
             class_labels=None,
             **model_kwargs,
         )
 
         if (F_x.dtype != dtype) and not torch.is_autocast_enabled():
             raise ValueError(
-                f"Expected the dtype to be {dtype}, but got {F_x.dtype} instead."
+                f"Expected the dtype to be {dtype}, " f"but got {F_x.dtype} instead."
             )
 
-        # skip connection - for SR there's size mismatch bwtween input and output
+        # skip connection
         D_x = F_x.to(torch.float32)
         return D_x
 
@@ -189,7 +212,7 @@ class StormCastUNet(Module):
     sigma_data: float, optional
         Expected standard deviation of the training data, by default 0.5.
     model_type: str, optional
-        Class name of the underlying model, by default 'DhariwalUNet'.
+        Class name of the underlying model, by default 'SongUNet'.
     **model_kwargs : dict
         Keyword arguments for the underlying model.
 

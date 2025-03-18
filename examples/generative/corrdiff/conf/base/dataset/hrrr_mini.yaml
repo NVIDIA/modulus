@@ -14,14 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .fid import calculate_fid_from_inception_stats
-from .loss import (
-    EDMLoss,
-    EDMLossSR,
-    RegressionLoss,
-    RegressionLossCE,
-    ResidualLoss,
-    VELoss,
-    VELoss_dfsr,
-    VPLoss,
-)
+# Dataset type
+type: hrrr_mini
+# Path to .nc data file. Must be overridden.
+data_path: ???
+# Path to json stats file. Must be overriden.
+stats_path: ???
+# Names of output channels. Must be overridden.
+output_variables: ['10u', '10v']
