@@ -22,7 +22,7 @@ import os
 import tarfile
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 import torch
 
@@ -317,7 +317,9 @@ class Module(torch.nn.Module):
             self.load_state_dict(model_dict, strict=strict)
 
     @classmethod
-    def from_checkpoint(cls, file_name: str) -> "Module":
+    def from_checkpoint(
+        cls, file_name: str, model_args: Optional[Dict] = None
+    ) -> "Module":
         """Simple utility for constructing a model from a checkpoint
 
         Parameters
@@ -354,14 +356,40 @@ class Module(torch.nn.Module):
             # Load model arguments and instantiate the model
             with open(local_path.joinpath("args.json"), "r") as f:
                 args = json.load(f)
-            model = cls.instantiate(args)
+            apex_in_ckp = "use_apex_gn" in args["__args__"].keys()
 
+            # Merge model_args (adding new keys and updating existing ones)
+            if model_args is not None:
+                args["__args__"].update(model_args)
+            model = cls.instantiate(args)
             # Load the model weights
             model_dict = torch.load(
                 local_path.joinpath("model.pt"), map_location=model.device
             )
-            model.load_state_dict(model_dict)
-
+            # TODO: for corrdiff model architecture specifically
+            if (
+                not apex_in_ckp
+                and "use_apex_gn" in args["__args__"].keys()
+                and args["__args__"]["use_apex_gn"]
+            ):
+                filtered_state_dict = {}
+                for key, value in model_dict.items():
+                    filtered_state_dict[key] = value  # Keep the original key
+                    # Duplicate weight/bias for Apex GroupNorm (without removing the original)
+                    for norm_layer in ["norm0", "norm1", "norm2", "aux_norm"]:
+                        if f"{norm_layer}.weight" in key:
+                            new_key = key.replace(
+                                f"{norm_layer}.weight", f"{norm_layer}.gn.weight"
+                            )
+                            filtered_state_dict[new_key] = value  # Duplicate weight
+                        elif f"{norm_layer}.bias" in key:
+                            new_key = key.replace(
+                                f"{norm_layer}.bias", f"{norm_layer}.gn.bias"
+                            )
+                            filtered_state_dict[new_key] = value  # Duplicate bias
+                model.load_state_dict(filtered_state_dict, strict=False)
+            else:
+                model.load_state_dict(model_dict, strict=False)
         return model
 
     @staticmethod

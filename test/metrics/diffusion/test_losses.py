@@ -19,6 +19,7 @@ import torch
 from modulus.metrics.diffusion import (
     EDMLoss,
     RegressionLossCE,
+    ResLoss_Opt,
     VELoss,
     VELoss_dfsr,
     VPLoss,
@@ -327,6 +328,75 @@ def test_call_method():
 #         fake_net, img_clean, img_lr, labels, mock_augment_pipe
 #     )
 #     assert isinstance(loss_value_with_augmentation, torch.Tensor)
+
+# ResLoss Opt tests
+
+
+def res_loss_opt_fake_net(
+    latent, y_lr, sigma, labels, global_index=None, augment_labels=None
+):
+    return torch.tensor([1.0])
+
+
+def test_resloss_opt_initialization():
+    # Mock the model loading
+    loss_func = ResLoss_Opt(
+        regression_net=res_loss_opt_fake_net,
+        img_shape_x=256,
+        img_shape_y=256,
+        patch_shape_x=256,
+        patch_shape_y=256,
+        patch_num=1,
+    )
+    assert loss_func.P_mean == 0.0
+    assert loss_func.P_std == 1.2
+    assert loss_func.sigma_data == 0.5
+
+    loss_func = ResLoss_Opt(
+        regression_net=res_loss_opt_fake_net,
+        img_shape_x=256,
+        img_shape_y=256,
+        patch_shape_x=256,
+        patch_shape_y=256,
+        patch_num=1,
+        P_mean=-2.0,
+        P_std=2.0,
+        sigma_data=0.3,
+    )
+    assert loss_func.P_mean == -2.0
+    assert loss_func.P_std == 2.0
+    assert loss_func.sigma_data == 0.3
+
+
+def test_resloss_opt_call_method():
+    loss_func = ResLoss_Opt(
+        regression_net=res_loss_opt_fake_net,
+        img_shape_x=256,
+        img_shape_y=256,
+        patch_shape_x=256,
+        patch_shape_y=256,
+        patch_num=1,
+        P_mean=-2.0,
+        P_std=2.0,
+        sigma_data=0.3,
+    )
+
+    img_clean = torch.tensor([[[[1.0]]]])
+    img_lr = torch.tensor([[[[0.5]]]])
+    labels = None
+
+    # Without augmentation
+    loss_value = loss_func(res_loss_opt_fake_net, img_clean, img_lr, labels)
+    assert isinstance(loss_value, torch.Tensor)
+
+    # With augmentation
+    def mock_augment_pipe(imgs):
+        return imgs, None
+
+    loss_value_with_augmentation = loss_func(
+        res_loss_opt_fake_net, img_clean, img_lr, labels, mock_augment_pipe
+    )
+    assert isinstance(loss_value_with_augmentation, torch.Tensor)
 
 
 # VELoss_dfsr tests

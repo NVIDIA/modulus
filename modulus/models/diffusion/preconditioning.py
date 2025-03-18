@@ -25,7 +25,6 @@ from dataclasses import dataclass
 from typing import List, Union
 
 import numpy as np
-import nvtx
 import torch
 
 from modulus.models.diffusion import DhariwalUNet, SongUNet  # noqa: F401 for globals
@@ -805,7 +804,6 @@ class EDMPrecondSR(Module):
     def _legacy_scaling_fn(x, img_lr, c_in):
         return c_in * torch.cat([x, img_lr.to(x.dtype)], dim=1)
 
-    @nvtx.annotate(message="EDMPrecondSR", color="orange")
     def forward(
         self,
         x,

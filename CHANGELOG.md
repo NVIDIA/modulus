@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DrivAerML dataset support in FIGConvNet example.
 - Retraining recipe for DoMINO from a pretrained model checkpoint
 - Added Datacenter CFD use case.
+- Added `ResLoss_Opt` for patch amortized CorrDiff training
 
 ### Changed
 
@@ -25,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated utils in `modulus.launch.logging` to avoid unnecessary `wandb` and `mlflow` imports
 - Moved to experiment-based Hydra config in Lagrangian-MGN example
 - Make data caching optional in `MeshDatapipe`
+- Updated CorrDiff training code to support multiple patch iterations
+to amortize regression cost and usage of `torch.compile`
+- Refactored `modulus/models/diffusion/layers.py` to optimize data type casting workflow,
+avoiding unnecessary casting under autocast mode
+- Refactored Conv2d to enable fusion of conv2d with bias addition
+- Refactored GroupNorm, UNetBlock, SongUNet, SongUNetPosEmbd to support usage of
+Apex GroupNorm, fusion of activation with GroupNorm, and AMP workflow.
+- Updated SongUNetPosEmbd to avoid unnecessary HtoD Memcpy of `pos_embd`
+- Updated `from_checkpoint` to accommodate usage of Apex GroupNorm
+- Refactored CorrDiff NVTX annotation workflow to be configurable
 
 ### Deprecated
 
