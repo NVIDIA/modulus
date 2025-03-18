@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 from jaxtyping import Int
 from torch import Tensor
+from torch.autograd.profiler import record_function
 from torch.nn import functional as F
 
 from physicsnemo.models.figconvnet.components.encodings import SinusoidalEncoding
@@ -39,6 +40,13 @@ from physicsnemo.models.figconvnet.point_feature_conv import (
 )
 from physicsnemo.utils.profiling import Profiler
 
+try:
+    import transformer_engine.pytorch as te
+
+    HAS_TE = True
+except ImportError:
+    HAS_TE = False
+
 prof = Profiler()
 
 
@@ -51,8 +59,9 @@ class AABBGridFeatures(GridFeatures):
         aabb_min: Tuple[float, float, float],
         resolution: Union[Int[Tensor, "3"], List[int]],
         pos_encode_dim: int = 32,
+        device: torch.device = None,
     ):
-        grid = grid_init(aabb_max, aabb_min, resolution)
+        grid = grid_init(aabb_max, aabb_min, resolution, device)
         feat = SinusoidalEncoding(pos_encode_dim, data_range=aabb_max[0] - aabb_min[0])(
             grid
         )
@@ -77,6 +86,7 @@ class PointFeatureToGrid(nn.Module):
         neighbor_search_type: Literal["radius", "knn"] = "radius",
         knn_k: int = 16,
         radius: float = np.sqrt(3),  # diagonal of a unit cube
+        use_te_norm: bool = True,
     ) -> None:
         super().__init__()
         if resolution is None:
@@ -117,27 +127,29 @@ class PointFeatureToGrid(nn.Module):
             reductions=reductions,
             neighbor_search_type=neighbor_search_type,
             knn_k=knn_k,
+            use_te_norm=use_te_norm,
         )
 
     @prof
     def forward(self, point_features: PointFeatures) -> GridFeatures:
-        # match the batch size of points
-        self.grid_features.to(device=point_features.vertices.device)
-        grid_point_features = self.grid_features.point_features.expand_batch_size(
-            point_features.batch_size
-        )
+        with record_function("PointFeatureToGrid.forward"):
+            # match the batch size of points
+            self.grid_features.to(device=point_features.vertices.device)
+            grid_point_features = self.grid_features.point_features.expand_batch_size(
+                point_features.batch_size
+            )
 
-        out_point_features = self.conv(
-            point_features,
-            grid_point_features,
-        )
+            out_point_features = self.conv(
+                point_features,
+                grid_point_features,
+            )
 
-        B, _, C = out_point_features.features.shape
-        grid_feature = GridFeatures(
-            out_point_features.vertices.reshape(B, *self.resolution, 3),
-            out_point_features.features.view(B, *self.resolution, C),
-        )
-        return grid_feature
+            B, _, C = out_point_features.features.shape
+            grid_feature = GridFeatures(
+                out_point_features.vertices.reshape(B, *self.resolution, 3),
+                out_point_features.features.view(B, *self.resolution, C),
+            )
+            return grid_feature
 
 
 class GridFeatureToPoint(nn.Module):
@@ -158,8 +170,14 @@ class GridFeatureToPoint(nn.Module):
         neighbor_search_type: Literal["radius", "knn"] = "radius",
         knn_k: int = 16,
         reductions: List[REDUCTION_TYPES] = ["mean"],
+        use_te_norm: bool = True,
     ) -> None:
         super().__init__()
+        if use_te_norm and not HAS_TE:
+            raise ImportError(
+                "transformer_engine is not available but use_te_norm=True. "
+                "Either install transformer_engine or set use_te_norm=False"
+            )
         self.sample_method = sample_method
         if sample_method == "graphconv":
             self.conv = GridFeatureToPointGraphConv(
@@ -175,6 +193,7 @@ class GridFeatureToPoint(nn.Module):
                 neighbor_search_type=neighbor_search_type,
                 knn_k=knn_k,
                 reductions=reductions,
+                use_te_norm=use_te_norm,
             )
         elif sample_method == "interp":
             self.conv = GridFeatureToPointInterp(
@@ -185,7 +204,9 @@ class GridFeatureToPoint(nn.Module):
             self.transform = PointFeatureTransform(
                 nn.Sequential(
                     nn.Linear(grid_in_channels + point_in_channels, out_channels),
-                    nn.LayerNorm(out_channels),
+                    te.LayerNorm(out_channels)
+                    if use_te_norm
+                    else nn.LayerNorm(out_channels),
                 )
             )
         else:
@@ -217,6 +238,7 @@ class GridFeatureToPointGraphConv(nn.Module):
         neighbor_search_type: Literal["radius", "knn"] = "radius",
         knn_k: int = 16,
         reductions: List[REDUCTION_TYPES] = ["mean"],
+        use_te_norm: bool = True,
     ) -> None:
         super().__init__()
         self.aabb_max = aabb_max
@@ -234,6 +256,7 @@ class GridFeatureToPointGraphConv(nn.Module):
             neighbor_search_type=neighbor_search_type,
             knn_k=knn_k,
             reductions=reductions,
+            use_te_norm=use_te_norm,
         )
 
     def forward(

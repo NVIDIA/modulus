@@ -55,6 +55,15 @@ from physicsnemo.models.figconvnet.point_feature_grid_ops import PointFeatureToG
 from physicsnemo.models.meta import ModelMetaData
 from physicsnemo.utils.profiling import profile
 
+try:
+    import transformer_engine.pytorch as te
+
+    HAS_TE = True
+except ImportError:
+    HAS_TE = False
+
+from torch.autograd.profiler import record_function
+
 memory_format_to_axis_index = {
     GridFeaturesMemoryFormat.b_xc_y_z: 0,
     GridFeaturesMemoryFormat.b_yc_x_z: 1,
@@ -77,12 +86,13 @@ class VerticesToPointFeatures(nn.Module):
         out_features: Optional[int] = 32,
         use_mlp: Optional[bool] = True,
         pos_embed_range: Optional[float] = 2.0,
+        use_te_norm: bool = True,
     ) -> None:
         super().__init__()
         self.pos_embed = SinusoidalEncoding(embed_dim, pos_embed_range)
         self.use_mlp = use_mlp
         if self.use_mlp:
-            self.mlp = MLP(3 * embed_dim, out_features, [])
+            self.mlp = MLP(3 * embed_dim, out_features, [], use_te_norm=use_te_norm)
 
     def forward(self, vertices: Float[Tensor, "B N 3"]) -> PointFeatures:
         assert (
@@ -152,8 +162,17 @@ class FIGConvUNet(BaseModel):
         drag_loss_weight: Optional[float] = None,
         pooling_type: Literal["attention", "max", "mean"] = "max",
         pooling_layers: List[int] = None,
+        use_te_norm: bool = True,
     ):
         super().__init__(meta=MetaData())
+
+        # Add a check to see if transformer_engine is installed
+        if use_te_norm and not HAS_TE:
+            raise ImportError(
+                "transformer_engine is not available but use_te_norm=True. "
+                "Either install transformer_engine or set use_te_norm=False"
+            )
+
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.hidden_channels = hidden_channels
@@ -180,6 +199,7 @@ class FIGConvUNet(BaseModel):
                     reductions=reductions,
                     neighbor_search_type=neighbor_search_type,
                     knn_k=knn_k,
+                    use_te_norm=use_te_norm,
                 ),
                 GridFeatureMemoryFormatConverter(
                     memory_format=mem_fmt,
@@ -210,6 +230,7 @@ class FIGConvUNet(BaseModel):
                     stride=2,
                     compressed_spatial_dims=compressed_spatial_dims,
                     communication_types=communication_types,
+                    use_te_norm=use_te_norm,
                 )
             ]
             for _ in range(1, num_down_blocks[level]):
@@ -221,6 +242,7 @@ class FIGConvUNet(BaseModel):
                         stride=1,
                         compressed_spatial_dims=compressed_spatial_dims,
                         communication_types=communication_types,
+                        use_te_norm=use_te_norm,
                     )
                 )
             down_block = nn.Sequential(*down_block)
@@ -234,6 +256,7 @@ class FIGConvUNet(BaseModel):
                     up_stride=2,
                     compressed_spatial_dims=compressed_spatial_dims,
                     communication_types=communication_types,
+                    use_te_norm=use_te_norm,
                 )
             ]
             for _ in range(1, num_up_blocks[level]):
@@ -245,6 +268,7 @@ class FIGConvUNet(BaseModel):
                         up_stride=1,
                         compressed_spatial_dims=compressed_spatial_dims,
                         communication_types=communication_types,
+                        use_te_norm=use_te_norm,
                     )
                 )
             up_block = nn.Sequential(*up_block)
@@ -281,6 +305,7 @@ class FIGConvUNet(BaseModel):
             mlp_channels,
             use_residual=True,
             activation=nn.GELU,
+            use_te_norm=use_te_norm,
         )
         self.mlp_projection = nn.Linear(mlp_channels[-1], 1)
         # nn.Sigmoid(),
@@ -299,11 +324,14 @@ class FIGConvUNet(BaseModel):
             neighbor_search_type=neighbor_search_type,
             knn_k=knn_k,
             reductions=reductions,
+            use_te_norm=use_te_norm,
         )
         self.projection = PointFeatureTransform(
             nn.Sequential(
                 nn.Linear(hidden_channels[0] * 2, hidden_channels[0] * 2),
-                nn.LayerNorm(hidden_channels[0] * 2),
+                te.LayerNorm(hidden_channels[0] * 2)
+                if use_te_norm
+                else nn.LayerNorm(hidden_channels[0] * 2),
                 nn.GELU(),
                 nn.Linear(hidden_channels[0] * 2, out_channels),
             )
@@ -316,6 +344,7 @@ class FIGConvUNet(BaseModel):
             out_features=hidden_channels[0],
             use_mlp=True,
             pos_embed_range=aabb_max[0] - aabb_min[0],
+            use_te_norm=use_te_norm,
         )
 
         self.vertex_to_point_features = vertex_to_point_features
@@ -323,36 +352,39 @@ class FIGConvUNet(BaseModel):
             self.drag_loss_weight = drag_loss_weight
 
     @profile
-    def _grid_forward(self, point_features: PointFeatures):
-        grid_feature_group = GridFeatureGroup(
-            [to_grid(point_features) for to_grid in self.point_feature_to_grids]
-        )
-        down_grid_feature_groups = [grid_feature_group]
-        for down_block in self.down_blocks:
-            out_features = down_block(down_grid_feature_groups[-1])
-            down_grid_feature_groups.append(out_features)
+    def _grid_forward(self, grid_feature_group: GridFeatureGroup):
+        with record_function("FCN.GridForward.down_blocks"):
+            down_grid_feature_groups = [grid_feature_group]
+            for down_block in self.down_blocks:
+                out_features = down_block(down_grid_feature_groups[-1])
+                down_grid_feature_groups.append(out_features)
 
-        # Drag prediction
-        pooled_feats = []
-        for grid_pool, layer in zip(self.grid_pools, self.pooling_layers):
-            pooled_feats.append(grid_pool(down_grid_feature_groups[layer]))
-        if len(pooled_feats) > 1:
-            pooled_feats = torch.cat(pooled_feats, dim=-1)
-        else:
-            pooled_feats = pooled_feats[0]
-        drag_pred = self.mlp_projection(self.mlp(pooled_feats))
+        with record_function("FCN.GridForward.pooling"):
+            pooled_feats = []
+            for grid_pool, layer in zip(self.grid_pools, self.pooling_layers):
+                pooled_feats.append(grid_pool(down_grid_feature_groups[layer]))
+            if len(pooled_feats) > 1:
+                pooled_feats = torch.cat(pooled_feats, dim=-1)
+            else:
+                pooled_feats = pooled_feats[0]
 
-        for level in reversed(range(self.num_levels)):
-            up_grid_features = self.up_blocks[level](
-                down_grid_feature_groups[level + 1]
-            )
-            padded_down_features = self.pad_to_match(
-                up_grid_features, down_grid_feature_groups[level]
-            )
-            up_grid_features = up_grid_features + padded_down_features
-            down_grid_feature_groups[level] = up_grid_features
+        with record_function("FCN.GridForward.mlp"):
+            drag_pred = self.mlp_projection(self.mlp(pooled_feats))
 
-        grid_features = self.convert_to_orig(down_grid_feature_groups[0])
+        with record_function("FCN.GridForward.up_blocks"):
+            for level in reversed(range(self.num_levels)):
+                up_grid_features = self.up_blocks[level](
+                    down_grid_feature_groups[level + 1]
+                )
+                padded_down_features = self.pad_to_match(
+                    up_grid_features, down_grid_feature_groups[level]
+                )
+                up_grid_features = up_grid_features + padded_down_features
+                down_grid_feature_groups[level] = up_grid_features
+
+        with record_function("FCN.GridForward.convert_to_orig"):
+            grid_features = self.convert_to_orig(down_grid_feature_groups[0])
+
         return grid_features, drag_pred
 
     @profile
@@ -361,12 +393,26 @@ class FIGConvUNet(BaseModel):
         vertices: Float[Tensor, "B N 3"],
         features: Optional[Float[Tensor, "B N C"]] = None,
     ) -> Tensor:
-        if features is None:
-            point_features = self.vertex_to_point_features(vertices)
-        else:
-            point_features = PointFeatures(vertices, features)
 
-        grid_features, drag_pred = self._grid_forward(point_features)
-        out_point_features = self.to_point(grid_features, point_features)
-        out_point_features = self.projection(out_point_features)
+        with record_function("FCN.Forward.point_features"):
+            if features is None:
+                point_features = self.vertex_to_point_features(vertices)
+            else:
+                point_features = PointFeatures(vertices, features)
+
+        with record_function("FCN.Forward.grid_feature_group"):
+            grid_feature_group = GridFeatureGroup(
+                [to_grid(point_features) for to_grid in self.point_feature_to_grids]
+            )
+
+        with record_function("FCN.Forward.grid_forward"):
+            # Use the wrapper instead of calling _grid_forward directly
+            grid_features, drag_pred = self._grid_forward(grid_feature_group)
+
+        with record_function("FCN.Forward.to_point"):
+            out_point_features = self.to_point(grid_features, point_features)
+
+        with record_function("FCN.Forward.projection"):
+            out_point_features = self.projection(out_point_features)
+
         return out_point_features.features, drag_pred

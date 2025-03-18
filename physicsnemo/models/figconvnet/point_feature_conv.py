@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 from jaxtyping import Float
 from torch import Tensor
+from torch.autograd.profiler import record_function
 
 from physicsnemo.models.figconvnet.components.encodings import SinusoidalEncoding
 from physicsnemo.models.figconvnet.components.mlp import MLPBlock
@@ -33,6 +34,13 @@ from physicsnemo.models.figconvnet.neighbor_ops import (
     batched_neighbor_knn_search,
     batched_neighbor_radius_search,
 )
+
+try:
+    import transformer_engine.pytorch as te
+
+    HAS_TE = True
+except ImportError:
+    HAS_TE = False
 
 
 class PointFeatureTransform(nn.Module):
@@ -112,6 +120,7 @@ class PointFeatureConv(nn.Module):
         neighbor_search_type: Literal["radius", "knn"] = "radius",
         radius_search_method: Literal["open3d", "warp"] = "warp",
         knn_k: Optional[int] = None,
+        use_te_norm: bool = True,
     ):
         """If use_relative_position_encoding is True, the positional encoding vertex coordinate
         difference is added to the edge features.
@@ -193,6 +202,7 @@ class PointFeatureConv(nn.Module):
                 in_channels=edge_in_channels,
                 hidden_channels=hidden_dim,
                 out_channels=out_channels,
+                use_te_norm=use_te_norm,
             )
         self.edge_transform_mlp = edge_transform_mlp
         if out_transform_mlp is None:
@@ -200,6 +210,7 @@ class PointFeatureConv(nn.Module):
                 in_channels=out_channels * len(reductions),
                 hidden_channels=hidden_dim,
                 out_channels=out_channels,
+                use_te_norm=use_te_norm,
             )
         self.out_transform_mlp = out_transform_mlp
 
@@ -273,12 +284,13 @@ class PointFeatureConv(nn.Module):
             ]
             num_reps = self.radius_or_k
         elif self.neighbor_search_type == "radius":
-            neighbors = batched_neighbor_radius_search(
-                in_vertices,
-                out_vertices,
-                radius=self.radius_or_k,
-                search_method=self.radius_search_method,
-            )
+            with record_function("PointFeatureConv.forward.neighbor_radius_search"):
+                neighbors = batched_neighbor_radius_search(
+                    in_vertices,
+                    out_vertices,
+                    radius=self.radius_or_k,
+                    search_method=self.radius_search_method,
+                )
             neighbors_index = neighbors.neighbors_index.long()
             rep_in_features = in_point_features.features.view(-1, in_num_channels)[
                 neighbors_index
@@ -289,12 +301,13 @@ class PointFeatureConv(nn.Module):
             raise ValueError(
                 f"neighbor_search_type must be radius or knn, got {self.neighbor_search_type}"
             )
-        # repeat the self features using num_reps
-        self_features = torch.repeat_interleave(
-            out_point_features.features.view(-1, out_num_channels).contiguous(),
-            num_reps,
-            dim=0,
-        )
+        with record_function("PointFeatureConv.forward.repeat_self_features"):
+            # repeat the self features using num_reps
+            self_features = torch.repeat_interleave(
+                out_point_features.features.view(-1, out_num_channels).contiguous(),
+                num_reps,
+                dim=0,
+            )
         edge_features = [rep_in_features, self_features]
         if self.use_rel_pos or self.use_rel_pos_encode:
             in_rep_vertices = in_point_features.vertices.view(-1, 3)[neighbors_index]
@@ -309,19 +322,24 @@ class PointFeatureConv(nn.Module):
                 )
             elif self.use_rel_pos:
                 edge_features.append(in_rep_vertices - self_vertices)
-        edge_features = torch.cat(edge_features, dim=1)
-        edge_features = self.edge_transform_mlp(edge_features)
+        with record_function("PointFeatureConv.forward.cat_edge_features"):
+            edge_features = torch.cat(edge_features, dim=1)
+        with record_function("PointFeatureConv.forward.edge_transform_mlp"):
+            edge_features = self.edge_transform_mlp(edge_features)
         # if in_weight is not None:
         #     assert in_weight.shape[0] == in_point_features.features.shape[0]
         #     rep_weights = in_weight[neighbors_index]
         #     edge_features = edge_features * rep_weights.squeeze().unsqueeze(-1)
 
-        out_features = [
-            row_reduction(edge_features, neighbors_row_splits, reduction=reduction)
-            for reduction in self.reductions
-        ]
-        out_features = torch.cat(out_features, dim=-1)
-        out_features = self.out_transform_mlp(out_features)
+        with record_function("PointFeatureConv.forward.out_transform_mlp"):
+            out_features = [
+                row_reduction(edge_features, neighbors_row_splits, reduction=reduction)
+                for reduction in self.reductions
+            ]
+        with record_function("PointFeatureConv.forward.out_transform_mlp"):
+            out_features = torch.cat(out_features, dim=-1)
+        with record_function("PointFeatureConv.forward.out_transform_mlp"):
+            out_features = self.out_transform_mlp(out_features)
         # Convert back to the original shape
         out_features = out_features.view(
             out_point_features.batch_size,
@@ -349,6 +367,7 @@ class PointFeatureConvBlock(nn.Module):
         provided_in_channels: Optional[int] = None,
         neighbor_search_type: Literal["radius", "knn"] = "radius",
         knn_k: Optional[int] = None,
+        use_te_norm: bool = True,
     ):
         super().__init__()
         self.downsample_voxel_size = downsample_voxel_size
@@ -367,6 +386,7 @@ class PointFeatureConvBlock(nn.Module):
             provided_in_channels=provided_in_channels,
             neighbor_search_type=neighbor_search_type,
             knn_k=knn_k,
+            use_te_norm=use_te_norm,
         )
         self.conv2 = PointFeatureConv(
             in_channels=out_channels,
@@ -378,9 +398,14 @@ class PointFeatureConvBlock(nn.Module):
             out_point_feature_type="same",
             neighbor_search_type=neighbor_search_type,
             knn_k=knn_k,
+            use_te_norm=use_te_norm,
         )
-        self.norm1 = PointFeatureTransform(nn.LayerNorm(out_channels))
-        self.norm2 = PointFeatureTransform(nn.LayerNorm(out_channels))
+        self.norm1 = PointFeatureTransform(
+            te.LayerNorm(out_channels) if use_te_norm else nn.LayerNorm(out_channels)
+        )
+        self.norm2 = PointFeatureTransform(
+            te.LayerNorm(out_channels) if use_te_norm else nn.LayerNorm(out_channels)
+        )
         if out_point_feature_type == "provided":
             self.shortcut = PointFeatureMLP(
                 in_channels=provided_in_channels, out_channels=out_channels
