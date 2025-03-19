@@ -329,15 +329,16 @@ def load_checkpoint(
     """
     fs = fsspec.filesystem(fsspec.utils.get_protocol(path))
     # Check if checkpoint directory exists
-    if fs.isfile(path):
-        raise FileNotFoundError(
+    if fs.exists(path):
+        if fs.isfile(path):
+            raise FileNotFoundError(
             f"Provided checkpoint directory {path} is a file, not directory"
         )
-    if fs.isdir(path):
+    else:
         checkpoint_logging.warning(
             f"Provided checkpoint directory {path} does not exist, skipping load"
         )
-        return 0  
+        return 0
         
     # == Loading model checkpoint ==
     if models:
