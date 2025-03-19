@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-from fair_crps import kcrps
+from physicsnemo.metrics.crps import kcrps
 import netCDF4 as nc
 import torch
 import tqdm
@@ -38,7 +38,7 @@ def rank_(truth: torch.Tensor, img: torch.Tensor):
 
 
 n_samples = 5000
-conditional_samples = "/lustre/fsw/portfolios/nvr/users/pharrington/dev/regen/modulus-regen/examples/weather/regen/pzh_inference_testpaper.nc"
+conditional_samples = "/path/to/conditional_samples.nc"
 
 
 # TODO store this hyperparameter per variable in netCDF
