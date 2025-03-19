@@ -49,7 +49,7 @@ The binary dataset should have the following structure:
 ```text
 ├─ partitions
 │  ├─ graph_partitions_1.bin
-│  ├─ graph_partitions_1.bin
+│  ├─ graph_partitions_2.bin
 │  ├─ ...
 ├─ test_partitions
 │  ├─ graph_partitions_100.bin
@@ -73,8 +73,8 @@ FIGConvUNet dependencies can be installed with `pip install`, for example:
 pip install -e .[figconv]
 ```
 
-It is recommended to install these dependencies in a Modulus Docker container,
-which provides a simple way to run Modulus.
+It is recommended to install these dependencies in a PhysicsNeMo Docker container,
+which provides a simple way to run PhysicsNeMo.
 
 ## Training
 

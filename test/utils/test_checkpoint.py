@@ -27,9 +27,9 @@ from moto import mock_aws
 from pathlib import Path
 from pytest_utils import import_or_fail
 
-from modulus.distributed import DistributedManager
-from modulus.models.mlp import FullyConnected
-from modulus.models import Module 
+from physicsnemo.distributed import DistributedManager
+from physicsnemo.models.mlp import FullyConnected
+from physicsnemo.models import Module
 
 
 @pytest.fixture(params=["./checkpoints", "msc://checkpoint-test/checkpoints"])
@@ -37,10 +37,10 @@ def checkpoint_folder(request) -> str:
     return request.param
 
 
-@pytest.fixture(params=["modulus", "pytorch"])
+@pytest.fixture(params=["physicsnemo", "pytorch"])
 def model_generator(request) -> Callable:
     # Create fully-connected NN generator function
-    if request.param == "modulus":
+    if request.param == "physicsnemo":
 
         def model(x):
             return FullyConnected(
@@ -75,6 +75,7 @@ def test_model_checkpointing(
 ):
     """Test checkpointing util for model"""
 
+    from physicsnemo.launch.utils import load_checkpoint, save_checkpoint
     # Set up the mock with IAM credentials for access. These should match those in
     # the MSC Config file (./msc_config_checkpoint.yaml).
     os.environ["AWS_ACCESS_KEY_ID"] = "access-key-id"
@@ -90,8 +91,6 @@ def test_model_checkpointing(
     # Create a bucket using the mock directly to ensure that MSC accesses the correct location.
     conn = boto3.resource("s3", region_name="us-east-1")
     conn.create_bucket(Bucket="checkpoint-test-bucket")
-
-    from modulus.launch.utils import load_checkpoint, save_checkpoint
 
     # Initialize DistributedManager first since save_checkpoint instantiates it
     DistributedManager.initialize()
