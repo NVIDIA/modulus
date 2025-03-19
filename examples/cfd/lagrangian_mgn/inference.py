@@ -193,7 +193,7 @@ def plot_particles_3d(ax, title, position, node_color, bounds):
 
 def animate(num, plotter, fig, ax1, ax2, pred, gt, node_color, bounds, frame_skip):
     num *= frame_skip
-    plotter(ax1, "Modulus MeshGraphNet Prediction", pred[num], node_color, bounds)
+    plotter(ax1, "PhysicsNeMo MeshGraphNet Prediction", pred[num], node_color, bounds)
     plotter(ax2, "Ground Truth", gt[num], node_color, bounds)
 
     fig.subplots_adjust(
