@@ -57,7 +57,7 @@ simulated data.  We observe that the error in each of these cases is relatively 
 
 We will demonstrate the use of data loss and physics constraints,
 specifically the equation residual loss, to create accurate predictions.
-[PhysicsNeMo Sym](https://github.com/NVIDIA/modulus-sym)
+[PhysicsNeMo Sym](https://github.com/NVIDIA/physicsnemo-sym)
 has utilities tailored for physics-informed machine learning. It also presents
 abstracted APIs that allow users to think and model the problem from the lens of
 equations, constraints, etc. In this example, we will only leverage the physics-informed
@@ -65,7 +65,7 @@ utilities to see how we can add physics to an existing data-driven model with ea
 still maintaining the flexibility to define our own training loop and other details.
 For a more abstracted definition of these type of problems, where the training loop
 definition and other things is taken care of implicitly, you may refer
-[PhysicsNeMo Sym](https://github.com/NVIDIA/modulus-sym)
+[PhysicsNeMo Sym](https://github.com/NVIDIA/physicsnemo-sym)
 
 ## Dataset
 

@@ -164,9 +164,9 @@ class MdlsSymDNN(Arch):
     about the input and output dimensionality of the pytorch model.
 
     For more details on PhysicsNeMo Sym models, refer:
-    https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-core/tutorials/simple_training_example.html#using-custom-models-in-modulus
+    https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-core/tutorials/simple_training_example.html#using-custom-models-in-physicsnemo
     For more details on Key class, refer:
-    https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/api/physicsnemo.sym.html#module-modulus.sym.key
+    https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/api/physicsnemo.sym.html#module-physicsnemo.sym.key
     """
 
     def __init__(
@@ -185,7 +185,7 @@ class MdlsSymDNN(Arch):
 
     def forward(self, dict_tensor: Dict[str, torch.Tensor]):
         # Use concat_input method of the Arch class to convert dict of tensors to
-        # a single multi-dimensional tensor. Ref: https://github.com/NVIDIA/physicsnemo-sym/blob/main/modulus/sym/models/arch.py#L251
+        # a single multi-dimensional tensor. Ref: https://github.com/NVIDIA/physicsnemo-sym/blob/main/physicsnemo/sym/models/arch.py#L251
         x = self.concat_input(
             dict_tensor,
             self.input_key_dict,
@@ -194,7 +194,7 @@ class MdlsSymDNN(Arch):
         )
         out = self.mdls_model(x)
         # Use split_output method of the Arch class to convert a single muli-dimensional
-        # tensor to a dict of tensors. Ref: https://github.com/NVIDIA/physicsnemo-sym/blob/main/modulus/sym/models/arch.py#L381
+        # tensor to a dict of tensors. Ref: https://github.com/NVIDIA/physicsnemo-sym/blob/main/physicsnemo/sym/models/arch.py#L381
         return self.split_output(out, self.output_key_dict, dim=1)
 
 

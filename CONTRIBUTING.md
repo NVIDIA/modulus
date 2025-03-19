@@ -18,7 +18,7 @@ contributing to the project. One way to do this is to create an issue discussing
 your thoughts. It might be that a very similar feature is under development or
 already exists, so an issue is a great starting point. If you are looking for an
 issue to resolve that will help, refer to the
-[issue](https://github.com/NVIDIA/modulus/issues) section.
+[issue](https://github.com/NVIDIA/physicsnemo/issues) section.
 If you are considering collaborating with NVIDIA PhysicsNeMo team to enhance PhysicsNeMo,
 fill this [proposal form](https://forms.gle/fYsbZEtgRWJUQ3oQ9) and
 we will get back to you.
@@ -30,7 +30,7 @@ we will get back to you.
 Developer workflow for code contributions is as follows:
 
 1. Developers must first [fork](https://help.github.com/en/articles/fork-a-repo)
-the [upstream](https://github.com/NVIDIA/Modulus) PhysicsNeMo repository.
+the [upstream](https://github.com/NVIDIA/physicsnemo) PhysicsNeMo repository.
 
 2. Git clone the forked repository and push changes to the personal fork.
 
@@ -215,8 +215,8 @@ The pipeline has following stages:
     To run pytest locally you can simply run `pytest` inside the `test` folder.
 
     While writing these tests, we encourage you to make use of the
-    [`@nfs_data_or_fail`](https://github.com/NVIDIA/modulus/blob/main/test/pytest_utils.py#L92)
-    and the [`@import_of_fail`](https://github.com/NVIDIA/modulus/blob/main/test/pytest_utils.py#L25)
+    [`@nfs_data_or_fail`](https://github.com/NVIDIA/physicsnemo/blob/main/test/pytest_utils.py#L92)
+    and the [`@import_of_fail`](https://github.com/NVIDIA/physicsnemo/blob/main/test/pytest_utils.py#L25)
     decorators to appropriately skip your tests for developers and users not having your
     test specific datasets and dependencies respectively. The CI has these datasets and
     dependencies so your tests will get executed during CI.
