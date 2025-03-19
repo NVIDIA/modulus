@@ -8,7 +8,7 @@ Numerical derivatives (PINO).
 
 This is an extension of the 2D darcy flow data-driven problem. In addition to the
 data loss, we will demonstrate the use of physics constranints, specifically
-the equation residual loss. [PhysicsNeMo Sym](https://github.com/NVIDIA/modulus-sym)
+the equation residual loss. [PhysicsNeMo Sym](https://github.com/NVIDIA/physicsnemo-sym)
 has utilities tailored for physics-informed machine learning. It also presents an
 abstracted APIs that allows users to think and model the problem from the lens of
 equations, constraints, etc. In this example, we will only levarage the physics-informed
@@ -16,7 +16,7 @@ utilites to see how we can add physics to an existing data-driven model with eas
 still maintaining the flexibility to define our own training loop and other details.
 For a more abstracted definition of these type of problems, where the training loop
 definition and other things is taken care of implictily, you may refer
-[PhysicsNeMo Sym](https://github.com/NVIDIA/modulus-sym)
+[PhysicsNeMo Sym](https://github.com/NVIDIA/physicsnemo-sym)
 
 ## Dataset
 
@@ -79,7 +79,7 @@ darcy_physics_informed_fno.py
 ### Note
 
 If you are running this example outside of the PhysicsNeMo container, install
-PhysicsNeMo Sym using the instructions from [here](https://github.com/NVIDIA/modulus-sym?tab=readme-ov-file#pypi)
+PhysicsNeMo Sym using the instructions from [here](https://github.com/NVIDIA/physicsnemo-sym?tab=readme-ov-file#pypi)
 
 ## References
 

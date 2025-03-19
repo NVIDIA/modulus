@@ -81,4 +81,4 @@ This example was developed as a part of collaboration between NVIDIA and Wistron
 ## Resources
 
 1. [Wistron Uses NVIDIA Omniverse and NVIDIA PhysicsNeMo to Build Digital Twin Platform, Transforming Factory Planning and Operations](https://www.wistron.com/en/Newsroom/2024-03-19-1)
-2. [Model Innovators: How Digital Twins Are Making Industries More Efficient](https://blogs.nvidia.com/blog/digital-twins-modulus-wistron/)
+2. [Model Innovators: How Digital Twins Are Making Industries More Efficient](https://blogs.nvidia.com/blog/digital-twins-nvidia-physicsnemo-wistron/)

@@ -99,9 +99,9 @@ class MdlsSymWrapper(Arch):
     the PhysicsNeMo Sym's optimized gradient computing backend.
 
     For more details on PhysicsNeMo Sym models, refer:
-    https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-core/tutorials/simple_training_example.html#using-custom-models-in-modulus
+    https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-core/tutorials/simple_training_example.html#using-custom-models-in-physicsnemo
     For more details on Key class, refer:
-    https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/api/physicsnemo.sym.html#module-modulus.sym.key
+    https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/api/physicsnemo.sym.html#module-physicsnemo.sym.key
     """
 
     def __init__(
