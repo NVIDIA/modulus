@@ -141,8 +141,8 @@ class FIGConvUNet(BaseModel):
         num_down_blocks: Union[int, List[int]] = 1,
         num_up_blocks: Union[int, List[int]] = 1,
         mlp_channels: List[int] = [512, 512],
-        aabb_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-        aabb_min: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        aabb_max: torch.Tensor = torch.tensor([1.0, 1.0, 1.0]),
+        aabb_min: torch.Tensor = torch.tensor([0.0, 0.0, 0.0]),
         voxel_size: Optional[float] = None,
         resolution_memory_format_pairs: List[
             Tuple[GridFeaturesMemoryFormat, Tuple[int, int, int]]
@@ -166,6 +166,11 @@ class FIGConvUNet(BaseModel):
     ):
         super().__init__(meta=MetaData())
 
+        if not isinstance(aabb_max, torch.Tensor):
+            aabb_max = torch.tensor(aabb_max)
+        if not isinstance(aabb_min, torch.Tensor):
+            aabb_min = torch.tensor(aabb_min)
+
         # Add a check to see if transformer_engine is installed
         if use_te_norm and not HAS_TE:
             raise ImportError(
@@ -180,8 +185,8 @@ class FIGConvUNet(BaseModel):
         compressed_spatial_dims = []
         self.grid_feature_group_size = len(resolution_memory_format_pairs)
         self.point_feature_to_grids = nn.ModuleList()
-        self.aabb_length = torch.tensor(aabb_max) - torch.tensor(aabb_min)
-        self.min_voxel_edge_length = torch.tensor([np.inf, np.inf, np.inf])
+        # self.aabb_length = torch.tensor(aabb_max) - torch.tensor(aabb_min)
+        # self.min_voxel_edge_length = torch.tensor([np.inf, np.inf, np.inf])
         for mem_fmt, res in resolution_memory_format_pairs:
             compressed_axis = memory_format_to_axis_index[mem_fmt]
             compressed_spatial_dims.append(res[compressed_axis])
@@ -207,10 +212,10 @@ class FIGConvUNet(BaseModel):
             )
             self.point_feature_to_grids.append(to_grid)
             # Compute voxel size
-            voxel_size = self.aabb_length / torch.tensor(res)
-            self.min_voxel_edge_length = torch.min(
-                self.min_voxel_edge_length, voxel_size
-            )
+            # voxel_size = self.aabb_length / torch.tensor(res)
+            # self.min_voxel_edge_length = torch.min(
+            #     self.min_voxel_edge_length, voxel_size
+            # )
         self.compressed_spatial_dims = compressed_spatial_dims
 
         self.down_blocks = nn.ModuleList()
@@ -416,3 +421,172 @@ class FIGConvUNet(BaseModel):
             out_point_features = self.projection(out_point_features)
 
         return out_point_features.features, drag_pred
+
+
+
+
+    #     # Add CUDA graph related attributes
+    #     self.use_cuda_graph = use_cuda_graph
+    #     if self.use_cuda_graph:
+    #         self.graph = torch.cuda.CUDAGraph()
+    #         self.replay_stream = None
+    #         self.warmup_iterations = 10
+    #         self.iteration = 0
+
+    #         self.static_input = None
+
+    #     self.use_cuda_streams = use_cuda_streams
+    #     if self.use_cuda_streams:
+    #         self.streams = [None for _ in range(len(self.point_feature_to_grids))]
+
+    # def _grid_forward_graph_wrapper(self, grid_feature_group: GridFeatureGroup):
+    #     # If CUDA graphs are disabled, just call the original function
+    #     if not self.use_cuda_graph:
+    #         return self._grid_forward(grid_feature_group)
+
+    #     if self.replay_stream is None:
+    #         self.replay_stream = torch.cuda.Stream(self.device)
+
+    #     # If we haven't warmed up yet, we need to capture the graph
+    #     if self.iteration < self.warmup_iterations:
+    #         self.replay_stream.wait_stream(torch.cuda.current_stream())
+    #         with torch.cuda.stream(self.replay_stream):
+    #             grid_features, drag_pred = self._grid_forward(grid_feature_group)
+    #         torch.cuda.current_stream().wait_stream(self.replay_stream)
+    #         self.iteration += 1
+    #         return grid_features, drag_pred
+    #     elif self.iteration == self.warmup_iterations:
+    #         # Do the graph capture
+    #         torch.cuda.synchronize()
+    #         with torch.cuda.graph(self.graph):
+    #             grid_features, drag_pred = self._grid_forward(grid_feature_group)
+    #         self.iteration += 1
+
+    #     else:
+    #         # Replay the grapH;
+    #         self.graph.replay()
+
+    # @profile
+    # def _grid_forward(self, grid_feature_group: GridFeatureGroup):
+    #     with record_function("FCN.GridForward.down_blocks"):
+    #         down_grid_feature_groups = [grid_feature_group]
+    #         for down_block in self.down_blocks:
+    #             out_features = down_block(down_grid_feature_groups[-1])
+    #             down_grid_feature_groups.append(out_features)
+
+    #     with record_function("FCN.GridForward.pooling"):
+    #         pooled_feats = []
+    #         for grid_pool, layer in zip(self.grid_pools, self.pooling_layers):
+    #             pooled_feats.append(grid_pool(down_grid_feature_groups[layer]))
+    #         if len(pooled_feats) > 1:
+    #             pooled_feats = torch.cat(pooled_feats, dim=-1)
+    #         else:
+    #             pooled_feats = pooled_feats[0]
+
+    #     with record_function("FCN.GridForward.mlp"):
+    #         drag_pred = self.mlp_projection(self.mlp(pooled_feats))
+
+    #     with record_function("FCN.GridForward.up_blocks"):
+    #         for level in reversed(range(self.num_levels)):
+    #             up_grid_features = self.up_blocks[level](
+    #                 down_grid_feature_groups[level + 1]
+    #             )
+    #             padded_down_features = self.pad_to_match(
+    #                 up_grid_features, down_grid_feature_groups[level]
+    #             )
+    #             up_grid_features = up_grid_features + padded_down_features
+    #             down_grid_feature_groups[level] = up_grid_features
+
+    #     with record_function("FCN.GridForward.convert_to_orig"):
+    #         grid_features = self.convert_to_orig(down_grid_feature_groups[0])
+
+    #     return grid_features, drag_pred
+
+    # @profile
+    # def forward(
+    #     self,
+    #     vertices: Float[Tensor, "B N 3"],
+    #     features: Optional[Float[Tensor, "B N C"]] = None,
+    # ) -> Tensor:
+
+    #     with record_function("FCN.Forward.point_features"):
+    #         if features is None:
+    #             point_features = self.vertex_to_point_features(vertices)
+    #         else:
+    #             point_features = PointFeatures(vertices, features)
+
+    #     with record_function("FCN.Forward.grid_feature_group"):
+    #         if self.use_cuda_streams:
+
+    #             cuda = vertices.device
+    #             grids = []
+    #             for i, to_grid in enumerate(self.point_feature_to_grids):
+    #                 if self.streams[i] is None:
+    #                     # Wait until model on device to init the stream:
+    #                     self.streams[i] = torch.cuda.Stream(self.device)
+    #                 self.streams[i].wait_stream(torch.cuda.default_stream(cuda))
+    #                 with torch.cuda.stream(self.streams[i]):
+    #                     point_features_grid = to_grid[0](
+    #                         point_features, self.streams[i]
+    #                     )
+    #                     this_grid = to_grid[1](point_features_grid)
+    #                     grids.append(this_grid)
+    #                 vertices.record_stream(self.streams[i])
+    #                 point_features.vertices.record_stream(self.streams[i])
+    #                 point_features.features.record_stream(self.streams[i])
+    #             grid_feature_group = GridFeatureGroup(grids)
+    #         else:
+    #             grid_feature_group = GridFeatureGroup(
+    #                 [to_grid(point_features) for to_grid in self.point_feature_to_grids]
+    #             )
+
+    #     with record_function("FCN.Forward.grid_forward"):
+    #         # Use the wrapper instead of calling _grid_forward directly
+    #         grid_features, drag_pred = self._grid_forward_graph_wrapper(
+    #             grid_feature_group
+    #         )
+
+    #     with record_function("FCN.Forward.to_point"):
+    #         out_point_features = self.to_point(grid_features, point_features)
+
+    #     with record_function("FCN.Forward.projection"):
+    #         out_point_features = self.projection(out_point_features)
+
+    #     return out_point_features.features, drag_pred
+
+    # def to(self, *args, **kwargs):
+    #     """
+    #     Moves the model and its non-trainable tensors to the specified device.
+
+    #     This extends the functionality of nn.Module.to() to also handle custom
+    #     non-trainable tensors that aren't registered as parameters or buffers.
+    #     """
+    #     # First call parent to() method to handle parameters and buffers
+    #     result = super().to(*args, **kwargs)
+
+    #     # Determine the target device from args or kwargs
+    #     device = None
+    #     if len(args) > 0:
+    #         if isinstance(args[0], (torch.device, str, int)):
+    #             device = args[0]
+    #     elif 'device' in kwargs:
+    #         device = kwargs['device']
+
+    #     # If a device was specified, move non-trainable tensors
+    #     if device is not None:
+    #         self.aabb_max = self.aabb_max.to(device)
+    #         self.aabb_min = self.aabb_min.to(device)
+    #         self.aabb_length = self.aabb_length.to(device)
+    #         self.min_voxel_edge_length = self.min_voxel_edge_length.to(device)
+
+    #         # # If using CUDA streams, initialize them for the new device
+    #         # if self.use_cuda_streams:
+    #         #     self.streams = [torch.cuda.Stream(device) for _ in range(len(self.point_feature_to_grids))]
+
+    #         # # If using CUDA graphs, reset state for the new device
+    #         # if self.use_cuda_graph:
+    #         #     self.graph = torch.cuda.CUDAGraph()
+    #         #     self.replay_stream = torch.cuda.Stream(device)
+    #         #     self.iteration = 0
+
+    #     return result

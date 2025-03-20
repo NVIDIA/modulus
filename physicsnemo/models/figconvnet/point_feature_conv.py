@@ -172,7 +172,14 @@ class PointFeatureConv(nn.Module):
         self.use_rel_pos = use_rel_pos
         self.use_rel_pos_encode = use_rel_pos_encode
         self.out_point_feature_type = out_point_feature_type
-        self.neighbor_search_vertices_scaler = neighbor_search_vertices_scaler
+        # This is a tensor so we want to move it to GPU automatically, if it's present:
+        if neighbor_search_vertices_scaler is not None:
+            self.register_buffer(
+                "neighbor_search_vertices_scaler", neighbor_search_vertices_scaler
+            )
+        else:
+            self.neighbor_search_vertices_scaler = None
+
         self.neighbor_search_type = neighbor_search_type
         self.radius_search_method = radius_search_method
         if neighbor_search_type == "radius":
@@ -257,13 +264,14 @@ class PointFeatureConv(nn.Module):
         # Get the neighbors
         in_vertices = in_point_features.vertices
         out_vertices = out_point_features.vertices
+        
+        
         if self.neighbor_search_vertices_scaler is not None:
             neighbor_search_vertices_scaler = self.neighbor_search_vertices_scaler
         if neighbor_search_vertices_scaler is not None:
-            in_vertices = in_vertices * neighbor_search_vertices_scaler.to(in_vertices)
-            out_vertices = out_vertices * neighbor_search_vertices_scaler.to(
-                out_vertices
-            )
+
+            in_vertices = in_vertices * neighbor_search_vertices_scaler
+            out_vertices = out_vertices * neighbor_search_vertices_scaler
 
         if self.neighbor_search_type == "knn":
             device = in_vertices.device
@@ -271,6 +279,8 @@ class PointFeatureConv(nn.Module):
                 in_vertices, out_vertices, self.radius_or_k
             )
             # B x M x K index
+            # TODO - CJA - is this a copy from H to D?  Can it be removed or altered?
+            # If not, can we make it non-blocking?
             neighbors_index = neighbors_index.long().to(device).view(-1)
             # M row splits
             neighbors_row_splits = (
@@ -308,20 +318,23 @@ class PointFeatureConv(nn.Module):
                 num_reps,
                 dim=0,
             )
-        edge_features = [rep_in_features, self_features]
-        if self.use_rel_pos or self.use_rel_pos_encode:
-            in_rep_vertices = in_point_features.vertices.view(-1, 3)[neighbors_index]
-            self_vertices = torch.repeat_interleave(
-                out_point_features.vertices.view(-1, 3).contiguous(), num_reps, dim=0
-            )
-            if self.use_rel_pos_encode:
-                edge_features.append(
-                    self.positional_encoding(
-                        in_rep_vertices.view(-1, 3) - self_vertices.view(-1, 3)
-                    )
+        # TODO - CJA - num_reps is a GPU tensor used to dynamically allocate new data.
+        # It causes a sync point and blocks forward execution. 
+        with record_function("PointFeatureConv.forward.interleave_edge_features"):
+            edge_features = [rep_in_features, self_features]
+            if self.use_rel_pos or self.use_rel_pos_encode:
+                in_rep_vertices = in_point_features.vertices.view(-1, 3)[neighbors_index]
+                self_vertices = torch.repeat_interleave(
+                    out_point_features.vertices.view(-1, 3).contiguous(), num_reps, dim=0
                 )
-            elif self.use_rel_pos:
-                edge_features.append(in_rep_vertices - self_vertices)
+                if self.use_rel_pos_encode:
+                    edge_features.append(
+                        self.positional_encoding(
+                            in_rep_vertices.view(-1, 3) - self_vertices.view(-1, 3)
+                        )
+                    )
+                elif self.use_rel_pos:
+                    edge_features.append(in_rep_vertices - self_vertices)
         with record_function("PointFeatureConv.forward.cat_edge_features"):
             edge_features = torch.cat(edge_features, dim=1)
         with record_function("PointFeatureConv.forward.edge_transform_mlp"):

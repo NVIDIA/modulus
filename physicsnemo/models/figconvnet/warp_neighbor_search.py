@@ -22,6 +22,7 @@ import warp as wp
 from jaxtyping import Float
 from torch import Tensor
 
+from torch.autograd.profiler import record_function
 
 @wp.kernel
 def _radius_search_count(
@@ -108,16 +109,52 @@ def _radius_search_warp(
         device=device,
     )
 
-    torch_offset = torch.zeros(len(result_count) + 1, device=device, dtype=torch.int32)
-    result_count_torch = wp.to_torch(result_count)
-    torch.cumsum(result_count_torch, dim=0, out=torch_offset[1:])
-    total_count = torch_offset[-1].item()
-    assert (
-        total_count < 2**31 - 1
-    ), f"Total result count is too large: {total_count} > 2**31 - 1"
+    with record_function("radius_search_warp.offset_calculation"):
+        ############################################################
+        # Original implementation
+        ############################################################
+        # torch_offset = torch.zeros(len(result_count) + 1, device=device, dtype=torch.int32)
+        # result_count_torch = wp.to_torch(result_count)
+        # torch.cumsum(result_count_torch, dim=0, out=torch_offset[1:])
+        # total_count = torch_offset[-1].item()
+        # print(f"total_count: {total_count}")
+        # assert (
+        #     total_count < 2**31 - 1
+        # ), f"Total result count is too large: {total_count} > 2**31 - 1"
 
-    result_point_idx = wp.zeros(shape=(total_count,), dtype=wp.int32)
-    result_point_dist = wp.zeros(shape=(total_count,), dtype=wp.float32)
+        # result_point_idx = wp.zeros(shape=(total_count,), dtype=wp.int32)
+        # result_point_dist = wp.zeros(shape=(total_count,), dtype=wp.float32)
+
+
+        ############################################################
+        # New implementation
+        ############################################################
+        torch_offset = torch.zeros(len(result_count) + 1, device=device, dtype=torch.int32)
+        result_count_torch = wp.to_torch(result_count)
+        torch.cumsum(result_count_torch, dim=0, out=torch_offset[1:])
+        # Allocate a pinned tensor on the CPU:
+        torch_count = torch.empty(1, dtype=torch.int32, pin_memory=True)
+        total_count.copy_(torch_offset[-1], non_blocking=True)
+
+        total_count = torch_offset[-1].to(torch.int64)
+        # total_count = torch_offset[-1].item()
+        # print(f"total_count: {total_count}")
+        # assert (
+        #     total_count < 2**31 - 1
+        # ), f"Total result count is too large: {total_count} > 2**31 - 1"
+
+        # Create result tensors on GPU without copying total_count to host
+        result_point_idx_torch = torch.zeros(total_count, device=device, dtype=torch.int32)
+        result_point_dist_torch = torch.zeros(total_count, device=device, dtype=torch.float32)
+        
+
+
+        result_point_idx = wp.from_torch(result_point_idx_torch)
+        result_point_dist = wp.from_torch(result_point_dist_torch)
+        
+        ############################################################
+        # End of new implementation
+        ############################################################
 
     wp.launch(
         kernel=_radius_search_query,
@@ -162,8 +199,10 @@ def radius_search_warp(
     # Convert from warp to torch
     assert points.is_contiguous(), "points must be contiguous"
     assert queries.is_contiguous(), "queries must be contiguous"
-    points_wp = wp.from_torch(points, dtype=wp.vec3)
-    queries_wp = wp.from_torch(queries, dtype=wp.vec3)
+    with record_function("radius_search_warp.points_from_torch"):
+        points_wp = wp.from_torch(points, dtype=wp.vec3)
+    with record_function("radius_search_warp.queries_from_torch"):
+        queries_wp = wp.from_torch(queries, dtype=wp.vec3)
 
     result_point_idx, result_point_dist, torch_offset = _radius_search_warp(
         points=points_wp,
@@ -174,8 +213,10 @@ def radius_search_warp(
     )
 
     # Convert from warp to torch
-    result_point_idx = wp.to_torch(result_point_idx)
-    result_point_dist = wp.to_torch(result_point_dist)
+    with record_function("radius_search_warp.result_point_idx_to_torch"):
+        result_point_idx = wp.to_torch(result_point_idx)
+    with record_function("radius_search_warp.result_point_dist_to_torch"):
+        result_point_dist = wp.to_torch(result_point_dist)
 
     # Neighbor index, Neighbor Distance, Neighbor Split
     return result_point_idx, result_point_dist, torch_offset

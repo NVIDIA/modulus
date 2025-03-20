@@ -42,7 +42,7 @@ from physicsnemo.models.figconvnet.point_feature_grid_ops import (
     GridFeatureToPoint,
 )
 from physicsnemo.utils.profiling import profile
-
+from torch.autograd.profiler import record_function
 try:
     import transformer_engine.pytorch as te
 
@@ -340,15 +340,21 @@ class GridFeatureConv2DBlocksAndIntraCommunication(nn.Module):
         self.nonlinear = GridFeatureGroupTransform(nn.GELU())
 
     def forward(self, grid_features_group: GridFeatureGroup) -> GridFeatureGroup:
-        assert len(grid_features_group) == len(self.convs)
-        grid_feats = []
-        for grid_feat, conv in zip(grid_features_group, self.convs):
-            grid_feats.append(conv(grid_feat))
-        grid_features_group = GridFeatureGroup(grid_feats)
-        grid_features_group = self.intra_communications(grid_features_group)
-        grid_features_group = self.proj(grid_features_group)
-        grid_features_group = self.nonlinear(grid_features_group)
-        return grid_features_group
+        # assert len(grid_features_group) == len(self.convs)
+        with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward"):
+            grid_feats = []
+            with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward.convs"):
+                for grid_feat, conv in zip(grid_features_group, self.convs):
+                    grid_feats.append(conv(grid_feat))
+            with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward.grid_features_group"):
+                grid_features_group = GridFeatureGroup(grid_feats)
+            with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward.intra_communications"):
+                grid_features_group = self.intra_communications(grid_features_group)
+            with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward.proj"):
+                grid_features_group = self.proj(grid_features_group)
+            with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward.nonlinear"):
+                grid_features_group = self.nonlinear(grid_features_group)
+            return grid_features_group
 
 
 class GridFeatureGroupCat(nn.Module):

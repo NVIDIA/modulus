@@ -38,7 +38,7 @@ from physicsnemo.models.figconvnet.point_feature_conv import (
     PointFeatureConv,
     PointFeatureTransform,
 )
-from physicsnemo.utils.profiling import Profiler
+from physicsnemo.utils.profiling import profile
 
 try:
     import transformer_engine.pytorch as te
@@ -47,16 +47,14 @@ try:
 except ImportError:
     HAS_TE = False
 
-prof = Profiler()
-
 
 class AABBGridFeatures(GridFeatures):
     """AABBGridFeatures."""
 
     def __init__(
         self,
-        aabb_max: Tuple[float, float, float],
-        aabb_min: Tuple[float, float, float],
+        aabb_max: torch.Tensor,
+        aabb_min: torch.Tensor,
         resolution: Union[Int[Tensor, "3"], List[int]],
         pos_encode_dim: int = 32,
         device: torch.device = None,
@@ -75,8 +73,8 @@ class PointFeatureToGrid(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        aabb_max: Tuple[float, float, float],
-        aabb_min: Tuple[float, float, float],
+        aabb_max: torch.Tensor,
+        aabb_min: torch.Tensor,
         voxel_size: Optional[float] = None,
         resolution: Optional[Union[Int[Tensor, "3"], List[int]]] = None,
         use_rel_pos: bool = True,
@@ -130,11 +128,15 @@ class PointFeatureToGrid(nn.Module):
             use_te_norm=use_te_norm,
         )
 
-    @prof
+    @profile
     def forward(self, point_features: PointFeatures) -> GridFeatures:
         with record_function("PointFeatureToGrid.forward"):
             # match the batch size of points
-            self.grid_features.to(device=point_features.vertices.device)
+
+            # This is a no-op after the first time
+            if self.grid_features.point_features.device != point_features.vertices.device:
+                self.grid_features.to(device=point_features.vertices.device)
+    
             grid_point_features = self.grid_features.point_features.expand_batch_size(
                 point_features.batch_size
             )
@@ -229,8 +231,8 @@ class GridFeatureToPointGraphConv(nn.Module):
         grid_in_channels: int,
         point_in_channels: int,
         out_channels: int,
-        aabb_max: Tuple[float, float, float],
-        aabb_min: Tuple[float, float, float],
+        aabb_max: torch.Tensor,
+        aabb_min: torch.Tensor,
         hidden_dim: Optional[int] = None,
         use_rel_pos: bool = True,
         use_rel_pos_embed: bool = False,
@@ -241,8 +243,13 @@ class GridFeatureToPointGraphConv(nn.Module):
         use_te_norm: bool = True,
     ) -> None:
         super().__init__()
-        self.aabb_max = aabb_max
-        self.aabb_min = aabb_min
+        if not isinstance(aabb_max, torch.Tensor):
+            aabb_max = torch.Tensor(aabb_max)
+        if not isinstance(aabb_min, torch.Tensor):
+            aabb_min = torch.Tensor(aabb_min)
+        self.register_buffer("aabb_max", aabb_max)
+        self.register_buffer("aabb_min", aabb_min)
+        
         self.conv = PointFeatureConv(
             radius=np.sqrt(3),  # diagonal of a unit cube
             in_channels=grid_in_channels,
@@ -259,18 +266,23 @@ class GridFeatureToPointGraphConv(nn.Module):
             use_te_norm=use_te_norm,
         )
 
+    @profile
     def forward(
         self, grid_features: GridFeatures, point_features: PointFeatures
     ) -> PointFeatures:
         resolution = grid_features.resolution
         # Find per axis scaler that scales the vertices to [0, resolution[0]] x [0, resolution[1]] x [0, resolution[2]]
-        vertices_scaler = torch.FloatTensor(
+        
+        vertices_scaler = torch.tensor(
             [
                 resolution[0] / (self.aabb_max[0] - self.aabb_min[0]),
                 resolution[1] / (self.aabb_max[1] - self.aabb_min[1]),
                 resolution[2] / (self.aabb_max[2] - self.aabb_min[2]),
-            ]
+            ],
+            device=self.aabb_max.device,
+            dtype=self.aabb_max.dtype,
         )
+        # TODO - CJA - is the above incurring a copy from HtoD?
         out_point_features = self.conv(
             grid_features.point_features.contiguous(),
             point_features,
@@ -305,6 +317,7 @@ class GridFeatureToPointInterp(nn.Module):
         # Use F.interpolate to interpolate grid features to point features
         grid_features.to(memory_format=GridFeaturesMemoryFormat.b_c_x_y_z)
         xyz = point_features.vertices  # N x 3
+        # TODO - CJA - Is this called?
         self.to(device=xyz.device)
         normalized_xyz = (xyz - self.aabb_min) / (self.aabb_max - self.aabb_min) * 2 - 1
         normalized_xyz = normalized_xyz.view(1, 1, 1, -1, 3)
