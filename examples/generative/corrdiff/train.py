@@ -25,7 +25,7 @@ from physicsnemo.distributed import DistributedManager
 from physicsnemo.launch.logging import PythonLogger, RankZeroLoggingWrapper
 from physicsnemo.metrics.diffusion import RegressionLoss, ResLoss, RegressionLossCE
 from physicsnemo.launch.logging import PythonLogger, RankZeroLoggingWrapper
-from physicsnemo.launch.utils import load_checkpoint, save_checkpoint
+from physicsnemo.launch.utils import load_checkpoint, save_checkpoint, get_checkpoint_dir
 from datasets.dataset import init_train_valid_datasets_from_config
 from helpers.train_helpers import (
     set_patch_shape,

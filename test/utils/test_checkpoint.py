@@ -147,12 +147,12 @@ def test_model_checkpointing(
         shutil.rmtree(checkpoint_folder)
     else:
         # if writing to object, the local cache must be cleared to allow multiple test runs
-        local_cache = os.environ["HOME"] + "/.cache/modulus"
+        local_cache = os.environ["HOME"] + "/.cache/physicsnemo"
         shutil.rmtree(local_cache)
 
 
 def test_get_checkpoint_dir():
-    from modulus.launch.utils import get_checkpoint_dir
+    from physicsnemo.launch.utils import get_checkpoint_dir
     assert get_checkpoint_dir(".", "model") == "./checkpoints_model"
     assert get_checkpoint_dir("./", "model") == "./checkpoints_model"
     assert get_checkpoint_dir("/Users/auser", "model") == "/Users/auser/checkpoints_model"
