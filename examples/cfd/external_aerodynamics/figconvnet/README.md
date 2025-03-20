@@ -41,7 +41,7 @@ and represents efficient storage of the original meshes as
 partitioned graphs.
 For more details on how to convert the original DrivAerML dataset
 to partitioned dataset, refer to
-[XAeroNet example README](https://github.com/NVIDIA/modulus/tree/main/examples/cfd/external_aerodynamics/xaeronet#training-the-xaeronet-s-model),
+[XAeroNet example README](https://github.com/NVIDIA/physicsnemo/tree/main/examples/cfd/external_aerodynamics/xaeronet#training-the-xaeronet-s-model),
 steps 1 to 5.
 
 The binary dataset should have the following structure:

@@ -8,7 +8,7 @@ PhysicsNeMo to train a diagnostic model predicting precipitation from ERA-5 data
 
 ### Installing PhysicsNeMo
 
-You need [PhysicsNeMo](https://github.com/NVIDIA/modulus) installed on your Python
+You need [PhysicsNeMo](https://github.com/NVIDIA/physicsnemo) installed on your Python
 environment, installed with the `launch` extras. If installing from the PhysicsNeMo
 repository, install PhysicsNeMo by running:
 

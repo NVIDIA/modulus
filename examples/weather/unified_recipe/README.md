@@ -100,7 +100,7 @@ Learning Stable Dynamics on the Sphere](https://arxiv.org/pdf/2306.03838.pdf). I
 train the SFNO model, [PhysicsNeMo Makani](https://github.com/NVIDIA/modulus-makani)
 needs to be installed. This allows the model to be added to physicsnemo's model registry.
 For more information on this process, please refer to [PhysicsNeMo model registry](
-https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-core/api/physicsnemo.models.html#modulus-model-registry-and-entry-points).
+https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-core/api/physicsnemo.models.html#physicsnemo-model-registry-and-entry-points).
 
 ```bash
 git clone git@github.com:NVIDIA/makani.git

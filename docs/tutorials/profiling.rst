@@ -866,7 +866,7 @@ cases that can help guide you in the right direction:
     - If your model has a lot of small operations, `torch.compile` can be a good
       option to see if it can be fused.  Alternatively, you can try to capture the
       kernels into a single kernal replay launch with cuda graphs - PhysicsNeMo provides
-      easy to use tools to do this with `StaticCapture <https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-core-v030/api/modulus.utils.html>`_.
+      easy to use tools to do this with `StaticCapture <https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-core/api/physicsnemo.utils.html>`_.
 
     - If your model is dominated by just a few large, long running kernels, you can explore
       optimizations with custom fusion or kernel implementations.  Try `triton <https://openai.com/index/triton/>`_ and `NVIDIA Warp <https://github.com/NVIDIA/warp>`_
