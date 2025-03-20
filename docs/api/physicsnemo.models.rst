@@ -23,7 +23,7 @@ These include some very general models like Fourier Neural Operators (FNOs),
 ResNet, and Graph Neural Networks (GNNs) as well as domain-specific models like
 Deep Learning Weather Prediction (DLWP) and Spherical Fourier Neural Operators (SFNO).
 
-For a list of currently available models, please refer the `models on GitHub <https://github.com/NVIDIA/physicsnemo/tree/main/modulus/models>`_.
+For a list of currently available models, please refer the `models on GitHub <https://github.com/NVIDIA/physicsnemo/tree/main/physicsnemo/models>`_.
 
 Below are some simple examples of how to use these models.
 

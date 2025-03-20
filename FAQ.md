@@ -11,7 +11,7 @@
 ## What is the recommended hardware for training using PhysicsNeMo framework?
 
 Please refer to the recommended hardware section:
-[System Requirments](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html#system-requirements)
+[System Requirments](https://docs.nvidia.com/deeplearning/physicsnemo/getting-started/index.html#system-requirements)
 
 ## What model architectures are in PhysicsNeMo?
 
@@ -24,8 +24,8 @@ model architecture can be applied to a specific problem.
 These are reference starting points for users to get started.
 
 You can find the list of built in model architectures
-[here](https://github.com/NVIDIA/modulus/tree/main/modulus/models) and
-[here](https://github.com/NVIDIA/modulus-sym/tree/main/modulus/sym/models)
+[here](https://github.com/NVIDIA/physicsnemo/tree/main/physicsnemo/models) and
+[here](https://github.com/NVIDIA/physicsnemo-sym/tree/main/physicsnemo/sym/models)
 
 ## What is the difference between PhysicsNeMo Core and Symbolic?
 
@@ -38,23 +38,23 @@ abstraction to compose a training loop from specification of the geometry, PDEs 
 constraints like boundary conditions using simple symbolic APIs.
 So if you are familiar with PyTorch and want to train model from a dataset, you start
 with PhysicsNeMo core and you import PhysicsNeMo symbolic to bring in explicit domain knowledge.
-Please refer to the [DeepONet example](https://github.com/modulus/tree/main/examples/cfd/darcy_deeponet_physics)
+Please refer to the [DeepONet example](https://github.com/physicsnemo/tree/main/examples/cfd/darcy_deeponet_physics)
 that illustrates the concept.
 If you are an engineer or domain expert accustomed to using numerical solvers, you can
 use PhysicsNeMo Symbolic to define your problem at a higher level of abstraction. Please
-refer to the [Lid Driven cavity](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/basics/lid_driven_cavity_flow.html)
+refer to the [Lid Driven cavity](https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/user_guide/basics/lid_driven_cavity_flow.html)
 that illustrates the concept.
 
 ## What can I do if I dont see a PDE in PhysicsNeMo?
 
 PhysicsNeMo Symbolic provides a well documeted
-[example](https://docs.nvidia.com/deeplearning/modulus/modulus-sym/user_guide/foundational/1d_wave_equation.html#writing-custom-pdes-and-boundary-initial-conditions)
-that walks you through how to define a custom PDE. Please see the source [here](https://github.com/NVIDIA/modulus-sym/tree/main/modulus/sym/eq/pdes)
+[example](https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/user_guide/foundational/1d_wave_equation.html#writing-custom-pdes-and-boundary-initial-conditions)
+that walks you through how to define a custom PDE. Please see the source [here](https://github.com/NVIDIA/physicsnemo-sym/tree/main/physicsnemo/sym/eq/pdes)
 to see the built-in PDE implementation as an additional reference for your own implementation.
 
 ## What is the difference between the pip install and the container?
 
 There is no functional difference between the two. This is to simplify the ease of
 installing and setting up the PhysicsNeMo environment. Please refer to the
-[getting started guide](https://docs.nvidia.com/deeplearning/modulus/getting-started/index.html#modulus-with-docker-image-recommended)
+[getting started guide](https://docs.nvidia.com/deeplearning/physicsnemo/getting-started/index.html#physicsnemo-with-docker-image-recommended)
 on how to install using Pip or using the container.
