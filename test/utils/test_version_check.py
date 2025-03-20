@@ -90,7 +90,7 @@ def test_check_module_requirements_success():
 
         # Should run check_min_version for known module
         check_module_requirements("physicsnemo.distributed.shard_tensor")
-        mock_check_min_version.assert_called_once_with("torch", "2.6.0")
+        mock_check_min_version.assert_called_once_with("torch", "2.5.9")
 
 
 def test_check_module_requirements_unknown_module():
@@ -108,5 +108,65 @@ def test_version_requirements_structure():
     assert "physicsnemo.distributed.shard_tensor" in VERSION_REQUIREMENTS
     assert "torch" in VERSION_REQUIREMENTS["physicsnemo.distributed.shard_tensor"]
     assert (
-        VERSION_REQUIREMENTS["physicsnemo.distributed.shard_tensor"]["torch"] == "2.6.0"
+        VERSION_REQUIREMENTS["physicsnemo.distributed.shard_tensor"]["torch"] == "2.5.9"
     )
+
+
+def test_require_version_success():
+    """Test that require_version decorator allows function to run when version requirement is met"""
+    with patch("importlib.import_module") as mock_import:
+        # Create a mock module with version 2.6.0
+        mock_module = MagicMock()
+        mock_module.__version__ = "2.6.0"
+        mock_import.return_value = mock_module
+
+        # Create a decorated function
+        from physicsnemo.utils.version_check import require_version
+
+        @require_version("torch", "2.5.0")
+        def test_function():
+            return "Function executed"
+
+        # Function should execute normally when version requirement is met
+        assert test_function() == "Function executed"
+
+
+def test_require_version_failure():
+    """Test that require_version decorator prevents function from running when version requirement is not met"""
+    with patch("importlib.import_module") as mock_import:
+        # Create a mock module with version 2.5.0
+        mock_module = MagicMock()
+        mock_module.__version__ = "2.5.0"
+        mock_import.return_value = mock_module
+
+        # Create a decorated function
+        from physicsnemo.utils.version_check import require_version
+
+        @require_version("torch", "2.6.0")
+        def test_function():
+            return "Function executed"
+
+        # Function should raise ImportError when version requirement is not met
+        with pytest.raises(ImportError) as excinfo:
+            test_function()
+
+        assert "torch version 2.6.0 or higher is required" in str(excinfo.value)
+
+
+def test_require_version_package_not_found():
+    """Test that require_version decorator raises ImportError when package is not installed"""
+    with patch("importlib.import_module", side_effect=ImportError("Package not found")):
+        # Create a decorated function
+        from physicsnemo.utils.version_check import require_version
+
+        @require_version("nonexistent_package", "1.0.0")
+        def test_function():
+            return "Function executed"
+
+        # Function should raise ImportError when package is not installed
+        with pytest.raises(ImportError) as excinfo:
+            test_function()
+
+        assert "Package nonexistent_package is required but not installed" in str(
+            excinfo.value
+        )

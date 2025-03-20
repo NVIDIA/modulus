@@ -28,6 +28,13 @@ from typing import Optional
 
 from packaging import version
 
+# Dictionary mapping module paths to their version requirements
+# This can be expanded as needed for different modules
+VERSION_REQUIREMENTS = {
+    "physicsnemo.distributed.shard_tensor": {"torch": "2.5.9"},
+    "device_mesh": {"torch": "2.4.0"},
+}
+
 
 def check_min_version(
     package_name: str, min_version: str, error_msg: Optional[str] = None
@@ -62,13 +69,6 @@ def check_min_version(
     return True
 
 
-# Dictionary mapping module paths to their version requirements
-# This can be expanded as needed for different modules
-VERSION_REQUIREMENTS = {
-    "physicsnemo.distributed.shard_tensor": {"torch": "2.6.0"},
-}
-
-
 def check_module_requirements(module_path: str) -> None:
     """
     Check all version requirements for a specific module.
@@ -84,3 +84,38 @@ def check_module_requirements(module_path: str) -> None:
 
     for package, min_version in VERSION_REQUIREMENTS[module_path].items():
         check_min_version(package, min_version)
+
+
+def require_version(package_name: str, min_version: str):
+    """
+    Decorator that prevents a function from being called unless the
+    specified package meets the minimum version requirement.
+
+    Args:
+        package_name: Name of the package to check
+        min_version: Minimum required version string (e.g. '2.3')
+
+    Returns:
+        Decorator function that checks version requirement before execution
+
+    Example:
+        @require_version("torch", "2.3")
+        def my_function():
+            # This function will only execute if torch >= 2.3
+            pass
+    """
+
+    def decorator(func):
+        import functools
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # Verify the package meets minimum version before executing
+            check_min_version(package_name, min_version)
+
+            # If we get here, version check passed
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
