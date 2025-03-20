@@ -16,6 +16,7 @@
 
 import warnings
 from importlib.metadata import EntryPoint, entry_points
+from importlib_metadata import EntryPoint as EntryPointV2
 from typing import List, Union
 
 import physicsnemo
@@ -120,8 +121,10 @@ class ModelRegistry:
 
         model = self._model_registry.get(name)
         if model is not None:
-            if isinstance(model, EntryPoint):
+            if isinstance(model, EntryPoint) or isinstance(model, EntryPointV2):
                 model = model.load()
+            else:
+                raise ValueError(f"Model {name} is not a valid entry point.")
             return model
 
         raise KeyError(f"No model is registered under the name {name}")
