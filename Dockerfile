@@ -94,7 +94,7 @@ ENV DGLBACKEND=$DGL_BACKEND
 ARG DGL_ARM64_WHEEL
 ENV DGL_ARM64_WHEEL=${DGL_ARM64_WHEEL:-unknown}
 
-# TODO: this is a workaround as dgl is not yet shipping arm compatible wheels for CUDA 12.x: https://github.com/NVIDIA/modulus/issues/432
+# TODO: this is a workaround as dgl is not yet shipping arm compatible wheels for CUDA 12.x: https://github.com/NVIDIA/physicsnemo/issues/432
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ "$DGL_ARM64_WHEEL" != "unknown" ]; then \
         echo "Custom DGL wheel $DGL_ARM64_WHEEL for $TARGETPLATFORM exists, installing!" && \
         pip install --no-cache-dir --no-deps /physicsnemo/deps/${DGL_ARM64_WHEEL}; \
@@ -135,7 +135,7 @@ ARG TARGETPLATFORM
 # TODO: Remove hacky downgrade of netCDF4 package. netCDF4 v1.7.1 has following 
 # issue: https://github.com/Unidata/netcdf4-python/issues/1343
 # This workaround is only added for the CI systems which run pytest only once. 
-# For more details, refer: https://github.com/NVIDIA/modulus/issues/608
+# For more details, refer: https://github.com/NVIDIA/physicsnemo/issues/608
 RUN pip install --no-cache-dir "netcdf4>=1.6.3,<1.7.1"
 
 RUN pip install --no-cache-dir "mlflow>=2.1.1"

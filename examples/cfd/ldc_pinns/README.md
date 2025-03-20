@@ -15,14 +15,14 @@ This example takes a non-abstracted way to define the problem. The
 boundary condition constraints, residual constraints, and the subsequent physics loss
 computation are defined explicitly. For a more abstracted version of this workflow,
 where some of these steps are automated and abstracted, we recommend the
-[Introductory example tutorial from PhysicsNeMo-Sym](https://docs.nvidia.com/deeplearning/physicsnemo/modulus-sym/user_guide/basics/lid_driven_cavity_flow.html).
+[Introductory example tutorial from PhysicsNeMo-Sym](https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/user_guide/basics/lid_driven_cavity_flow.html).
 
 ## Getting Started
 
 ### Prerequisites
 
 If you are running this example outside of the PhysicsNeMo container, install
-PhysicsNeMo Sym using the instructions from [here](https://github.com/NVIDIA/modulus-sym?tab=readme-ov-file#pypi)
+PhysicsNeMo Sym using the instructions from [here](https://github.com/NVIDIA/physicsnemo-sym?tab=readme-ov-file#pypi)
 
 ### Training
 
@@ -37,11 +37,11 @@ fashion, there is no dataset required.
 
 Instead, we generate the geometry using the PhysicsNeMo Sym's geometry module and sample
 point cloud using `GeometryDatapipe` utility. For more details refer documentation
-[here](https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/api/physicsnemo.sym.geometry.html#modulus.sym.geometry.geometry_dataloader.GeometryDatapipe)
+[here](https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/api/physicsnemo.sym.geometry.html#physicsnemo.sym.geometry.geometry_dataloader.GeometryDatapipe)
 
 For computing the physics losses, we will use the `PhysicsInformer` utility from
 PhysicsNeMo-Sym. For more details, refer documentation
-[here](https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/api/physicsnemo.sym.eq.html#modulus.sym.eq.phy_informer.PhysicsInformer)
+[here](https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/api/physicsnemo.sym.eq.html#physicsnemo.sym.eq.phy_informer.PhysicsInformer)
 
 The results would get saved in the `./outputs/` directory.
 
