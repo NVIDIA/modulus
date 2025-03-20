@@ -14,29 +14,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import hydra
-from omegaconf import DictConfig
-import torch
-import numpy as np
-import matplotlib.pyplot as plt
-from hydra.utils import to_absolute_path
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
 from itertools import chain
+from typing import Dict
 
-from modulus.models.mlp import FullyConnected
-from modulus.models.fno import FNO
-from modulus.launch.logging import LaunchLogger
-from modulus.launch.utils.checkpoint import save_checkpoint
+import hydra
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn.functional as F
+from hydra.utils import to_absolute_path
+from physicsnemo.launch.logging import LaunchLogger
+from physicsnemo.launch.utils.checkpoint import save_checkpoint
+from physicsnemo.models.fno import FNO
+from physicsnemo.models.mlp import FullyConnected
+from physicsnemo.sym.eq.pdes.diffusion import Diffusion
+from physicsnemo.sym.eq.phy_informer import PhysicsInformer
+from physicsnemo.sym.key import Key
+from physicsnemo.sym.models.arch import Arch
+from omegaconf import DictConfig
+from torch.utils.data import DataLoader
 
 from utils import HDF5MapStyleDataset
-from modulus.sym.eq.pdes.diffusion import Diffusion
-
-from modulus.sym.graph import Graph
-from modulus.sym.key import Key
-from modulus.sym.node import Node
-from typing import Optional, Dict
-from modulus.sym.models.arch import Arch
 
 
 def validation_step(graph, dataloader, epoch):
@@ -61,14 +59,14 @@ def validation_step(graph, dataloader, epoch):
         # plotting
         fig, ax = plt.subplots(1, 3, figsize=(25, 5))
 
-        d_min = np.min(outvar[0, 0, ...])
-        d_max = np.max(outvar[0, 0, ...])
+        d_min = np.min(outvar[0, 0])
+        d_max = np.max(outvar[0, 0])
 
-        im = ax[0].imshow(outvar[0, 0, ...], vmin=d_min, vmax=d_max)
+        im = ax[0].imshow(outvar[0, 0], vmin=d_min, vmax=d_max)
         plt.colorbar(im, ax=ax[0])
-        im = ax[1].imshow(predvar[0, 0, ...], vmin=d_min, vmax=d_max)
+        im = ax[1].imshow(predvar[0, 0], vmin=d_min, vmax=d_max)
         plt.colorbar(im, ax=ax[1])
-        im = ax[2].imshow(np.abs(predvar[0, 0, ...] - outvar[0, 0, ...]))
+        im = ax[2].imshow(np.abs(predvar[0, 0] - outvar[0, 0]))
         plt.colorbar(im, ax=ax[2])
 
         ax[0].set_title("True")
@@ -82,28 +80,28 @@ def validation_step(graph, dataloader, epoch):
 
 class MdlsSymWrapper(Arch):
     """
-    Wrapper model to convert Modulus model to Modulus-Sym model.
+    Wrapper model to convert PhysicsNeMo model to PhysicsNeMo-Sym model.
 
-    Modulus Sym relies on the inputs/outputs of the model being dictionary of tensors.
+    PhysicsNeMo Sym relies on the inputs/outputs of the model being dictionary of tensors.
     This wrapper converts the input dictionary of tensors to a tensor inputs that can
-    be processed by the Modulus model that operate on tensors. Appropriate
+    be processed by the PhysicsNeMo model that operate on tensors. Appropriate
     transformations are performed in the forward pass of the model to translate between
     these two input/output definitions.
 
     These transformations can differ based on the models. For e.g. typically for a fully
     connected network, the input tensors are combined by concatenating them along
-    appropriate dimension before passing them as an input to the Modulus model.
+    appropriate dimension before passing them as an input to the PhysicsNeMo model.
     During the output, the process is reversed, the output tensor from pytorch model is
     split across appropriate dimensions and then converted to a dictionary with
     appropriate keys to produce the final output.
 
     Having the model wrapped in a wrapper like this allows gradient computation using
-    the Modulus Sym's optimized gradient computing backend.
+    the PhysicsNeMo Sym's optimized gradient computing backend.
 
-    For more details on Modulus Sym models, refer:
-    https://docs.nvidia.com/deeplearning/modulus/modulus-core/tutorials/simple_training_example.html#using-custom-models-in-modulus
+    For more details on PhysicsNeMo Sym models, refer:
+    https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-core/tutorials/simple_training_example.html#using-custom-models-in-physicsnemo
     For more details on Key class, refer:
-    https://docs.nvidia.com/deeplearning/modulus/modulus-sym/api/modulus.sym.html#module-modulus.sym.key
+    https://docs.nvidia.com/deeplearning/physicsnemo/physicsnemo-sym/api/physicsnemo.sym.html#module-physicsnemo.sym.key
     """
 
     def __init__(
@@ -113,7 +111,7 @@ class MdlsSymWrapper(Arch):
         trunk_net=None,
         branch_net=None,
     ):
-        super(MdlsSymWrapper, self).__init__(
+        super().__init__(
             input_keys=input_keys,
             output_keys=output_keys,
         )
@@ -162,9 +160,8 @@ def main(cfg: DictConfig):
     LaunchLogger.initialize()
 
     # Use Diffusion equation for the Darcy PDE
-    darcy = Diffusion(T="u", time=False, dim=2, D="k", Q=1.0 * 4.49996e00 * 3.88433e-03)
-
-    darcy_node = darcy.make_nodes()
+    forcing_fn = 1.0 * 4.49996e00 * 3.88433e-03  # after scaling
+    darcy = Diffusion(T="u", time=False, dim=2, D="k", Q=forcing_fn)
 
     dataset = HDF5MapStyleDataset(
         to_absolute_path("./datasets/Darcy_241/train.hdf5"), device=device
@@ -204,30 +201,14 @@ def main(cfg: DictConfig):
         output_keys=[Key("k"), Key("u")],
         trunk_net=model_trunk,
         branch_net=model_branch,
+    ).to(device)
+
+    phy_informer = PhysicsInformer(
+        required_outputs=["diffusion_u"],
+        equations=darcy,
+        grad_method="autodiff",
+        device=device,
     )
-
-    nodes = darcy_node + [model.make_node(name="network", jit=False)]
-
-    # note: this example uses the Graph class from Modulus Sym to construct the
-    # computational graph. This allows you to leverage Modulus Sym's optimized
-    # derivative backend to compute the derivatives, along with other benefits like
-    # symbolic definition of PDEs and leveraging the PDEs from Modulus Sym's PDE
-    # module.
-    # For more details, refer: https://docs.nvidia.com/deeplearning/modulus/modulus-sym/api/modulus.sym.html#module-modulus.sym.graph
-    graph = Graph(
-        nodes,
-        [Key("k_prime"), Key("x"), Key("y")],
-        [Key("k"), Key("u"), Key("diffusion_u")],
-        func_arch=False,
-    ).to(device)
-
-    # For pure inference (no gradients)
-    graph_infer = Graph(
-        [model.make_node(name="network", jit=False)],
-        [Key("k_prime"), Key("x"), Key("y")],
-        [Key("k"), Key("u")],  # No PDE Key
-        func_arch=False,
-    ).to(device)
 
     optimizer = torch.optim.Adam(
         chain(model_branch.parameters(), model_trunk.parameters()),
@@ -251,16 +232,24 @@ def main(cfg: DictConfig):
                 optimizer.zero_grad()
                 outvar = data[1]
 
+                coords = torch.stack([data[2], data[3]], dim=1).requires_grad_(True)
                 # compute forward pass
-                out = graph.forward(
+                out = model.forward(
                     {
                         "k_prime": data[0][:, 0].unsqueeze(dim=1),
-                        "x": data[2].requires_grad_(True),
-                        "y": data[3].requires_grad_(True),
+                        "x": coords[:, 0:1],
+                        "y": coords[:, 1:2],
                     }
                 )
 
-                pde_out_arr = out["diffusion_u"]
+                residuals = phy_informer.forward(
+                    {
+                        "coordinates": coords,
+                        "u": out["u"],
+                        "k": out["k"],
+                    }
+                )
+                pde_out_arr = residuals["diffusion_u"]
 
                 # Boundary condition
                 pde_out_arr = F.pad(
@@ -276,7 +265,7 @@ def main(cfg: DictConfig):
                 )
 
                 # Compute total loss
-                loss = loss_data + cfg.phy_wt * loss_pde
+                loss = loss_data + cfg.physics_weight * loss_pde
 
                 # Backward pass and optimizer and learning rate update
                 loss.backward()
@@ -289,7 +278,7 @@ def main(cfg: DictConfig):
             log.log_epoch({"Learning Rate": optimizer.param_groups[0]["lr"]})
 
         with LaunchLogger("valid", epoch=epoch) as log:
-            error = validation_step(graph_infer, validation_dataloader, epoch)
+            error = validation_step(model, validation_dataloader, epoch)
             log.log_epoch({"Validation error": error})
 
         save_checkpoint(

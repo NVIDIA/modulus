@@ -14,32 +14,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-from dgl.dataloading import GraphDataLoader
-from torch.cuda.amp import autocast, GradScaler
-from torch.nn.parallel import DistributedDataParallel
-import time, os
-import wandb
+import os
+import time
 
 import hydra
+import torch
+import wandb
+from dgl.dataloading import GraphDataLoader
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
+from torch.cuda.amp import GradScaler, autocast
+from torch.nn.parallel import DistributedDataParallel
 
 try:
     import apex
 except:
     pass
 
-from modulus.models.meshgraphnet import MeshGraphNet
-from modulus.datapipes.gnn.stokes_dataset import StokesDataset
-from modulus.distributed.manager import DistributedManager
-
-from modulus.launch.logging import (
+from physicsnemo.datapipes.gnn.stokes_dataset import StokesDataset
+from physicsnemo.distributed.manager import DistributedManager
+from physicsnemo.launch.logging import (
     PythonLogger,
-    initialize_wandb,
     RankZeroLoggingWrapper,
 )
-from modulus.launch.utils import load_checkpoint, save_checkpoint
+from physicsnemo.launch.logging.wandb import initialize_wandb
+from physicsnemo.launch.utils import load_checkpoint, save_checkpoint
+from physicsnemo.models.meshgraphnet import MeshGraphNet
+
 from utils import relative_lp_error
 
 
@@ -205,8 +206,8 @@ def main(cfg: DictConfig) -> None:
 
     # initialize loggers
     initialize_wandb(
-        project="Modulus-Launch",
-        entity="Modulus",
+        project="PhysicsNeMo-Launch",
+        entity="PhysicsNeMo",
         name="Stokes-Training",
         group="Stokes-DDP-Group",
         mode=cfg.wandb_mode,

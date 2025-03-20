@@ -18,14 +18,16 @@ from functools import partial
 
 import pytest
 import torch
-
-from modulus.models.diffusion import EDMPrecondSRV2, UNet
-from modulus.utils.corrdiff import diffusion_step, regression_step
-from modulus.utils.generative import deterministic_sampler, stochastic_sampler
+from pytest_utils import import_or_fail
 
 
+@import_or_fail("cftime")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_regression_step(device):
+def test_regression_step(device, pytestconfig):
+
+    from physicsnemo.models.diffusion import UNet
+    from physicsnemo.utils.corrdiff import regression_step
+
     # define the net
     mock_unet = UNet(
         img_channels=2,
@@ -47,13 +49,21 @@ def test_regression_step(device):
     assert output.shape == (2, 2, 16, 16), "Output shape mismatch"
 
 
+@import_or_fail("cftime")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_diffusion_step(device):
+def test_diffusion_step(device, pytestconfig):
+
+    from physicsnemo.models.diffusion import EDMPrecondSR
+    from physicsnemo.utils.corrdiff import diffusion_step
+    from physicsnemo.utils.generative import deterministic_sampler, stochastic_sampler
+
     # Define the preconditioner
-    mock_precond = EDMPrecondSRV2(
+    mock_precond = EDMPrecondSR(
         img_resolution=[16, 16],
         img_in_channels=8,
         img_out_channels=2,
+        img_channels=0,
+        scale_cond_input=False,
     ).to(device)
 
     # Define the input parameters
@@ -70,7 +80,7 @@ def test_diffusion_step(device):
         net=mock_precond,
         sampler_fn=sampler_fn,
         seed_batch_size=1,
-        img_shape=[16, 16],
+        img_shape=(16, 16),
         img_out_channels=2,
         rank_batches=[[0]],
         img_lr=img_lr,
@@ -92,7 +102,7 @@ def test_diffusion_step(device):
         net=mock_precond,
         sampler_fn=sampler_fn,
         seed_batch_size=1,
-        img_shape=[16, 16],
+        img_shape=(16, 16),
         img_out_channels=2,
         rank_batches=[[0]],
         img_lr=img_lr,

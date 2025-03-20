@@ -29,6 +29,8 @@ from torch.nn.parallel import DistributedDataParallel
 import torch.optim as torch_optimizers
 from tqdm import tqdm
 
+from utils import get_filesystem
+
 # Add eval to OmegaConf TODO: Remove when OmegaConf is updated
 OmegaConf.register_new_resolver("eval", eval)
 
@@ -40,16 +42,16 @@ except:
         + "See https://github.com/nvidia/apex for install details."
     )
 
-from modulus import Module
-from modulus.distributed import DistributedManager
-from modulus.launch.logging import (
+from physicsnemo import Module
+from physicsnemo.distributed import DistributedManager
+from physicsnemo.launch.logging import (
     LaunchLogger,
     PythonLogger,
     RankZeroLoggingWrapper,
 )
-from modulus.launch.logging.mlflow import initialize_mlflow
-from modulus.launch.utils import load_checkpoint, save_checkpoint
-from modulus.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
+from physicsnemo.launch.logging.mlflow import initialize_mlflow
+from physicsnemo.launch.utils import load_checkpoint, save_checkpoint
+from physicsnemo.utils import StaticCaptureEvaluateNoGrad, StaticCaptureTraining
 
 from seq_zarr_datapipe import SeqZarrDatapipe
 from model_packages import save_inference_model_package
@@ -87,10 +89,10 @@ def main(cfg: DictConfig) -> None:
         experiment_desc=cfg.experiment_desc,
         run_name=f"{cfg.model.name}-trainng",
         run_desc=cfg.experiment_desc,
-        user_name="Modulus User",
+        user_name="PhysicsNeMo User",
         mode="offline",
     )
-    LaunchLogger.initialize(use_mlflow=True)  # Modulus launch logger
+    LaunchLogger.initialize(use_mlflow=True)  # PhysicsNeMo launch logger
     logger = PythonLogger("main")  # General python logger
 
     # Initialize model
@@ -153,7 +155,12 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Initialize filesytem (TODO: Add multiple filesystem support)
-    fs = fsspec.filesystem("file")
+    fs = get_filesystem(
+        cfg.filesystem.type,
+        cfg.filesystem.key,
+        cfg.filesystem.endpoint_url,
+        cfg.filesystem.region_name,
+    )
 
     # Get filesystem mapper for datasets
     train_dataset_mapper = fs.get_mapper(cfg.curated_dataset.train_dataset_filename)
@@ -161,7 +168,7 @@ def main(cfg: DictConfig) -> None:
 
     # Initialize validation datapipe
     val_datapipe = SeqZarrDatapipe(
-        zarr_dataset=zarr.open(val_dataset_mapper, mode="r"),
+        file_mapping=val_dataset_mapper,
         variables=["time", "predicted", "unpredicted"],
         batch_size=cfg.validation.batch_size,
         num_steps=cfg.validation.num_steps + cfg.training.nr_input_steps,
@@ -169,6 +176,12 @@ def main(cfg: DictConfig) -> None:
         device=dist.device,
         process_rank=dist.rank,
         world_size=dist.world_size,
+        batch=cfg.datapipe.batch,
+        parallel=cfg.datapipe.parallel,
+        num_threads=cfg.datapipe.num_threads,
+        prefetch_queue_depth=cfg.datapipe.prefetch_queue_depth,
+        py_num_workers=cfg.datapipe.py_num_workers,
+        py_start_method=cfg.datapipe.py_start_method,
     )
 
     # Unroll network
@@ -256,7 +269,7 @@ def main(cfg: DictConfig) -> None:
 
         # Create new datapipe
         train_datapipe = SeqZarrDatapipe(
-            zarr_dataset=zarr.open(train_dataset_mapper, mode="r"),
+            file_mapping=train_dataset_mapper,
             variables=["time", "predicted", "unpredicted"],
             batch_size=stage.batch_size,
             num_steps=stage.unroll_steps + cfg.training.nr_input_steps,
@@ -264,6 +277,12 @@ def main(cfg: DictConfig) -> None:
             device=dist.device,
             process_rank=dist.rank,
             world_size=dist.world_size,
+            batch=cfg.datapipe.batch,
+            parallel=cfg.datapipe.parallel,
+            num_threads=cfg.datapipe.num_threads,
+            prefetch_queue_depth=cfg.datapipe.prefetch_queue_depth,
+            py_num_workers=cfg.datapipe.py_num_workers,
+            py_start_method=cfg.datapipe.py_start_method,
         )
 
         # Initialize scheduler
@@ -419,7 +438,7 @@ def main(cfg: DictConfig) -> None:
 
             # Save checkpoint
             if (epoch % 5 == 0 or epoch == 1) and dist.rank == 0:
-                # Use Modulus Launch checkpoint
+                # Use PhysicsNeMo Launch checkpoint
                 save_checkpoint(
                     "./checkpoints",
                     models=[model, predicted_batch_norm, unpredicted_batch_norm],

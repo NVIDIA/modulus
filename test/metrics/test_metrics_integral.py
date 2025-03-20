@@ -16,10 +16,11 @@
 
 import numpy as np
 import pytest
-import pyvista as pv
 from pytest_utils import import_or_fail
 
-from modulus.metrics.cae.integral import line_integral, surface_integral
+from physicsnemo.metrics.cae.integral import line_integral, surface_integral
+
+pv = pytest.importorskip("pyvista")
 
 
 @pytest.fixture

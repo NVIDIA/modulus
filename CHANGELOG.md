@@ -6,7 +6,94 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0a0] - 2024-09-XX
+## [1.1.0a0] - 2025-05-XX
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+### Dependencies
+
+## [1.0.0] - 2025-03-18
+
+### Added
+
+- DoMINO model architecture, datapipe and training recipe
+- Added matrix decomposition scheme to improve graph partitioning
+- DrivAerML dataset support in FIGConvNet example.
+- Retraining recipe for DoMINO from a pretrained model checkpoint
+- Prototype support for domain parallelism of using ShardTensor (new).
+- Enable DeviceMesh initialization via DistributedManager.
+- Added Datacenter CFD use case.
+- Add leave-in profiling utilities to physicsnemo, to easily enable torch/python/nsight
+  profiling in all aspects of the codebase.
+
+### Changed
+
+- Refactored StormCast training example
+- Enhancements and bug fixes to DoMINO model and training example
+- Enhancement to parameterize DoMINO model with inlet velocity
+- Moved non-dimensionaliztion out of domino datapipe to datapipe in domino example
+- Updated utils in `physicsnemo.launch.logging` to avoid unnecessary `wandb` and `mlflow`
+  imports
+- Moved to experiment-based Hydra config in Lagrangian-MGN example
+- Make data caching optional in `MeshDatapipe`
+- The use of older `importlib_metadata` library is removed
+
+### Deprecated
+
+- ProcessGroupConfig is tagged for future deprecation in favor of DeviceMesh.
+
+### Fixed
+
+- Update pytests to skip when the required dependencies are not present
+- Bug in data processing script in domino training example
+- Fixed NCCL_ASYNC_ERROR_HANDLING deprecation warning
+
+### Dependencies
+
+- Remove the numpy dependency upper bound
+- Moved pytz and nvtx to optional
+- Update the base image for the Dockerfile
+- Introduce Multi-Storage Client (MSC) as an optional dependency.
+- Introduce `wrapt` as an optional dependency, needed when using
+  ShardTensor's automatic domain parallelism
+
+## [0.9.0] - 2024-12-04
+
+### Added
+
+- Graph Transformer processor for GraphCast/GenCast.
+- Utility to generate STL from Signed Distance Field.
+- Metrics for CAE and CFD domain such as integrals, drag, and turbulence invariances and
+  spectrum.
+- Added gradient clipping to StaticCapture utilities.
+- Bistride Multiscale MeshGraphNet example.
+- FIGConvUNet model and example.
+- The Transolver model.
+- The XAeroNet model.
+- Incoporated CorrDiff-GEFS-HRRR model into CorrDiff, with lead-time aware SongUNet and
+  cross entropy loss.
+- Option to offload checkpoints to further reduce memory usage
+- Added StormCast model training and simple inference to examples
+
+### Changed
+
+- Refactored CorrDiff training recipe for improved usability
+- Fixed timezone calculation in datapipe cosine zenith utility.
+- Refactored EDMPrecondSRV2 preconditioner and fixed the bug related to the metadata
+- Extended the checkpointing utility to store metadata.
+- Corrected missing export of loggin function used by transolver model
+
+## [0.8.0] - 2024-09-24
 
 ### Added
 
@@ -21,16 +108,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Refactored CorrDiff training recipe for improved usability
 - Fixed timezone calculation in datapipe cosine zenith utility.
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
-
-### Dependencies
 
 ## [0.7.0] - 2024-07-23
 
@@ -60,8 +137,8 @@ Shallow-Water-Equation example.
 
 ### Changed
 
-- Raise `ModulusUndefinedGroupError` when querying undefined process groups
-- Changed Indexing error in `examples/cfd/swe_nonlinear_pino` for `modulus` loss function
+- Raise `PhysicsNeMoUndefinedGroupError` when querying undefined process groups
+- Changed Indexing error in `examples/cfd/swe_nonlinear_pino` for `physicsnemo` loss function
 - Safeguarding against uninitialized usage of `DistributedManager`
 
 ### Removed
@@ -90,7 +167,7 @@ intended for distributed message-passing.
 - Performance optimizations to CorrDiff.
 - Physics-Informed Nonlinear Shallow Water Equations example.
 - Warp neighbor search routine with a minimal example.
-- Strict option for loading Modulus checkpoints.
+- Strict option for loading PhysicsNeMo checkpoints.
 - Regression only or diffusion only inference for CorrDiff.
 - Support for organization level model files on NGC file system
 - Physics-Informed Magnetohydrodynamics example.
@@ -103,7 +180,7 @@ intended for distributed message-passing.
 
 ### Deprecated
 
-- `modulus.models.diffusion.preconditioning.EDMPrecondSR`. Use `EDMPecondSRV2` instead.
+- `physicsnemo.models.diffusion.preconditioning.EDMPrecondSR`. Use `EDMPecondSRV2` instead.
 
 ### Removed
 
@@ -161,7 +238,7 @@ intended for distributed message-passing.
 weather models
 - Added distributed FFT utility.
 - Added ruff as a linting tool.
-- Ported utilities from Modulus Launch to main package.
+- Ported utilities from PhysicsNeMo Launch to main package.
 - EDM diffusion models and recipes for training and sampling.
 - NGC model registry download integration into package/filesystem.
 - Denoising diffusion tutorial.
@@ -169,12 +246,12 @@ weather models
 ### Changed
 
 - The AFNO input argument `img_size` to `inp_shape`
-- Integrated the network architecture layers from Modulus-Sym.
+- Integrated the network architecture layers from PhysicsNeMo-Sym.
 - Updated the SFNO model, and the training and inference recipes.
 
 ### Fixed
 
-- Fixed modulus.Module `from_checkpoint` to work from custom model classes
+- Fixed physicsnemo.Module `from_checkpoint` to work from custom model classes
 
 ### Dependencies
 
@@ -197,11 +274,11 @@ weather models
 
 ### Changed
 
-- Updating file system cache location to modulus folder
+- Updating file system cache location to physicsnemo folder
 
 ### Fixed
 
-- Fixed modulus uninstall in CI docker image
+- Fixed physicsnemo uninstall in CI docker image
 
 ### Security
 
@@ -242,7 +319,7 @@ weather models
 ### Fixed
 
 - Fixed issue with torch-harmonics version locking
-- Fixed the Modulus editable install
+- Fixed the PhysicsNeMo editable install
 - Fixed AMP bug in static capture
 
 ### Security

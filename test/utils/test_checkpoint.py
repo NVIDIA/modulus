@@ -22,8 +22,8 @@ import torch
 import torch.nn as nn
 from pytest_utils import import_or_fail
 
-from modulus.distributed import DistributedManager
-from modulus.models.mlp import FullyConnected
+from physicsnemo.distributed import DistributedManager
+from physicsnemo.models.mlp import FullyConnected
 
 
 @pytest.fixture()
@@ -31,10 +31,10 @@ def checkpoint_folder() -> str:
     return "./checkpoints"
 
 
-@pytest.fixture(params=["modulus", "pytorch"])
+@pytest.fixture(params=["physicsnemo", "pytorch"])
 def model_generator(request) -> Callable:
     # Create fully-connected NN generator function
-    if request.param == "modulus":
+    if request.param == "physicsnemo":
 
         def model(x):
             return FullyConnected(
@@ -68,7 +68,7 @@ def test_model_checkpointing(
 ):
     """Test checkpointing util for model"""
 
-    from modulus.launch.utils import load_checkpoint, save_checkpoint
+    from physicsnemo.launch.utils import load_checkpoint, save_checkpoint
 
     # Initialize DistributedManager first since save_checkpoint instantiates it
     DistributedManager.initialize()
@@ -82,7 +82,11 @@ def test_model_checkpointing(
     output_1 = mlp_model_1(input_1)
     output_2 = mlp_model_2(input_2)
     # Save model weights to checkpoint
-    save_checkpoint(checkpoint_folder, models=[mlp_model_1, mlp_model_2])
+    save_checkpoint(
+        checkpoint_folder,
+        models=[mlp_model_1, mlp_model_2],
+        metadata={"model_type": "MLP"},
+    )
 
     # Load twin set of models for importing weights
     mlp_model_1 = model_generator(8).to(device)
@@ -102,6 +106,18 @@ def test_model_checkpointing(
 
     assert torch.allclose(output_1, new_output_1, rtol, atol)
     assert torch.allclose(output_2, new_output_2, rtol, atol)
+
+    # Also load the model with metadata
+    metadata_dict = {}
+    epoch = load_checkpoint(
+        checkpoint_folder,
+        models=[mlp_model_1, mlp_model_2],
+        metadata_dict=metadata_dict,
+        device=device,
+    )
+
+    assert epoch == 0
+    assert metadata_dict["model_type"] == "MLP"
 
     # Clean up
     shutil.rmtree(checkpoint_folder)

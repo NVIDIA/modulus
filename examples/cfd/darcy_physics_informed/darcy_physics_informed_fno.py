@@ -15,23 +15,20 @@
 # limitations under the License.
 
 import hydra
-from omegaconf import DictConfig
-import torch
-import numpy as np
-
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn.functional as F
 from hydra.utils import to_absolute_path
-import torch.nn.functional as F
+from physicsnemo.launch.logging import LaunchLogger
+from physicsnemo.launch.utils.checkpoint import save_checkpoint
+from physicsnemo.models.fno import FNO
+from physicsnemo.sym.eq.pdes.diffusion import Diffusion
+from physicsnemo.sym.eq.phy_informer import PhysicsInformer
+from omegaconf import DictConfig
 from torch.utils.data import DataLoader
-import torch.nn.functional as F
-
-from modulus.models.fno import FNO
-from modulus.launch.logging import LaunchLogger
-from modulus.launch.utils.checkpoint import save_checkpoint
-from modulus.sym.eq.pdes.diffusion import Diffusion
 
 from utils import HDF5MapStyleDataset
-from ops import dx, ddx
 
 
 def validation_step(model, dataloader, epoch):
@@ -53,14 +50,14 @@ def validation_step(model, dataloader, epoch):
         # plotting
         fig, ax = plt.subplots(1, 3, figsize=(25, 5))
 
-        d_min = np.min(outvar[0, 0, ...])
-        d_max = np.max(outvar[0, 0, ...])
+        d_min = np.min(outvar[0, 0])
+        d_max = np.max(outvar[0, 0])
 
-        im = ax[0].imshow(outvar[0, 0, ...], vmin=d_min, vmax=d_max)
+        im = ax[0].imshow(outvar[0, 0], vmin=d_min, vmax=d_max)
         plt.colorbar(im, ax=ax[0])
-        im = ax[1].imshow(predvar[0, 0, ...], vmin=d_min, vmax=d_max)
+        im = ax[1].imshow(predvar[0, 0], vmin=d_min, vmax=d_max)
         plt.colorbar(im, ax=ax[1])
-        im = ax[2].imshow(np.abs(predvar[0, 0, ...] - outvar[0, 0, ...]))
+        im = ax[2].imshow(np.abs(predvar[0, 0] - outvar[0, 0]))
         plt.colorbar(im, ax=ax[2])
 
         ax[0].set_title("True")
@@ -84,8 +81,8 @@ def main(cfg: DictConfig):
     LaunchLogger.initialize()
 
     # Use Diffusion equation for the Darcy PDE
-    darcy = Diffusion(T="u", time=False, dim=2, D="k", Q=1.0 * 4.49996e00 * 3.88433e-03)
-    darcy_node = darcy.make_nodes()
+    forcing_fn = 1.0 * 4.49996e00 * 3.88433e-03  # after scaling
+    darcy = Diffusion(T="u", time=False, dim=2, D="k", Q=forcing_fn)
 
     dataset = HDF5MapStyleDataset(
         to_absolute_path("./datasets/Darcy_241/train.hdf5"), device=device
@@ -109,6 +106,14 @@ def main(cfg: DictConfig):
         num_fno_modes=cfg.model.fno.num_fno_modes,
         padding=cfg.model.fno.padding,
     ).to(device)
+
+    phy_informer = PhysicsInformer(
+        required_outputs=["diffusion_u"],
+        equations=darcy,
+        grad_method="finite_difference",
+        device=device,
+        fd_dx=1 / 240,  # Unit square with resoultion as 240
+    )
 
     optimizer = torch.optim.Adam(
         model.parameters(),
@@ -135,37 +140,15 @@ def main(cfg: DictConfig):
                 # Compute forward pass
                 out = model(invar[:, 0].unsqueeze(dim=1))
 
-                dxf = 1.0 / out.shape[-2]
-                dyf = 1.0 / out.shape[-1]
-
-                # Compute gradients using finite difference
-                sol_x = dx(out, dx=dxf, channel=0, dim=1, order=1, padding="zeros")
-                sol_y = dx(out, dx=dyf, channel=0, dim=0, order=1, padding="zeros")
-                sol_x_x = ddx(out, dx=dxf, channel=0, dim=1, order=1, padding="zeros")
-                sol_y_y = ddx(out, dx=dyf, channel=0, dim=0, order=1, padding="zeros")
-
-                k_x = dx(invar, dx=dxf, channel=0, dim=1, order=1, padding="zeros")
-                k_y = dx(invar, dx=dxf, channel=0, dim=0, order=1, padding="zeros")
-
-                k, _, _ = (
-                    invar[:, 0],
-                    invar[:, 1],
-                    invar[:, 2],
-                )
-
-                pde_out = darcy_node[0].evaluate(
+                # print(out.shape, invar[:,0:1].shape)
+                residuals = phy_informer.forward(
                     {
-                        "u__x": sol_x,
-                        "u__y": sol_y,
-                        "u__x__x": sol_x_x,
-                        "u__y__y": sol_y_y,
-                        "k": k,
-                        "k__x": k_x,
-                        "k__y": k_y,
+                        "u": out,
+                        "k": invar[:, 0:1],
                     }
                 )
+                pde_out_arr = residuals["diffusion_u"]
 
-                pde_out_arr = pde_out["diffusion_u"]
                 pde_out_arr = F.pad(
                     pde_out_arr[:, :, 2:-2, 2:-2], [2, 2, 2, 2], "constant", 0
                 )
@@ -175,7 +158,7 @@ def main(cfg: DictConfig):
                 loss_data = F.mse_loss(outvar, out)
 
                 # Compute total loss
-                loss = loss_data + 1 / 240 * cfg.phy_wt * loss_pde
+                loss = loss_data + 1 / 240 * cfg.physics_weight * loss_pde
 
                 # Backward pass and optimizer and learning rate update
                 loss.backward()

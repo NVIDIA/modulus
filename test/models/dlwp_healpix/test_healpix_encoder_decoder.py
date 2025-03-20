@@ -23,20 +23,19 @@ sys.path.append(os.path.join(os.path.dirname(script_path), ".."))
 import common
 import pytest
 import torch
-
-from modulus.models.dlwp_healpix_layers import (
-    BasicConvBlock,  # for the output layer
-    ConvGRUBlock,  # for the recurrent layer
-    ConvNeXtBlock,  # for convolutional layer
-    MaxPool,  # for downsampling
-    TransposedConvUpsample,  # for upsampling
-    UNetDecoder,
-    UNetEncoder,
-)
+from pytest_utils import import_or_fail
 
 
+@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_UNetEncoder_initialize(device):
+def test_UNetEncoder_initialize(device, pytestconfig):
+
+    from physicsnemo.models.dlwp_healpix_layers import (
+        ConvNeXtBlock,  # for convolutional layer
+        MaxPool,  # for downsampling
+        UNetEncoder,
+    )
+
     channels = 2
     n_channels = (16, 32, 64)
 
@@ -72,8 +71,16 @@ def test_UNetEncoder_initialize(device):
     torch.cuda.empty_cache()
 
 
+@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_UNetEncoder_forward(device):
+def test_UNetEncoder_forward(device, pytestconfig):
+
+    from physicsnemo.models.dlwp_healpix_layers import (
+        ConvNeXtBlock,  # for convolutional layer
+        MaxPool,  # for downsampling
+        UNetEncoder,
+    )
+
     channels = 2
     hw_size = 16
     b_size = 12
@@ -114,8 +121,16 @@ def test_UNetEncoder_forward(device):
     torch.cuda.empty_cache()
 
 
+@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_UNetEncoder_reset(device):
+def test_UNetEncoder_reset(device, pytestconfig):
+
+    from physicsnemo.models.dlwp_healpix_layers import (
+        ConvNeXtBlock,  # for convolutional layer
+        MaxPool,  # for downsampling
+        UNetEncoder,
+    )
+
     channels = 2
     n_channels = (16, 32, 64)
 
@@ -144,8 +159,18 @@ def test_UNetEncoder_reset(device):
     torch.cuda.empty_cache()
 
 
+@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_UNetDecoder_initilization(device):
+def test_UNetDecoder_initilization(device, pytestconfig):
+
+    from physicsnemo.models.dlwp_healpix_layers import (
+        BasicConvBlock,  # for the output layer
+        ConvGRUBlock,  # for the recurrent layer
+        ConvNeXtBlock,  # for convolutional layer
+        TransposedConvUpsample,  # for upsampling
+        UNetDecoder,
+    )
+
     in_channels = 2
     out_channels = 1
     n_channels = (64, 32, 16)
@@ -203,8 +228,18 @@ def test_UNetDecoder_initilization(device):
     torch.cuda.empty_cache()
 
 
+@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_UNetDecoder_forward(device):
+def test_UNetDecoder_forward(device, pytestconfig):
+
+    from physicsnemo.models.dlwp_healpix_layers import (
+        BasicConvBlock,  # for the output layer
+        ConvGRUBlock,  # for the recurrent layer
+        ConvNeXtBlock,  # for convolutional layer
+        TransposedConvUpsample,  # for upsampling
+        UNetDecoder,
+    )
+
     in_channels = 2
     out_channels = 1
     hw_size = 32
@@ -281,8 +316,18 @@ def test_UNetDecoder_forward(device):
     torch.cuda.empty_cache()
 
 
+@import_or_fail("hydra")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_UNetDecoder_reset(device):
+def test_UNetDecoder_reset(device, pytestconfig):
+
+    from physicsnemo.models.dlwp_healpix_layers import (
+        BasicConvBlock,  # for the output layer
+        ConvGRUBlock,  # for the recurrent layer
+        ConvNeXtBlock,  # for convolutional layer
+        TransposedConvUpsample,  # for upsampling
+        UNetDecoder,
+    )
+
     in_channels = 2
     out_channels = 1
     hw_size = 32

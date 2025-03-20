@@ -24,19 +24,21 @@ import common
 import pytest
 import torch
 from graphcast.utils import fix_random_seeds
-from omegaconf import DictConfig
+from pytest_utils import import_or_fail
 
-from modulus.models.dlwp_healpix import HEALPixUNet
+from physicsnemo.models.dlwp_healpix import HEALPixUNet
+
+omegaconf = pytest.importorskip("omegaconf")
 
 
 @pytest.fixture
 def conv_next_block_dict(in_channels=3, out_channels=1):
     activation_block = {
-        "_target_": "modulus.models.layers.activations.CappedGELU",
+        "_target_": "physicsnemo.models.layers.activations.CappedGELU",
         "cap_value": 10,
     }
     conv_block = {
-        "_target_": "modulus.models.dlwp_healpix_layers.ConvNeXtBlock",
+        "_target_": "physicsnemo.models.dlwp_healpix_layers.ConvNeXtBlock",
         "in_channels": in_channels,
         "out_channels": out_channels,
         "activation": activation_block,
@@ -51,7 +53,7 @@ def conv_next_block_dict(in_channels=3, out_channels=1):
 @pytest.fixture
 def down_sampling_block_dict():
     down_sampling_block = {
-        "_target_": "modulus.models.dlwp_healpix_layers.AvgPool",
+        "_target_": "physicsnemo.models.dlwp_healpix_layers.AvgPool",
         "pooling": 2,
     }
     return down_sampling_block
@@ -61,30 +63,30 @@ def down_sampling_block_dict():
 def up_sampling_block_dict(in_channels=3, out_channels=1):
     """Upsampling dict fixture."""
     activation_block = {
-        "_target_": "modulus.models.layers.activations.CappedGELU",
+        "_target_": "physicsnemo.models.layers.activations.CappedGELU",
         "cap_value": 10,
     }
     up_sampling_block = {
-        "_target_": "modulus.models.dlwp_healpix_layers.TransposedConvUpsample",
+        "_target_": "physicsnemo.models.dlwp_healpix_layers.TransposedConvUpsample",
         "in_channels": in_channels,
         "out_channels": out_channels,
         "activation": activation_block,
         "upsampling": 2,
     }
-    return DictConfig(up_sampling_block)
+    return omegaconf.DictConfig(up_sampling_block)
 
 
 @pytest.fixture
 def output_layer_dict(in_channels=3, out_channels=2):
     output_layer = {
-        "_target_": "modulus.models.dlwp_healpix_layers.BasicConvBlock",
+        "_target_": "physicsnemo.models.dlwp_healpix_layers.BasicConvBlock",
         "in_channels": in_channels,
         "out_channels": out_channels,
         "kernel_size": 1,
         "dilation": 1,
         "n_layers": 1,
     }
-    return DictConfig(output_layer)
+    return omegaconf.DictConfig(output_layer)
 
 
 @pytest.fixture
@@ -126,7 +128,7 @@ def insolation_data():
 def unet_encoder_dict(conv_next_block_dict, down_sampling_block_dict):
     """Encoder dict fixture."""
     encoder = {
-        "_target_": "modulus.models.dlwp_healpix_layers.UNetEncoder",
+        "_target_": "physicsnemo.models.dlwp_healpix_layers.UNetEncoder",
         "conv_block": conv_next_block_dict,
         "down_sampling_block": down_sampling_block_dict,
         "_recursive_": False,
@@ -144,7 +146,7 @@ def unet_decoder_dict(
 ):
     """Decoder dict fixture."""
     decoder = {
-        "_target_": "modulus.models.dlwp_healpix_layers.UNetDecoder",
+        "_target_": "physicsnemo.models.dlwp_healpix_layers.UNetDecoder",
         "conv_block": conv_next_block_dict,
         "up_sampling_block": up_sampling_block_dict,
         "output_layer": output_layer_dict,
@@ -152,11 +154,14 @@ def unet_decoder_dict(
         "n_channels": [34, 68, 136],
         "dilations": [4, 2, 1],
     }
-    return DictConfig(decoder)
+    return omegaconf.DictConfig(decoder)
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixUNet_initialize(device, unet_encoder_dict, unet_decoder_dict):
+def test_HEALPixUNet_initialize(
+    device, unet_encoder_dict, unet_decoder_dict, pytestconfig
+):
     in_channels = 7
     out_channels = 7
     n_constants = 1
@@ -191,7 +196,7 @@ def test_HEALPixUNet_initialize(device, unet_encoder_dict, unet_decoder_dict):
             output_time_dim=3,
         ).to(device)
 
-    # test fail case for couplings with no constants or decoder input channels
+    # test fail case for couplings with no constants
     with pytest.raises(
         NotImplementedError,
         match=("support for coupled models with no constant field"),
@@ -208,8 +213,10 @@ def test_HEALPixUNet_initialize(device, unet_encoder_dict, unet_decoder_dict):
             couplings=["t2m", "v10m"],
         ).to(device)
 
+    # test fail case for couplings with no decoder input channels
     with pytest.raises(
-        NotImplementedError, match=("support for coupled models with no decoder")
+        NotImplementedError,
+        match=("support for coupled models with no decoder inputs"),
     ):
         model = HEALPixUNet(
             encoder=unet_encoder_dict,
@@ -223,27 +230,15 @@ def test_HEALPixUNet_initialize(device, unet_encoder_dict, unet_decoder_dict):
             couplings=["t2m", "v10m"],
         ).to(device)
 
-    with pytest.raises(
-        NotImplementedError,
-        match=("support for models with no constant fields and no decoder"),
-    ):
-        model = HEALPixUNet(
-            encoder=unet_encoder_dict,
-            decoder=unet_decoder_dict,
-            input_channels=in_channels,
-            output_channels=out_channels,
-            input_time_dim=2,
-            output_time_dim=3,
-            decoder_input_channels=0,
-            n_constants=0,
-        ).to(device)
-
     del model
     torch.cuda.empty_cache()
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
-def test_HEALPixUNet_integration_steps(device, unet_encoder_dict, unet_decoder_dict):
+def test_HEALPixUNet_integration_steps(
+    device, unet_encoder_dict, unet_decoder_dict, pytestconfig
+):
     in_channels = 2
     out_channels = 2
     n_constants = 1
@@ -267,6 +262,7 @@ def test_HEALPixUNet_integration_steps(device, unet_encoder_dict, unet_decoder_d
     torch.cuda.empty_cache()
 
 
+@import_or_fail("omegaconf")
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_HEALPixUNet_forward(
     device,
@@ -275,6 +271,7 @@ def test_HEALPixUNet_forward(
     test_data,
     insolation_data,
     constant_data,
+    pytestconfig,
 ):
     # create a smaller version of the dlwp healpix model
     in_channels = 3
@@ -362,6 +359,30 @@ def test_HEALPixUNet_forward(
         model,
         (inputs,),
         file_name="dlwp_healpix_unet_decoder.pth",
+        rtol=1e-2,
+    )
+
+    # no constants and no decoder inputs
+    inputs = [x, decoder_inputs]
+    model = HEALPixUNet(
+        encoder=unet_encoder_dict,
+        decoder=unet_decoder_dict,
+        input_channels=in_channels,
+        output_channels=out_channels,
+        n_constants=0,
+        decoder_input_channels=0,
+        input_time_dim=input_time_dim,
+        output_time_dim=output_time_dim,
+        enable_healpixpad=True,
+    ).to(device)
+
+    # one forward step to initialize recurrent states
+    model(inputs)
+
+    assert common.validate_forward_accuracy(
+        model,
+        (inputs,),
+        file_name="dlwp_healpix_unet_no_decoder_no_const.pth",
         rtol=1e-2,
     )
 

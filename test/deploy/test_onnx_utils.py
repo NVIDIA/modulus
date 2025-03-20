@@ -27,39 +27,20 @@ except ImportError:
 
 from pathlib import Path
 
-from modulus.deploy.onnx import export_to_onnx_stream, run_onnx_inference
-from modulus.models.mlp import FullyConnected
+from ort_utils import check_ort_version
+
+from physicsnemo.deploy.onnx import export_to_onnx_stream, run_onnx_inference
+from physicsnemo.models.mlp import FullyConnected
 
 Tensor = torch.Tensor
 logger = logging.getLogger("__name__")
 
 
-# TODO(akamenev): remove once the bug below is fixed.
-# Version "1.14.0" is the custom local build where the bug is fixed.
-def check_ort_version():
-    if ort is None:
-        return pytest.mark.skipif(
-            True,
-            reason="Proper ONNX runtime is not installed. 'pip install onnxruntime onnxruntime_gpu'",
-        )
-    elif ort.__version__ != "1.18.0":
-        return pytest.mark.skipif(
-            True,
-            reason="Must install ORT 1.18.0. Other versions might work, but are not \
-        tested. If using other versions, ensure that the fix here \
-        https://github.com/microsoft/onnxruntime/pull/15662 is present. \
-        If the onnxruntime-gpu wheel is not available, please build from source. \
-        For 1.18.0, one can use https://github.com/microsoft/onnxruntime/commit/4ea54b82f9debd70e46ea0a789e7aafe05d5b983",
-        )
-    else:
-        return pytest.mark.skipif(False, reason="")
-
-
-@pytest.fixture(params=["modulus", "pytorch"])
+@pytest.fixture(params=["physicsnemo", "pytorch"])
 def model(request) -> str:
     # Create fully-connected NN to test exporting
-    if request.param == "modulus":
-        # Modulus version with meta data
+    if request.param == "physicsnemo":
+        # PhysicsNeMo version with meta data
         model = FullyConnected(
             in_features=32,
             out_features=8,
@@ -79,7 +60,7 @@ def model(request) -> str:
 @check_ort_version()
 @pytest.mark.parametrize("device", ["cuda:0", "cpu"])
 def test_onnx_bytestream(device, model, rtol: float = 1e-3, atol: float = 1e-3):
-    """Test Modulus' export onnx stream function is consistent with file saving"""
+    """Test PhysicsNeMo' export onnx stream function is consistent with file saving"""
 
     model = model.to(device)
     bsize = 8
@@ -101,7 +82,7 @@ def test_onnx_bytestream(device, model, rtol: float = 1e-3, atol: float = 1e-3):
     outvar_ort_file = run_onnx_inference(onnx_name, invar, device=device)
     assert len(outvar_ort_file) == 1
     outvar_ort_file = torch.Tensor(outvar_ort_file[0]).to(device)
-    # Run ONNX using built in stream util in Modulus
+    # Run ONNX using built in stream util in PhysicsNeMo
     onnx_stream = export_to_onnx_stream(model, invar, verbose=False)
     outvar_ort = run_onnx_inference(onnx_stream, invar, device=device)
     assert len(outvar_ort) == 1

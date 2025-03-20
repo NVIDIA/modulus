@@ -1,0 +1,70 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Main dataset
+location: 'data' # Path to the dataset
+conus_dataset_name: 'hrrr_v3' # Version name for the dataset
+hrrr_stats: 'stats_v3_2019_2021' # Summary stats name for the dataset
+
+# Domain
+hrrr_img_size: [512, 640] # Image dimensions of the HRRR region of interest
+boundary_padding_pixels: 0 # set this to 0 for no padding of ERA5 beyond HRRR domain,
+                           # 32 for 32 pixels of padding in each direction, etc.
+
+# Temporal selection
+dt: 1 # Timestep between samples (in multiples of the base HRRR 1hr timestep)
+train_years: [2018, 2019, 2020, 2021] # Years to use for training
+valid_years: [2022] # Years to use for validation
+
+# Variable selection
+invariants: ["lsm", "orog"] # Invariant quantitites to include
+input_channels: 'all' #'all' or list of channels to condition on
+diffusion_channels: "all" #'all' or list of channels to condition on
+exclude_channels: # Dataset channels to exclude from inputs/predicitons
+  - u35
+  - u40
+  - v35
+  - v40
+  - t35
+  - t40
+  - q35
+  - q40
+  - w1
+  - w2
+  - w3
+  - w4
+  - w5
+  - w6
+  - w7
+  - w8
+  - w9
+  - w10
+  - w11
+  - w13
+  - w15
+  - w20
+  - w25
+  - w30
+  - w35
+  - w40
+  - p25
+  - p30
+  - p35
+  - p40
+  - z35
+  - z40
+  - tcwv
+  - vil

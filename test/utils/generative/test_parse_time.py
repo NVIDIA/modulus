@@ -20,8 +20,6 @@ import pytest
 import yaml
 from pytest_utils import import_or_fail
 
-from modulus.utils.generative import convert_datetime_to_cftime
-
 cftime = pytest.importorskip("cftime")
 
 # ruff: noqa: S101  # TODo remove exception
@@ -38,6 +36,9 @@ def test_datetime_yaml():
 @import_or_fail("cftime")
 def test_convert_to_cftime(pytestconfig):
     """test parse time"""
+
+    from physicsnemo.utils.generative import convert_datetime_to_cftime
+
     dt = datetime.datetime(2011, 1, 1)
     expected = cftime.DatetimeGregorian(2011, 1, 1)
     assert convert_datetime_to_cftime(dt) == expected

@@ -14,12 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from modulus.utils.generative import tuple_product
+from pytest_utils import import_or_fail
 
 
 # Test tuple_product function
-def test_tuple_product():
+@import_or_fail("cftime")
+def test_tuple_product(pytestconfig):
+
+    from physicsnemo.utils.generative import tuple_product
+
     # Test with an empty tuple
     assert tuple_product(()) == 1
 

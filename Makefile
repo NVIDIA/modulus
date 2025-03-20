@@ -34,7 +34,7 @@ doctest:
 	coverage run \
 		--rcfile='test/coverage.docstring.rc' \
 		-m pytest \
-		--doctest-modules modulus/ --ignore-glob=*internal* --ignore-glob=*experimental*
+		--doctest-modules physicsnemo/ --ignore-glob=*internal* --ignore-glob=*experimental*
 
 pytest: 
 	coverage run \
@@ -50,6 +50,8 @@ coverage:
 	coverage combine && \
 		coverage report --show-missing --omit=*test* --omit=*internal* --omit=*experimental* --fail-under=70 && \
 		coverage html
+
+all-ci: get-data setup-ci black interrogate lint license install pytest doctest coverage
 
 # For arch naming conventions, refer
 # https://docs.docker.com/build/building/multi-platform/
@@ -67,11 +69,11 @@ endif
 MODULUS_GIT_HASH = $(shell git rev-parse --short HEAD)
 
 container-deploy:
-	docker build -t modulus:deploy --build-arg TARGETPLATFORM=${TARGETPLATFORM} --build-arg MODULUS_GIT_HASH=${MODULUS_GIT_HASH} --target deploy -f Dockerfile .
+	docker build -t physicsnemo:deploy --build-arg TARGETPLATFORM=${TARGETPLATFORM} --build-arg MODULUS_GIT_HASH=${MODULUS_GIT_HASH} --target deploy -f Dockerfile .
 
 container-ci:
-	docker build -t modulus:ci --build-arg TARGETPLATFORM=${TARGETPLATFORM} --target ci -f Dockerfile .
+	docker build -t physicsnemo:ci --build-arg TARGETPLATFORM=${TARGETPLATFORM} --target ci -f Dockerfile .
 
 container-docs:
-	docker build -t modulus:docs --build-arg TARGETPLATFORM=${TARGETPLATFORM} --target docs -f Dockerfile .
+	docker build -t physicsnemo:docs --build-arg TARGETPLATFORM=${TARGETPLATFORM} --target docs -f Dockerfile .
 

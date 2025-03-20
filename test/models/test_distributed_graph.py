@@ -18,13 +18,9 @@ import os
 
 import pytest
 import torch
+from pytest_utils import import_or_fail
 
-from modulus.distributed import DistributedManager
-from modulus.models.gnn_layers import (
-    DistributedGraph,
-    partition_graph_by_coordinate_bbox,
-)
-from modulus.models.graphcast.graph_cast_net import get_lat_lon_partition_separators
+from physicsnemo.distributed import DistributedManager
 
 
 def get_random_graph(device):
@@ -131,6 +127,15 @@ def run_test_distributed_graph(
     partition_scheme: str,
     use_torchrun: bool = False,
 ):
+
+    from physicsnemo.models.gnn_layers import (
+        DistributedGraph,
+        partition_graph_by_coordinate_bbox,
+    )
+    from physicsnemo.models.graphcast.graph_cast_net import (
+        get_lat_lon_partition_separators,
+    )
+
     if not use_torchrun:
         os.environ["RANK"] = f"{rank}"
         os.environ["WORLD_SIZE"] = f"{world_size}"
@@ -338,9 +343,11 @@ def run_test_distributed_graph(
         del os.environ["MASTER_PORT"]
 
 
+@import_or_fail("dgl")
 @pytest.mark.multigpu
 @pytest.mark.parametrize("partition_scheme", ["lat_lon_bbox", "default"])
-def test_distributed_graph(partition_scheme):
+def test_distributed_graph(partition_scheme, pytestconfig):
+
     num_gpus = torch.cuda.device_count()
     assert num_gpus >= 2, "Not enough GPUs available for test"
     world_size = 2  # num_gpus
@@ -360,6 +367,7 @@ def test_distributed_graph(partition_scheme):
 
 
 if __name__ == "__main__":
+
     # to be launched with torchrun
     DistributedManager.initialize()
     run_test_distributed_graph(-1, -1, "lat_lon_bbox", True)
