@@ -31,14 +31,19 @@ class SinusoidalEncoding(nn.Module):
         self.num_channels = num_channels
         self.data_range = data_range
 
-    def forward(self, x):
-        freqs = 2 ** torch.arange(
-            start=0, end=self.num_channels // 2, device=x.device
-        ).to(x.dtype)
+        freqs = 2 ** torch.arange(start=0, end=self.num_channels // 2)
         freqs = (2 * np.pi / self.data_range) * freqs
+
+        self.register_buffer("freqs", freqs)
+
+    def forward(self, x):
+
         x = x.unsqueeze(-1)
-        # Make freq to have the same dimensions as x. X can be of any shape
-        freqs = freqs.reshape((1,) * (len(x.shape) - 1) + freqs.shape)
+        # Reshape frequencies to match input dimensions for broadcasting
+        # Create a shape with 1s for all dimensions except the last one
+        # For example, if x is (batch, points, 3), create (1, 1, freqs.shape)
+        broadcast_shape = (1,) * (len(x.shape) - 1) + self.freqs.shape
+        freqs = self.freqs.reshape(broadcast_shape)
         x = x * freqs
         x = torch.cat([x.cos(), x.sin()], dim=-1).flatten(start_dim=-2)
         return x

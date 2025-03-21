@@ -26,6 +26,13 @@ from physicsnemo.models.figconvnet.geometries import (
     GridFeaturesMemoryFormat,
 )
 
+try:
+    import transformer_engine.pytorch as te
+
+    HAS_TE = True
+except ImportError:
+    HAS_TE = False
+
 
 class GridFeaturePadToMatch(nn.Module):
     """GridFeaturePadToMatch."""
@@ -164,12 +171,25 @@ class GridFeatureConv2d(nn.Module):
         return out_grid_features
 
 
-class LayerNorm2d(nn.LayerNorm):
-    """LayerNorm2d."""
+class LayerNorm2d(nn.Module):
+    """LayerNorm2d with optional transformer engine support."""
+
+    def __init__(self, normalized_shape: int, use_te_norm: bool = True):
+        super().__init__()
+        if use_te_norm and not HAS_TE:
+            raise ImportError(
+                "transformer_engine is not available but use_te_norm=True. "
+                "Either install transformer_engine or set use_te_norm=False"
+            )
+        self.norm = (
+            te.LayerNorm(normalized_shape)
+            if use_te_norm
+            else nn.LayerNorm(normalized_shape)
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         x = x.permute(0, 2, 3, 1)
-        x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        x = self.norm(x)
         x = x.permute(0, 3, 1, 2)
         return x
 
@@ -205,7 +225,27 @@ class GridFeatureTransform(nn.Module):
 
 
 class GridFeatureConv2dBlock(nn.Module):
-    """GridFeatureConv2dBlock."""
+    """GridFeatureConv2dBlock.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels
+    out_channels : int
+        Number of output channels
+    kernel_size : int
+        Size of the convolutional kernel
+    compressed_spatial_dim : int, optional
+        Number of spatial dimensions to compress, default 1
+    stride : Optional[int], optional
+        Stride of convolution, default 1
+    up_stride : Optional[int], optional
+        Upsampling stride, default None
+    apply_nonlinear_at_end : bool, optional
+        Whether to apply nonlinearity at end, default True
+    use_te_norm : bool, optional
+        If True, use transformer_engine LayerNorm, else use torch.nn LayerNorm
+    """
 
     def __init__(
         self,
@@ -216,8 +256,15 @@ class GridFeatureConv2dBlock(nn.Module):
         stride: Optional[int] = 1,
         up_stride: Optional[int] = None,
         apply_nonlinear_at_end: bool = True,
+        use_te_norm: bool = True,
     ):
         super().__init__()
+
+        if use_te_norm and not HAS_TE:
+            raise ImportError(
+                "transformer_engine is not available but use_te_norm=True. "
+                "Either install transformer_engine or set use_te_norm=False"
+            )
 
         self.conv1 = GridFeatureConv2d(
             in_channels=in_channels,
@@ -227,6 +274,7 @@ class GridFeatureConv2dBlock(nn.Module):
             up_stride=up_stride,
             compressed_spatial_dim=compressed_spatial_dim,
         )
+
         self.conv2 = GridFeatureConv2d(
             in_channels=out_channels,
             out_channels=out_channels,
@@ -235,12 +283,14 @@ class GridFeatureConv2dBlock(nn.Module):
             compressed_spatial_dim=compressed_spatial_dim,
             up_stride=None,
         )
+
         self.norm1 = GridFeatureTransform(
-            LayerNorm2d(out_channels * compressed_spatial_dim)
+            LayerNorm2d(out_channels * compressed_spatial_dim, use_te_norm=use_te_norm)
         )
         self.norm2 = GridFeatureTransform(
-            LayerNorm2d(out_channels * compressed_spatial_dim)
+            LayerNorm2d(out_channels * compressed_spatial_dim, use_te_norm=use_te_norm)
         )
+
         self.apply_nonlinear_at_end = apply_nonlinear_at_end
 
         if up_stride is None:

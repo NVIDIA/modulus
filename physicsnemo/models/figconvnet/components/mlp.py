@@ -21,6 +21,13 @@ import torch.nn as nn
 from jaxtyping import Float
 from torch import Tensor
 
+try:
+    import transformer_engine.pytorch as te
+
+    HAS_TE = True
+except ImportError:
+    HAS_TE = False
+
 
 class LinearBlock(nn.Module):
     """Simple linear block with ReLU and dropout
@@ -33,6 +40,8 @@ class LinearBlock(nn.Module):
         Number of output channels
     activation : type[nn.Module]
         Activation function, default nn.GELU
+    use_te_norm : bool, optional
+        If True, use transformer_engine LayerNorm, else use torch.nn LayerNorm
     """
 
     def __init__(
@@ -40,11 +49,17 @@ class LinearBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         activation: type[nn.Module] = nn.GELU,
+        use_te_norm: bool = True,
     ):
         super().__init__()
+        if use_te_norm and not HAS_TE:
+            raise ImportError(
+                "transformer_engine is not available but use_te_norm=True. "
+                "Either install transformer_engine or set use_te_norm=False"
+            )
         self.block = nn.Sequential(
             nn.Linear(in_channels, out_channels, bias=False),
-            nn.LayerNorm(out_channels),
+            te.LayerNorm(out_channels) if use_te_norm else nn.LayerNorm(out_channels),
             activation(),
         )
 
@@ -53,7 +68,27 @@ class LinearBlock(nn.Module):
 
 
 class ResidualLinearBlock(nn.Module):
-    """MLPBlock."""
+    """Residual Linear Block.  Performs the following operations:
+    - Linear layer
+    - LayerNorm
+    - Activation
+    - Linear layer
+    - LayerNorm
+    - Add skip connection
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels
+    out_channels : int
+        Number of output channels
+    hidden_channels : int, optional
+        Number of hidden channels
+    activation : type[nn.Module]
+        Activation function, default nn.GELU
+    use_te_norm : bool, optional
+        If True, use transformer_engine LayerNorm, else use torch.nn LayerNorm
+    """
 
     def __init__(
         self,
@@ -61,16 +96,24 @@ class ResidualLinearBlock(nn.Module):
         out_channels: int,
         hidden_channels: int = None,
         activation: type[nn.Module] = nn.GELU,
+        use_te_norm: bool = True,
     ):
         super().__init__()
+        if use_te_norm and not HAS_TE:
+            raise ImportError(
+                "transformer_engine is not available but use_te_norm=True. "
+                "Either install transformer_engine or set use_te_norm=False"
+            )
         if hidden_channels is None:
             hidden_channels = in_channels
         self.blocks = nn.Sequential(
             nn.Linear(in_channels, hidden_channels),
-            nn.LayerNorm(hidden_channels),
+            te.LayerNorm(hidden_channels)
+            if use_te_norm
+            else nn.LayerNorm(hidden_channels),
             activation(),
             nn.Linear(hidden_channels, out_channels),
-            nn.LayerNorm(out_channels),
+            te.LayerNorm(out_channels) if use_te_norm else nn.LayerNorm(out_channels),
         )
         self.shortcut = (
             nn.Identity()
@@ -101,6 +144,8 @@ class MLP(nn.Module):
         Whether to use residual connections, default False.
     activation : type[nn.Module]
         Activation function, default nn.GELU
+    use_te_norm : bool, optional
+        If True, use transformer_engine LayerNorm, else use torch.nn LayerNorm
     """
 
     def __init__(
@@ -110,6 +155,7 @@ class MLP(nn.Module):
         hidden_channels: List[int],
         use_residual: bool = False,
         activation: type[nn.Module] = nn.GELU,
+        use_te_norm: bool = True,
     ):
         """
         :param channels: list of channels
@@ -126,11 +172,17 @@ class MLP(nn.Module):
                         channels[i],
                         channels[i + 1],
                         activation=activation,
+                        use_te_norm=use_te_norm,
                     )
                 )
             else:
                 self.layers.append(
-                    LinearBlock(channels[i], channels[i + 1], activation=activation)
+                    LinearBlock(
+                        channels[i],
+                        channels[i + 1],
+                        activation=activation,
+                        use_te_norm=use_te_norm,
+                    )
                 )
 
     def forward(self, x: Float[Tensor, "... C1"]) -> Float[Tensor, "... C2"]:
@@ -143,7 +195,26 @@ class MLP(nn.Module):
 
 
 class MLPBlock(nn.Module):
-    """MLPBlock."""
+    """MLPBlock.  Performs the following operations:
+    - Linear layer
+    - LayerNorm
+    - Activation
+    - Linear layer
+    - LayerNorm
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels
+    hidden_channels : int, optional
+        Number of hidden channels. Defaults to in_channels if None
+    out_channels : int, optional
+        Number of output channels. Defaults to in_channels if None
+    activation : type[nn.Module]
+        Activation function, default nn.GELU
+    use_te_norm : bool, optional
+        If True, use transformer_engine LayerNorm, else use torch.nn LayerNorm
+    """
 
     def __init__(
         self,
@@ -151,17 +222,29 @@ class MLPBlock(nn.Module):
         hidden_channels: int = None,
         out_channels: int = None,
         activation: type[nn.Module] = nn.GELU,
+        use_te_norm: bool = True,
     ):
         super().__init__()
+        if use_te_norm and not HAS_TE:
+            raise ImportError(
+                "transformer_engine is not available but use_te_norm=True. "
+                "Either install transformer_engine or set use_te_norm=False"
+            )
         if hidden_channels is None:
             hidden_channels = in_channels
         if out_channels is None:
             out_channels = in_channels
         self.in_channels = in_channels
         self.fc1 = nn.Linear(in_channels, hidden_channels)
-        self.norm1 = nn.LayerNorm(hidden_channels)
+        self.norm1 = (
+            te.LayerNorm(hidden_channels)
+            if use_te_norm
+            else nn.LayerNorm(hidden_channels)
+        )
         self.fc2 = nn.Linear(hidden_channels, out_channels)
-        self.norm2 = nn.LayerNorm(out_channels)
+        self.norm2 = (
+            te.LayerNorm(out_channels) if use_te_norm else nn.LayerNorm(out_channels)
+        )
         self.shortcut = nn.Linear(in_channels, out_channels)
         self.activation = activation()
 

@@ -22,6 +22,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Float
 from torch import Tensor
+from torch.autograd.profiler import record_function
 
 from physicsnemo.models.figconvnet.components.reductions import REDUCTION_TYPES
 from physicsnemo.models.figconvnet.geometries import (
@@ -41,6 +42,13 @@ from physicsnemo.models.figconvnet.point_feature_grid_ops import (
     GridFeatureToPoint,
 )
 from physicsnemo.utils.profiling import profile
+from torch.autograd.profiler import record_function
+try:
+    import transformer_engine.pytorch as te
+
+    HAS_TE = True
+except ImportError:
+    HAS_TE = False
 
 
 class GridFeatureGroup:
@@ -225,9 +233,15 @@ class GridFeatureGroupConv2dNorm(nn.Module):
         compressed_spatial_dims: Tuple[int],
         stride: int = 1,
         up_stride: Optional[int] = None,
-        norm: nn.Module = LayerNorm2d,
+        use_te_norm: bool = True,
     ):
         super().__init__()
+        if use_te_norm and not HAS_TE:
+            raise ImportError(
+                "transformer_engine is not available but use_te_norm=True. "
+                "Either install transformer_engine or set use_te_norm=False"
+            )
+
         self.convs = nn.ModuleList()
         for compressed_spatial_dim in compressed_spatial_dims:
             self.convs.append(
@@ -240,7 +254,12 @@ class GridFeatureGroupConv2dNorm(nn.Module):
                         stride=stride,
                         up_stride=up_stride,
                     ),
-                    GridFeatureTransform(norm(out_channels * compressed_spatial_dim)),
+                    GridFeatureTransform(
+                        LayerNorm2d(
+                            out_channels * compressed_spatial_dim,
+                            use_te_norm=use_te_norm,
+                        )
+                    ),
                 )
             )
 
@@ -285,6 +304,7 @@ class GridFeatureConv2DBlocksAndIntraCommunication(nn.Module):
         stride: int = 1,
         up_stride: Optional[int] = None,
         communication_types: List[Literal["sum", "mul"]] = ["sum"],
+        use_te_norm: bool = True,
     ):
         super().__init__()
         self.convs = nn.ModuleList()
@@ -298,6 +318,7 @@ class GridFeatureConv2DBlocksAndIntraCommunication(nn.Module):
                     stride=stride,
                     up_stride=up_stride,
                     apply_nonlinear_at_end=False,
+                    use_te_norm=use_te_norm,
                 )
             )
         self.intra_communications = GridFeatureGroupIntraCommunications(
@@ -312,21 +333,28 @@ class GridFeatureConv2DBlocksAndIntraCommunication(nn.Module):
                 out_channels=out_channels,
                 kernel_size=1,
                 compressed_spatial_dims=compressed_spatial_dims,
+                use_te_norm=use_te_norm,
             )
         else:
             self.proj = nn.Identity()
         self.nonlinear = GridFeatureGroupTransform(nn.GELU())
 
     def forward(self, grid_features_group: GridFeatureGroup) -> GridFeatureGroup:
-        assert len(grid_features_group) == len(self.convs)
-        grid_feats = []
-        for grid_feat, conv in zip(grid_features_group, self.convs):
-            grid_feats.append(conv(grid_feat))
-        grid_features_group = GridFeatureGroup(grid_feats)
-        grid_features_group = self.intra_communications(grid_features_group)
-        grid_features_group = self.proj(grid_features_group)
-        grid_features_group = self.nonlinear(grid_features_group)
-        return grid_features_group
+        # assert len(grid_features_group) == len(self.convs)
+        with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward"):
+            grid_feats = []
+            with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward.convs"):
+                for grid_feat, conv in zip(grid_features_group, self.convs):
+                    grid_feats.append(conv(grid_feat))
+            with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward.grid_features_group"):
+                grid_features_group = GridFeatureGroup(grid_feats)
+            with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward.intra_communications"):
+                grid_features_group = self.intra_communications(grid_features_group)
+            with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward.proj"):
+                grid_features_group = self.proj(grid_features_group)
+            with record_function("GridFeatureConv2DBlocksAndIntraCommunication.forward.nonlinear"):
+                grid_features_group = self.nonlinear(grid_features_group)
+            return grid_features_group
 
 
 class GridFeatureGroupCat(nn.Module):
@@ -383,6 +411,7 @@ class GridFeatureGroupToPoint(nn.Module):
         neighbor_search_type: Literal["radius", "knn"] = "radius",
         knn_k: int = 16,
         reductions: List[REDUCTION_TYPES] = ["mean"],
+        use_te_norm: bool = True,
     ) -> None:
         super().__init__()
         self.conv_list = nn.ModuleList()
@@ -403,6 +432,7 @@ class GridFeatureGroupToPoint(nn.Module):
                     neighbor_search_type=neighbor_search_type,
                     knn_k=knn_k,
                     reductions=reductions,
+                    use_te_norm=use_te_norm,
                 )
             )
 
@@ -483,8 +513,15 @@ class GridFeaturePool(nn.Module):
         out_channels: int,
         compressed_spatial_dim: int,
         pooling_type: Literal["max", "mean", "attention"] = "max",
+        use_te_norm: bool = True,
     ):
         super().__init__()
+        if use_te_norm and not HAS_TE:
+            raise ImportError(
+                "transformer_engine is not available but use_te_norm=True. "
+                "Either install transformer_engine or set use_te_norm=False"
+            )
+
         self.conv = nn.Conv2d(
             in_channels=in_channels * compressed_spatial_dim,
             out_channels=out_channels,
@@ -500,20 +537,27 @@ class GridFeaturePool(nn.Module):
             raise NotImplementedError
 
         self.pooling_type = pooling_type
-        self.norm = nn.LayerNorm(out_channels)
+        self.norm = (
+            te.LayerNorm(out_channels) if use_te_norm else nn.LayerNorm(out_channels)
+        )
 
     def forward(
         self,
         grid_features: GridFeatures,
     ) -> Float[Tensor, "B C"]:
-        features = grid_features.features
-        assert features.ndim == 4, "Features must be compressed format with BxCxHxW."
-        features = self.conv(features)
-        features = features.flatten(2, 3)
-        if self.pooling_type == "attention":
-            features = features.transpose(1, 2)
-        pooled_feat = self.pool(features)
-        return self.norm(pooled_feat.squeeze(-1))
+        with record_function("GridFeaturePool.conv"):
+            features = grid_features.features
+            assert (
+                features.ndim == 4
+            ), "Features must be compressed format with BxCxHxW."
+            features = self.conv(features)
+            features = features.flatten(2, 3)
+            if self.pooling_type == "attention":
+                features = features.transpose(1, 2)
+        with record_function("GridFeaturePool.pool"):
+            pooled_feat = self.pool(features)
+        with record_function("GridFeaturePool.norm"):
+            return self.norm(pooled_feat.squeeze(-1))
 
 
 class GridFeatureGroupPool(nn.Module):
@@ -544,8 +588,9 @@ class GridFeatureGroupPool(nn.Module):
         self,
         grid_features_group: GridFeatureGroup,
     ) -> Float[Tensor, "B 3C"]:
-        assert len(grid_features_group) == len(self.pools)
-        pooled_features = []
-        for grid_features, pool in zip(grid_features_group, self.pools):
-            pooled_features.append(pool(grid_features))
-        return torch.cat(pooled_features, dim=-1)
+        with record_function("GridFeatureGroupPool.forward"):
+            assert len(grid_features_group) == len(self.pools)
+            pooled_features = []
+            for grid_features, pool in zip(grid_features_group, self.pools):
+                pooled_features.append(pool(grid_features))
+            return torch.cat(pooled_features, dim=-1)

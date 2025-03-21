@@ -23,18 +23,17 @@ import torch
 import torch.nn.functional as F
 from jaxtyping import Float
 from torch import Tensor
+from torch.autograd.profiler import record_function
 
 
-def grid_init(bb_max, bb_min, resolution):
-    """grid_init."""
-
-    # Define grid points
-    grid = torch.meshgrid(
-        torch.linspace(bb_min[0], bb_max[0], resolution[0]),
-        torch.linspace(bb_min[1], bb_max[1], resolution[1]),
-        torch.linspace(bb_min[2], bb_max[2], resolution[2]),
+def grid_init(bb_max, bb_min, resolution, device):
+    """grid_init2."""
+    grid = torch.cartesian_prod(
+        torch.linspace(bb_min[0], bb_max[0], resolution[0], device=device),
+        torch.linspace(bb_min[1], bb_max[1], resolution[1], device=device),
+        torch.linspace(bb_min[2], bb_max[2], resolution[2], device=device),
     )
-    grid = torch.stack(grid, dim=-1)  # (n_x, n_y, n_z, 3)
+    grid = grid.reshape(list(resolution) + [-1])
     return grid
 
 
@@ -420,10 +419,15 @@ class GridFeatures:
             # Use grid_sample 3D to interpolate the vertices
             # vertices have shape (H, W, D, 3)
             # create sample points using AABB
-            grid_points = grid_init(
-                bb_max=(1, 1, 1), bb_min=(-1, -1, -1), resolution=resolution
-            )  # (res[0], res[1], res[2], 3)
-            grid_points = grid_points.unsqueeze(0).to(self.vertices.device)
+            with record_function("grid_init"):
+                grid_points = grid_init(
+                    bb_max=(1, 1, 1),
+                    bb_min=(-1, -1, -1),
+                    resolution=resolution,
+                    device=self.vertices.device,
+                )  # (res[0], res[1], res[2], 3)
+
+                grid_points = grid_points.unsqueeze(0)
 
             sampled_vertices = F.grid_sample(
                 self.vertices.permute(
