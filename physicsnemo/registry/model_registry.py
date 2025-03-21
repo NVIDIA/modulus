@@ -46,7 +46,6 @@ class ModelRegistry:
         registry = {}
         entrypoints = entry_points(group="physicsnemo.models")
         for entry_point in entrypoints:
-            print(type(entry_point))
             registry[entry_point.name] = entry_point
 
         # Pull in any modulus models for backwards compatibility
