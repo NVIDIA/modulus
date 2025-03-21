@@ -16,6 +16,12 @@
 
 import warnings
 from importlib.metadata import EntryPoint, entry_points
+
+# NOTE: This is for backport compatibility, some entry points seem to be using this old class
+# Exact cause of this is unknown but it seems to be related to multiple versions
+# of importlib being present in the environment
+from importlib_metadata import EntryPoint as EntryPointOld
+
 from typing import List, Union
 
 import physicsnemo
@@ -120,8 +126,10 @@ class ModelRegistry:
 
         model = self._model_registry.get(name)
         if model is not None:
-            if isinstance(model, EntryPoint):
+            if isinstance(model, EntryPoint) or isinstance(model, EntryPointOld):
                 model = model.load()
+            else:
+                raise TypeError(f"Model {name} is not a valid entry point.")
             return model
 
         raise KeyError(f"No model is registered under the name {name}")
