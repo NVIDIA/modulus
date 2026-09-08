@@ -73,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   charges the target leaf's own extent: on a 200k-face car with 200k volume
   points the dual plan held 1.6e9 pairs at `theta=0.5` and the point plan
   holds 1.5e8.
+- `ShardTensor` ring attention, ring kNN and ring ball query run on functional
+  collectives; ring attention works under `torch.compile` as an eager
+  graph-break region. In-place `detach_` on a `ShardTensor` is supported.
 
 ### Changed
 
@@ -232,6 +235,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CUDA device.
 - `BoundingBoxFilter` takes about half as long on CPU. On a GPU it
   synchronizes once per coordinate key, instead of once per filtered tensor.
+- The stream-based ring helpers `perform_ring_iteration_async` and
+  `get_comm_stream` are removed; use `perform_ring_iteration_funcol` with
+  `wait=False` and `finish_ring_iteration` for overlap.
 
 ### Deprecated
 
@@ -417,6 +423,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scatter_tensor` returns a shard that owns its storage, stream recording on
   wrapped tensors works, and several `torch.compile` tracing issues are
   resolved.
+- `torch.unbind` on a `Partial` `ShardTensor` resolves the pending reduction
+  before slicing instead of silently dropping it.
 
 ### Security
 
