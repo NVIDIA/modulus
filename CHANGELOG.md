@@ -83,6 +83,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ClusterTree.merge` joins trees into one forest, whose `root_ids` list the
   root of each tree. Every traversal starts from all of them, so one
   traversal plans a tree against every tree of a forest, on either side.
+- `ShardTensor` ring attention, ring kNN and ring ball query run on functional
+  collectives; ring attention works under `torch.compile` as an eager
+  graph-break region. In-place `detach_` on a `ShardTensor` is supported.
 
 ### Changed
 
@@ -283,6 +286,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tutorials in `examples/minimal/mesh` are reorganized from a first mesh to ML
   pipelines. New sections show how to use the edge graph of a mesh, a
   `Mesh[1, n]`, in graph network models.
+- The stream-based ring helpers `perform_ring_iteration_async` and
+  `get_comm_stream` are removed; use `perform_ring_iteration_funcol` with
+  `wait=False` and `finish_ring_iteration` for overlap.
 
 ### Deprecated
 
@@ -571,6 +577,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scatter_tensor` returns a shard that owns its storage, stream recording on
   wrapped tensors works, and several `torch.compile` tracing issues are
   resolved.
+- `torch.unbind` on a `Partial` `ShardTensor` resolves the pending reduction
+  before slicing instead of silently dropping it.
 
 ### Security
 
