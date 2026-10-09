@@ -131,6 +131,18 @@ def _require_supported(schema: FieldSchema, *, label: str) -> None:
     true vectors, and build vector outputs on a basis of true vectors.  A
     field of rank 2 or more would be silently left out, and a pseudotensor
     would transform with the wrong sign under reflections.
+
+    Parameters
+    ----------
+    schema : FieldSchema
+        Parsed field declarations to check.
+    label : str
+        Name of the schema argument, used in error messages.
+
+    Raises
+    ------
+    NotImplementedError
+        If a field has rank other than 0 or 1, or has ``parity='odd'``.
     """
     for name, spec in schema.items():
         if spec.rank not in (0, 1):

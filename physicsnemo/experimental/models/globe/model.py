@@ -398,6 +398,20 @@ class GLOBE(Module):
         normals, and optionally latent features into a single schema
         declaration that mirrors the ``source_data`` structure produced by
         :meth:`_evaluate_hyperlayer`.
+
+        Parameters
+        ----------
+        bc_source_schema : FieldSchemaLike
+            Schema of the per-face physical source features for one BC type.
+        include_latents : bool
+            Whether to add the latent scalars and vectors, which exist only
+            after the first hyperlayer.
+
+        Returns
+        -------
+        FieldSchemaLike
+            Nested declaration with keys ``"physical"``, ``"normals"``, and
+            (if ``include_latents``) ``"latent"``.
         """
         result: dict[str, Any] = {
             "physical": bc_source_schema,
