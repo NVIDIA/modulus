@@ -42,11 +42,9 @@ class WeightedStatistic(ABC):
         if w.ndim == 1:
             if x.shape[dim] != len(w):
                 raise ValueError(
-                    "Expected inputs and weights to have the same size along the reduction dimension but have dimensions"
-                    + str(len(x[dim]))
-                    + " and "
-                    + str(len(w))
-                    + "."
+                    "Expected inputs and weights to have the same size along the "
+                    f"reduction dimension but have dimensions {x.shape[dim]} "
+                    f"and {len(w)}."
                 )
             if dim < 0:
                 dim = x.ndim + dim

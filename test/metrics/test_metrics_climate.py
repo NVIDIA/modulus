@@ -131,6 +131,15 @@ def test_climate_reductions(test_data, device, rtol: float = 1e-3, atol: float =
         www = gen_red.WeightedStatistic(torch.rand((10, 10), device=device))
         www(torch.randn((13, 13), device=device), dim=1)
 
+    # A square input cannot tell which dimension the message reports, and an
+    # input whose first dimension is shorter than dim is the shape global_mean
+    # hands over for a batch of one.
+    www = gen_red.WeightedStatistic(torch.rand((10,), device=device))
+    with pytest.raises(ValueError, match="dimensions 13 and 10"):
+        www(torch.randn((13, 7), device=device), dim=0)
+    with pytest.raises(ValueError, match="dimensions 13 and 10"):
+        www(torch.randn((1, 13, 13), device=device), dim=-2)
+
     # Check when weights are 1 dimensional
     weights = weights.flatten()
     wm = gen_red.WeightedMean(weights)

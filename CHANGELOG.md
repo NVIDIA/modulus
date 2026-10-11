@@ -204,6 +204,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A weighted reduction whose weights do not match the reduction dimension
+  names that dimension in the error it raises. Before, the message measured a
+  different axis, and for an input whose first dimension is shorter than `dim`
+  it raised `IndexError` or `TypeError` in place of the `ValueError`.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only
