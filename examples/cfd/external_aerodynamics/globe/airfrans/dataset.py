@@ -237,16 +237,16 @@ class AirFRANSDataSet(CachedPreprocessingDataset):
                 raise FileNotFoundError(f"Missing required file: {path}")
 
         freestream = project(
-            from_pyvista(pv.read(mesh_paths["freestream"]), manifold_dim=1),
+            from_pyvista(pv.read(mesh_paths["freestream"]), manifold_dim=1).float(),
             keep_dims=[0, 1],
             transform_cell_data=True,
         )
         airfoil = project(
-            from_pyvista(pv.read(mesh_paths["airfoil"]), manifold_dim=1),
+            from_pyvista(pv.read(mesh_paths["airfoil"]), manifold_dim=1).float(),
             keep_dims=[0, 1],
         )
         internal = project(
-            from_pyvista(pv.read(mesh_paths["internal"])),
+            from_pyvista(pv.read(mesh_paths["internal"])).float(),
             keep_dims=[0, 1],
             transform_point_data=True,
         )
