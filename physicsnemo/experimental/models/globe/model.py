@@ -120,13 +120,14 @@ class GLOBE(Module):
     n_spherical_harmonics : int, optional, default=4
         Number of Legendre polynomial terms used for angle-dependent features in
         kernel functions.
-    theta : float, optional, default=0.6
+    theta : float, optional, default=1.5
         Barnes-Hut opening angle controlling the near/far-field split in the
         dual-tree traversal. The criterion is :math:`(D_T + D_S) / r < \theta`,
         where :math:`D_T` and :math:`D_S` are AABB diagonals and :math:`r` is
         the minimum inter-AABB distance. Larger values approximate more
         aggressively; ``0`` forces all interactions to be exact (no far-field
-        approximation).
+        approximation). A trained model adapts to its ``theta``, so evaluate it
+        with the value it was trained with.
     leaf_size : int, optional, default=1
         Maximum number of source points per leaf node in the cluster tree.
         Larger values produce shallower trees (fewer traversal iterations) at
@@ -233,7 +234,7 @@ class GLOBE(Module):
         smoothing_radius: float = 1e-8,
         hidden_layer_sizes: Sequence[int] | None = None,
         n_spherical_harmonics: int = 4,
-        theta: float = 0.6,
+        theta: float = 1.5,
         leaf_size: int = 1,
         network_type: Literal["pade", "mlp"] = "pade",
         self_regularization_beta: float | None = None,

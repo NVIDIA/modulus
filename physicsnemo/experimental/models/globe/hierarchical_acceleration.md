@@ -207,8 +207,8 @@ Hut 1986):
 - **Smaller theta** = more conservative (more exact interactions, slower).
 - **theta = 0** = all interactions are exact (no approximation).
 
-Typical values for GLOBE: `theta = 0.25` (conservative) to `theta = 1.0`
-(aggressive).  The default is `theta = 0.6`.
+Typical values for GLOBE range from `theta = 0.6` to `theta = 3`.  The
+default is `theta = 1.5`; Section 8.1 explains why.
 
 `theta` bounds the position errors.  The far-field monopole also averages
 each source feature (normals, latents) over the node, and GLOBE's network
@@ -481,10 +481,24 @@ The `theta` parameter controls accuracy vs. speed:
 | theta | Character            | Typical use case                       |
 |-------|----------------------|----------------------------------------|
 | 0     | Exact                | No approximation (equivalent to dense) |
-| 0.25  | Conservative         | High accuracy, for validation          |
-| 0.6   | Moderate             | Default for production training        |
-| 1.0   | Aggressive           | Fast approximate evaluation            |
+| 0.6   | Conservative         | Most accurate per epoch                |
+| 1.5   | Moderate             | Default for training and inference     |
+| 3.0   | Aggressive           | Fastest training                       |
 | 100+  | Extremely aggressive | Testing only                           |
+
+A trained model adapts to the approximation at its `theta`, so the kernel
+errors in Section 4.2 overstate what a larger `theta` costs.  In DrivAerML
+training (80k faces per boundary, 16 GPUs, eager mode), the validation loss
+at equal epochs matched within 2% for `theta` from 0.6 to 1.5 between epochs
+100 and 200, and was 7-12% higher at 2 and 3.  Time per iteration fell from
+22.5 s at `theta = 0.6` to 9.6 s at 1.5 and 5.8 s at 3.  After 24 hours of
+training, the validation loss was 29% lower at 1.5 than at 0.6, and 32% lower
+at 3.
+
+A model is tied to the `theta` it was trained with.  Evaluated at a smaller
+`theta`, it gets worse, not better: a model trained at `theta = 3` had twice
+the validation loss when evaluated at 0.6.  `theta` is a constructor argument,
+so a saved GLOBE model keeps it.
 
 The approximation error per interaction scales with theta, but the total
 error is bounded by the kernel's far-field decay.  Distant clusters contribute
