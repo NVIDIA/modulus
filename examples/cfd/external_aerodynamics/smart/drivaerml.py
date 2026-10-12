@@ -202,6 +202,12 @@ class DrivAerMLReader(TensorStoreZarrReader):
             )
         else:
             attributes = {}
+        if attributes.get("point_counts") is not None:
+            from prepare_drivaerml import validate_prepared_cache
+
+            validate_prepared_cache(
+                group_path, attributes, self.fields, context=self._context
+            )
         return {
             key: torch.as_tensor(attributes[key], dtype=torch.float32)
             for key in ("air_density", "stream_velocity")

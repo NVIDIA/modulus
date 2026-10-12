@@ -39,6 +39,44 @@ from physicsnemo.datapipes import DomainMeshReader
 from physicsnemo.datapipes._rng import derive_seed
 
 
+def validate_prepared_cache(
+    path: Path, metadata: dict, fields=None, *, context=None
+) -> None:
+    """Check declared full-cloud counts before any reader subsampling.
+
+    Older caches without point-count metadata remain supported. These checks
+    validate array structure, not source contents or the integrity of each chunk.
+    ``fields`` permits target-free inference and single-field datasets.
+    """
+    counts = metadata.get("point_counts")
+    if counts is None:
+        return
+    if not isinstance(counts, dict):
+        raise ValueError(f"Invalid point-count metadata in {path}")
+    for field, channels in (("surface", 4), ("volume", 5)):
+        for suffix, width in (("mesh_centers", 3), ("fields", channels)):
+            key = f"{field}_{suffix}"
+            if fields is not None and key not in fields:
+                continue
+            count = counts.get(field)
+            if isinstance(count, bool) or not isinstance(count, int) or count <= 0:
+                raise ValueError(f"Invalid {field} point count in {path}")
+            store = ts.open(
+                {
+                    "driver": "auto",
+                    "kvstore": {"driver": "file", "path": str(path / key)},
+                },
+                open=True,
+                create=False,
+                context=context,
+            ).result()
+            if store.shape != (count, width):
+                raise ValueError(
+                    f"{path / key} shape {store.shape} differs from "
+                    f"declared complete-field shape {(count, width)}"
+                )
+
+
 def write_array(path: Path, values: torch.Tensor, chunk_points: int) -> None:
     """Write losslessly compressed float32 Zarr v2 chunks using TensorStore."""
     array = values.detach().float().cpu().numpy()
@@ -103,6 +141,7 @@ def prepare_case(
         previous = json.loads((output / ".zattrs").read_text())
         if previous.get("preparation") != identity:
             raise ValueError(f"Existing preparation differs: {output}")
+        validate_prepared_cache(output, previous)
         return previous
     output.parent.mkdir(parents=True, exist_ok=True)
     partial = output.with_name(output.name + ".partial-" + uuid.uuid4().hex)

@@ -168,7 +168,10 @@ torchrun --standalone --nproc_per_node=4 train.py \
 Resume restores the latest complete epoch checkpoint. There is no mid-epoch
 resume. Source data must remain unchanged; configuration checks do not hash the
 complete dataset. Avoid concurrent writers to a run directory. Model-only
-inference files such as `best.mdlus` do not contain optimizer state.
+inference files such as `best.mdlus` do not contain optimizer state. Resume
+reevaluates the saved best model once to reconcile its validation score. If the
+destination has no best model, selection starts from the restored checkpoint;
+the source run’s earlier best weights are not carried into a new directory.
 
 ## Generic point-cloud input
 

@@ -420,6 +420,13 @@ def _save_training_checkpoint(path: Path, **kwargs) -> None:
             state_file.replace(path / state_file.name)
 
 
+def _save_best_model(model: SMART, output: Path) -> None:
+    """Replace the inference checkpoint only after its write has completed."""
+    temporary_best = output / ".best.pending.mdlus"
+    model.save(str(temporary_best))
+    temporary_best.replace(output / "best.mdlus")
+
+
 def run(cfg: DictConfig) -> list[dict]:
     """Train or resume, closing data readers even after a failed update."""
     with ExitStack() as resources:
@@ -784,6 +791,41 @@ def _run(cfg: DictConfig, resources: ExitStack) -> list[dict]:
             len(val_data),
             manager.world_size,
         )
+    if cfg.training.resume:
+        missing_best = torch.tensor(
+            int(not (output / "best.mdlus").is_file()), device=device
+        )
+        if manager.world_size > 1:
+            distributed.broadcast(missing_best, src=0)
+        # The best artifact can be newer than the last training checkpoint after
+        # an interruption or when save_interval > 1. Reconcile its actual score
+        # instead of trusting an older threshold in the training metadata.
+        if not missing_best.item():
+            model.load(output / "best.mdlus")
+        try:
+            best = evaluate(
+                model,
+                val_data,
+                device,
+                cfg.validation.chunk_size,
+                cfg.training.precision,
+                manager.rank,
+                manager.world_size,
+                cfg,
+            )["loss"]
+            if missing_best.item() and manager.rank == 0:
+                # A new output directory starts selection from the restored
+                # model, including when its training endpoint is already met.
+                _save_best_model(model, output)
+                log.info(
+                    "Initialized missing best.mdlus from resumed epoch %s "
+                    "with validation loss %.6g",
+                    start_epoch,
+                    best,
+                )
+        finally:
+            if not missing_best.item():
+                model.load(load_dir / f"SMART.0.{start_epoch}.mdlus")
     if cfg.training.get("compile_blocks", False):
         # Reuse compiled graphs across equal-shaped layers while keeping Module
         # checkpoint names and the stochastic geometry sampler unchanged.
@@ -947,6 +989,11 @@ def _run(cfg: DictConfig, resources: ExitStack) -> list[dict]:
                 stream.write(json.dumps(timing) + "\n")
             with (output / "metrics.jsonl").open("a") as stream:
                 stream.write(json.dumps(record) + "\n")
+            if is_best:
+                # Publish best weights before a resumable checkpoint records the
+                # improved threshold. Otherwise an interruption between the two
+                # saves could permanently leave best.mdlus missing or stale.
+                _save_best_model(model, output)
             if (
                 epoch == start_epoch
                 or (epoch + 1) % cfg.training.get("save_interval", 1) == 0
@@ -970,10 +1017,6 @@ def _run(cfg: DictConfig, resources: ExitStack) -> list[dict]:
                         "epoch_complete": step + 1 == len(loader),
                     },
                 )
-            if is_best:
-                temporary_best = output / ".best.pending.mdlus"
-                model.save(str(temporary_best))
-                temporary_best.replace(output / "best.mdlus")
         if manager.world_size > 1:
             distributed.barrier()
         epoch += 1
