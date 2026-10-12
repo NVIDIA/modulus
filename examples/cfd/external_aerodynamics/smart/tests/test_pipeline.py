@@ -194,7 +194,9 @@ def test_primary_training_resume_and_recipe_guards(config, tmp_path):
         Path(config.output_dir) / "checkpoints/SMART.0.2.mdlus"
     )
     full_optimizer = torch.load(
-        Path(config.output_dir) / "checkpoints/checkpoint.0.2.pt", weights_only=False
+        Path(config.output_dir) / "checkpoints/checkpoint.0.2.pt",
+        map_location="cpu",
+        weights_only=False,
     )["optimizer_state_dict"]
     config.output_dir = str(tmp_path / "primary-resumed")
     config.training.epochs = 1
@@ -209,7 +211,7 @@ def test_primary_training_resume_and_recipe_guards(config, tmp_path):
     for key, value in full.state_dict().items():
         torch.testing.assert_close(value, resumed.state_dict()[key], rtol=0, atol=0)
     checkpoint = Path(config.output_dir) / "checkpoints/checkpoint.0.2.pt"
-    saved = torch.load(checkpoint, weights_only=False)
+    saved = torch.load(checkpoint, map_location="cpu", weights_only=False)
     for index, state in full_optimizer["state"].items():
         for key, value in state.items():
             torch.testing.assert_close(
@@ -381,7 +383,11 @@ def test_weights_only_initialization_and_exact_resume(
         """Observe actual weights and empty optimizer states before the first update."""
         state = optimizer.state_dict()
         if all(not child["state"] for child in state.get("optimizers", [state])):
-            torch.testing.assert_close(model.state_dict(), source_state, rtol=0, atol=0)
+            # Check exact weight values independently of checkpoint storage devices.
+            actual = {
+                key: value.detach().cpu() for key, value in model.state_dict().items()
+            }
+            torch.testing.assert_close(actual, source_state, rtol=0, atol=0)
             assert all(group["lr"] == 2e-3 for group in optimizer.param_groups)
             fresh_starts.append(True)
         return backward(loss, model, optimizer, scaler, gradient_clip)
@@ -818,7 +824,9 @@ def test_update_budget_schedule_and_resume(config, tmp_path, monkeypatch):
     assert [r["optimization"]["optimizer_steps"] for r in uninterrupted] == [4, 2]
     full_path = Path(config.output_dir) / "checkpoints"
     full = Module.from_checkpoint(full_path / "SMART.0.2.mdlus")
-    full_state = torch.load(full_path / "checkpoint.0.2.pt", weights_only=False)
+    full_state = torch.load(
+        full_path / "checkpoint.0.2.pt", map_location="cpu", weights_only=False
+    )
     assert full_state["metadata"]["optimizer_updates"] == 6
     assert full_state["metadata"]["epoch_complete"] is False
     assert full_state["scheduler_state_dict"]["last_epoch"] == 6
@@ -843,7 +851,9 @@ def test_update_budget_schedule_and_resume(config, tmp_path, monkeypatch):
     resumed = Module.from_checkpoint(resumed_path / "SMART.0.2.mdlus")
     for key, value in full.state_dict().items():
         torch.testing.assert_close(value, resumed.state_dict()[key], rtol=0, atol=0)
-    resumed_state = torch.load(resumed_path / "checkpoint.0.2.pt", weights_only=False)
+    resumed_state = torch.load(
+        resumed_path / "checkpoint.0.2.pt", map_location="cpu", weights_only=False
+    )
     assert resumed_state["scheduler_state_dict"] == full_state["scheduler_state_dict"]
     for index, state in full_state["optimizer_state_dict"]["state"].items():
         for key, value in state.items():
@@ -992,7 +1002,9 @@ def test_update_scheduler_does_not_count_overflow_skips(config, monkeypatch):
     assert [entry["optimization"]["optimizer_updates"] for entry in history] == [3, 4]
     assert sum(entry["optimization"]["skipped_steps"] for entry in history) == 1
     saved = torch.load(
-        Path(config.output_dir) / "checkpoints/checkpoint.0.2.pt", weights_only=False
+        Path(config.output_dir) / "checkpoints/checkpoint.0.2.pt",
+        map_location="cpu",
+        weights_only=False,
     )
     assert saved["scheduler_state_dict"]["last_epoch"] == 4
     assert saved["optimizer_state_dict"]["param_groups"][0]["lr"] == 0.003 * 0.25

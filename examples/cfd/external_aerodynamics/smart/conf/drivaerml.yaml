@@ -133,3 +133,10 @@ scheduler:
   _target_: torch.optim.lr_scheduler.StepLR
   step_size: 10900
   gamma: 0.5
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: ${output_dir}/hydra
+  output_subdir: null
