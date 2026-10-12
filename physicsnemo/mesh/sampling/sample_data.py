@@ -30,7 +30,7 @@ from tensordict import TensorDict
 from physicsnemo.mesh.neighbors._adjacency import Adjacency, build_adjacency_from_pairs
 from physicsnemo.mesh.spatial import BVH
 from physicsnemo.nn.functional.neighbors import knn
-from physicsnemo.utils._small_linalg import small_det, small_inverse
+from physicsnemo.utils._small_linalg import normalized_inverse
 
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh
@@ -110,10 +110,11 @@ def _solve_barycentric_system(
       as accurately as a QR factorization. The normal equations with the Gram
       matrix would square the condition number of thin cells.
 
-    Degenerate cells, whose normalized edge matrix (square systems) or Gram
-    matrix has a numerically zero determinant (within a few machine epsilons,
-    which also catches exactly singular cells whose determinant rounds to a
-    tiny nonzero value), have no barycentric coordinates. Previously, on CPU, they fell back to the minimum-norm
+    Degenerate cells, whose edges, scaled to unit length, have a numerically
+    zero determinant (within a few machine epsilons, which also catches
+    exactly singular cells whose determinant rounds to a tiny nonzero value),
+    have no barycentric coordinates. Long, thin but well-shaped cells are not
+    degenerate. Previously, on CPU, they fell back to the minimum-norm
     least-squares solution and could contain query points; on CUDA the result
     was undefined. They now get NaN coordinates (and a NaN
     ``reconstruction_error`` for codimension != 0), so no containment test
@@ -121,6 +122,14 @@ def _solve_barycentric_system(
     substitute, so gradients stay finite. Near-singular cells keep their
     (large) coordinates, as with ``torch.linalg.solve``.
     """
+    if relative_vectors.dtype in (
+        torch.float16,
+        torch.bfloat16,
+    ):  # tolerances need float32
+        weights, error = _solve_barycentric_system(
+            relative_vectors.float(), query_relative.float()
+        )
+        return weights.to(relative_vectors.dtype), error.to(relative_vectors.dtype)
     n_manifold_dims = relative_vectors.shape[-2]
     n_spatial_dims = relative_vectors.shape[-1]
 
@@ -136,11 +145,10 @@ def _solve_barycentric_system(
 
     if n_spatial_dims == n_manifold_dims:
         ### Square system: q = E^T w, so w = inv(E)^T q
-        is_degenerate = small_det(E).abs() <= singular_tolerance
-        eye = torch.eye(n_manifold_dims, dtype=E.dtype, device=E.device)
-        E_inv = small_inverse(torch.where(is_degenerate[..., None, None], eye, E))
+        # With the edges scaled to unit length, E = D Ê, w = D^-1 inv(Ê)^T q.
+        E_hat_inv, edge_lengths, is_degenerate = normalized_inverse(E)
         # Broadcast-and-sum: a batched matmul of millions of tiny matrices is slow.
-        weights_1_to_n = (E_inv * q.unsqueeze(-1)).sum(dim=-2)
+        weights_1_to_n = (E_hat_inv * q.unsqueeze(-1)).sum(dim=-2) / edge_lengths
 
         reconstruction_error = torch.zeros(
             weights_1_to_n.shape[:-1],

@@ -89,10 +89,14 @@ def test_singular_matrix_with_assume_invertible_poisons_caches(device) -> None:
 
 
 @pytest.mark.skipif(not _CUDA, reason="CUDA required to detect host synchronizations")
-def test_cotan_weight_inverse_is_sync_free(monkeypatch) -> None:
+@pytest.mark.parametrize("n_spatial_dims", [2, 3])
+def test_cotan_weight_inverse_is_sync_free(monkeypatch, n_spatial_dims) -> None:
     """FEM Gram-matrix inversion must not synchronize CUDA for error checks."""
     device = torch.device("cuda")
     mesh = _triangle_mesh(device)
+    if n_spatial_dims == 3:  # inverts the Gram matrix rather than the edge matrix
+        points = torch.nn.functional.pad(mesh.points, (0, 1), value=0.5)
+        mesh = Mesh(points=points, cells=mesh.cells)
     _ = mesh.cell_areas
 
     # Topology extraction has independently data-dependent output. Replace it
@@ -112,23 +116,27 @@ def test_cotan_weight_inverse_is_sync_free(monkeypatch) -> None:
     # regression test against reverting to the synchronizing ``linalg.inv``.
     from physicsnemo.mesh.geometry import dual_meshes
 
-    original_inverse = dual_meshes.small_inverse
-    called = False
+    called = []
 
-    def checked_inverse(*args, **kwargs):
-        nonlocal called
-        called = True
-        previous_mode = torch.cuda.get_sync_debug_mode()
-        torch.cuda.set_sync_debug_mode("error")
-        try:
-            return original_inverse(*args, **kwargs)
-        finally:
-            torch.cuda.set_sync_debug_mode(previous_mode)
+    def checked(original):
+        def checked_inverse(*args, **kwargs):
+            called.append(original.__name__)
+            previous_mode = torch.cuda.get_sync_debug_mode()
+            torch.cuda.set_sync_debug_mode("error")
+            try:
+                return original(*args, **kwargs)
+            finally:
+                torch.cuda.set_sync_debug_mode(previous_mode)
 
-    monkeypatch.setattr(dual_meshes, "small_inverse", checked_inverse)
+        return checked_inverse
+
+    for name in ("normalized_inverse", "normalized_gram_inverse"):
+        monkeypatch.setattr(dual_meshes, name, checked(getattr(dual_meshes, name)))
     compute_cotan_weights_fem(mesh)
     torch.cuda.synchronize()
-    assert called
+    assert called == [
+        "normalized_inverse" if n_spatial_dims == 2 else "normalized_gram_inverse"
+    ]
 
 
 @pytest.mark.skipif(not _CUDA, reason="CUDA required to detect host synchronizations")

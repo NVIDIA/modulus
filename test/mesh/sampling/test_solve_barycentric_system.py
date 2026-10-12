@@ -297,3 +297,24 @@ def test_sampling_gradients_finite_next_to_degenerate_cell(
 
     assert sampled["u"].isfinite().all()
     assert points.grad.isfinite().all()
+
+
+@pytest.mark.parametrize("length", [1e4, 1e6])
+def test_stretched_cells_contain_their_centroid(length, device):
+    """Long, thin but well-shaped cells are not degenerate (float32)."""
+    for points in (
+        torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, length]]),
+        torch.tensor(
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, length]]
+        ),
+    ):
+        n_verts = points.shape[0]
+        relative = (points[1:] - points[:1])[None].to(device)
+        query = (points.mean(dim=0) - points[0])[None].to(device)
+
+        bary, error = _solve_barycentric_system(relative, query)
+
+        torch.testing.assert_close(
+            bary, torch.full((1, n_verts), 1 / n_verts, device=device)
+        )
+        assert float(error[0]) == 0.0

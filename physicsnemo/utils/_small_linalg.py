@@ -22,11 +22,14 @@ per cell, so these helpers use closed forms for matrices up to 3x3, and
 ``small_lstsq`` a Gram-Schmidt QR over the few columns of each system
 (``batched_lstsq`` picks it or ``torch.linalg.lstsq``, whichever is faster). They use
 only elementwise products and sums, so they need no CUDA synchronization and
-support autograd and reduced-precision dtypes.
+support autograd. Tests against tolerances (singularity, rank) need at least
+float32 precision, so 16-bit inputs are computed in float32.
 """
 
 import torch
-from jaxtyping import Float
+from jaxtyping import Bool, Float
+
+_HALF_DTYPES = (torch.float16, torch.bfloat16)
 
 
 def small_det(
@@ -54,12 +57,22 @@ def small_inverse(
     """Inverse of each small invertible matrix, by its adjugate for n <= 3.
 
     The caller guarantees invertibility, so no error checks (which would
-    synchronize CUDA callers) are made.
+    synchronize CUDA callers) are made. :func:`normalized_inverse` also tests
+    for singularity.
     """
-    n = matrices.shape[-1]
-    m = matrices
+    if matrices.shape[-1] > 3:
+        return torch.linalg.inv_ex(matrices, check_errors=False).inverse
+    adjugate, det = _adjugate_and_det(matrices)
+    return adjugate / det[..., None, None]
+
+
+def _adjugate_and_det(
+    m: Float[torch.Tensor, "... n n"],
+) -> tuple[Float[torch.Tensor, "... n n"], Float[torch.Tensor, "..."]]:
+    """Adjugate and determinant of each matrix, n <= 3, from the same cofactors."""
+    n = m.shape[-1]
     if n == 1:
-        return 1.0 / m
+        return torch.ones_like(m), m[..., 0, 0]
     if n == 2:
         adjugate = torch.stack(
             [
@@ -68,17 +81,140 @@ def small_inverse(
             ],
             dim=-2,
         )
-        det = small_det(matrices)
-    elif n == 3:
-        # Row i of the cofactor matrix is the cross product of rows i + 1 and
-        # i + 2 (mod 3); the adjugate is its transpose. Expanding along row 0
-        # gives the determinant from the same cofactors.
-        cofactors = torch.linalg.cross(m.roll(-1, dims=-2), m.roll(-2, dims=-2), dim=-1)
-        adjugate = cofactors.transpose(-1, -2)
-        det = (m[..., 0, :] * cofactors[..., 0, :]).sum(-1)
+        return adjugate, small_det(m)
+    # Row i of the cofactor matrix is the cross product of rows i + 1 and i + 2
+    # (mod 3); the adjugate is its transpose. Expanding along row 0 gives the
+    # determinant from the same cofactors.
+    cofactors = torch.linalg.cross(m.roll(-1, dims=-2), m.roll(-2, dims=-2), dim=-1)
+    return cofactors.transpose(-1, -2), (m[..., 0, :] * cofactors[..., 0, :]).sum(-1)
+
+
+def _unit_rows(
+    matrices: Float[torch.Tensor, "... n d"],
+) -> tuple[
+    Float[torch.Tensor, "... n d"],
+    Float[torch.Tensor, "... n"],
+    Bool[torch.Tensor, "..."],
+]:
+    """Rows scaled to unit length, the row lengths, and whether any row is too short.
+
+    A row whose length squared would underflow carries no direction; it keeps
+    length 1, and its matrix is flagged.
+    """
+    row_lengths = torch.linalg.vector_norm(matrices, dim=-1)  # (..., n)
+    has_length = row_lengths > torch.finfo(matrices.dtype).tiny ** 0.5
+    row_lengths = torch.where(has_length, row_lengths, 1.0)
+    return matrices / row_lengths[..., None], row_lengths, ~has_length.all(dim=-1)
+
+
+def _invert_or_identity(
+    matrices: Float[torch.Tensor, "... n n"],
+    is_singular: Bool[torch.Tensor, "..."],
+    adjugate: Float[torch.Tensor, "... n n"] | None,
+    det: Float[torch.Tensor, "..."],
+) -> Float[torch.Tensor, "... n n"]:
+    """Inverse of each nonsingular matrix and the identity for the others.
+
+    Only finite values are divided, so gradients stay finite at singular matrices.
+    """
+    n = matrices.shape[-1]
+    eye = torch.eye(n, dtype=matrices.dtype, device=matrices.device)
+    if adjugate is None:  # n > 3
+        safe = torch.where(is_singular[..., None, None], eye, matrices)
+        return torch.linalg.inv_ex(safe, check_errors=False).inverse
+    safe_adjugate = torch.where(is_singular[..., None, None], eye, adjugate)
+    safe_det = torch.where(is_singular, 1.0, det)
+    return safe_adjugate / safe_det[..., None, None]
+
+
+def normalized_inverse(
+    matrices: Float[torch.Tensor, "... n n"],
+    tolerance: float | None = None,
+) -> tuple[
+    Float[torch.Tensor, "... n n"],
+    Float[torch.Tensor, "... n"],
+    Bool[torch.Tensor, "..."],
+]:
+    r"""Inverse of each small square matrix ``M``, with a scale-free singularity test.
+
+    Each row is first scaled to unit length, ``M = D \hat{M}`` with ``D`` the
+    diagonal of row lengths. Then :math:`|\det \hat{M}| \le 1` (Hadamard's
+    inequality), with equality for orthogonal rows of any lengths, so it measures
+    how close the rows are to linear dependence, not how stretched ``M`` is. A
+    matrix counts as singular when a row has no usable length or
+    :math:`|\det \hat{M}| \le` ``tolerance`` (by default ``n * eps``, the rounding
+    error of an exactly singular matrix). Singular matrices get the identity
+    instead of :math:`\hat{M}^{-1}`, keeping values and gradients finite; callers
+    choose what to return for them.
+
+    Returns
+    -------
+    inverse : Float[torch.Tensor, "... n n"]
+        :math:`\hat{M}^{-1}`, so that :math:`M^{-1} = \hat{M}^{-1} D^{-1}`, i.e.
+        ``inverse / row_lengths[..., None, :]``.
+    row_lengths : Float[torch.Tensor, "... n"]
+        Length of each row (1 for rows too short to scale).
+    is_singular : Bool[torch.Tensor, "..."]
+        Matrices that are singular to working precision, or below ``tolerance``.
+    """
+    n = matrices.shape[-1]
+    if tolerance is None:
+        tolerance = n * torch.finfo(matrices.dtype).eps
+    unit, row_lengths, has_short_row = _unit_rows(matrices)
+    if n <= 3:
+        adjugate, det = _adjugate_and_det(unit)
     else:
-        return torch.linalg.inv_ex(matrices, check_errors=False).inverse
-    return adjugate / det[..., None, None]
+        adjugate, det = None, torch.linalg.det(unit)
+    is_singular = has_short_row | ~(det.abs() > tolerance)
+    return (
+        _invert_or_identity(unit, is_singular, adjugate, det),
+        row_lengths,
+        is_singular,
+    )
+
+
+def normalized_gram_inverse(
+    rows: Float[torch.Tensor, "... n d"],
+    tolerance: float | None = None,
+) -> tuple[
+    Float[torch.Tensor, "... n n"],
+    Float[torch.Tensor, "... n"],
+    Bool[torch.Tensor, "..."],
+]:
+    r"""Inverse of the Gram matrix of the unit rows of each ``n x d`` matrix, n <= d.
+
+    With ``E = D \hat{E}`` (rows scaled to unit length), the Gram matrix
+    :math:`G = E E^\top = D \hat{G} D` and :math:`\hat{G} = \hat{E} \hat{E}^\top` has a
+    unit diagonal, so :math:`0 \le \det \hat{G} \le 1`. The singularity test is
+    that of :func:`normalized_inverse`, :math:`\sqrt{\det \hat{G}} \le`
+    ``tolerance``, since :math:`\det \hat{G} = \det(\hat{E})^2` for square ``E``.
+
+    Returns
+    -------
+    inverse : Float[torch.Tensor, "... n n"]
+        :math:`\hat{G}^{-1}`, so that :math:`G^{-1} = D^{-1} \hat{G}^{-1} D^{-1}`.
+    row_lengths : Float[torch.Tensor, "... n"]
+        Length of each row (1 for rows too short to scale).
+    is_singular : Bool[torch.Tensor, "..."]
+        Matrices whose rows are dependent to working precision, or below
+        ``tolerance``; their inverse is the identity.
+    """
+    n = rows.shape[-2]
+    if tolerance is None:
+        tolerance = n * torch.finfo(rows.dtype).eps
+    unit, row_lengths, has_short_row = _unit_rows(rows)
+    # Broadcast-and-sum: a batched matmul of millions of tiny matrices is slow.
+    gram = (unit.unsqueeze(-2) * unit.unsqueeze(-3)).sum(dim=-1)  # (..., n, n)
+    if n <= 3:
+        adjugate, det = _adjugate_and_det(gram)
+    else:
+        adjugate, det = None, torch.linalg.det(gram)
+    is_singular = has_short_row | ~(det > tolerance**2)
+    return (
+        _invert_or_identity(gram, is_singular, adjugate, det),
+        row_lengths,
+        is_singular,
+    )
 
 
 def small_lstsq(
@@ -112,6 +248,8 @@ def small_lstsq(
     Float[torch.Tensor, "... d n_rhs"]
         Minimum-norm least-squares solutions.
     """
+    if A.dtype in _HALF_DTYPES:  # the rank test needs float32 precision
+        return small_lstsq(A.float(), B.float()).to(A.dtype)
     k, d = A.shape[-2:]
     n_rhs = B.shape[-1]
     batch_shape = A.shape[:-2]
@@ -119,8 +257,9 @@ def small_lstsq(
     identity_rows = [(columns[:d] == i).to(A.dtype) for i in range(d)]  # each (d,)
 
     ### Normalize A by its largest entry, so squared norms stay in range
+    # NaN or inf entries keep a NaN or inf scale, so they propagate.
     scale = A.detach().abs().amax(dim=(-2, -1), keepdim=True)  # (..., 1, 1)
-    scale = torch.where(scale > 0, scale, 1.0)
+    scale = torch.where(scale == 0, 1.0, scale)
     work = torch.cat([A / scale, B], dim=-1)  # (..., k, d + n_rhs)
 
     rcond = torch.finfo(A.dtype).eps * max(k, d)
@@ -151,9 +290,10 @@ def small_lstsq(
 
         column = work[..., :, j]  # (..., k)
         norm2 = column.square().sum(-1)  # (...)
-        # At most k columns are independent.
+        # At most k columns are independent. Written so that NaN counts as
+        # independent and propagates, rather than zeroing the solution.
         if j < k:
-            independent = norm2 > (rcond * R_00) ** 2
+            independent = ~(norm2 <= (rcond * R_00) ** 2)
         else:
             independent = torch.zeros_like(norm2, dtype=torch.bool)
         norm = torch.where(independent, norm2, 1.0).sqrt()
@@ -240,13 +380,15 @@ def batched_lstsq(
     (32 Grace cores) and 10M cells (GB300). On CPU, :func:`small_lstsq` is
     15-50x faster than batched ``torch.linalg.lstsq``, which loops over LAPACK
     calls. On CUDA, batched ``torch.linalg.lstsq`` is 2-4x faster than
-    :func:`small_lstsq`, but its only driver, ``gels``, assumes full rank. It
-    raises on exactly rank-deficient systems, such as flat stencils in a
-    coordinate plane: those batches fall back to :func:`small_lstsq`. Systems
-    that are rank-deficient only up to rounding (collinear or underdetermined
-    stencils, say) still get the answer of ``gels`` on CUDA, which is not the
-    minimum-norm solution.
+    :func:`small_lstsq`, but its only driver, ``gels``, assumes full rank, so on
+    CUDA rank-deficient systems are not supported: ``gels`` returns NaN, inf or
+    a large non-minimum-norm answer for them, as it did before this function
+    existed. When a batch of two or more systems contains an exactly
+    rank-deficient one (such as a flat stencil in a coordinate plane),
+    ``gels`` raises instead, and the batch falls back to :func:`small_lstsq`.
     """
+    if A.dtype in _HALF_DTYPES:  # neither solver handles 16-bit rank tests
+        return batched_lstsq(A.float(), B.float()).to(A.dtype)
     if A.is_cuda:
         try:
             return torch.linalg.lstsq(A, B).solution

@@ -29,7 +29,12 @@ from physicsnemo.mesh.geometry._angles import compute_vertex_angles
 from physicsnemo.mesh.geometry.dual_meshes import compute_cotan_weights_fem
 from physicsnemo.mesh.utilities._tolerances import safe_eps
 from physicsnemo.mesh.utilities._topology import extract_unique_edges
-from physicsnemo.utils._small_linalg import small_det, small_inverse
+from physicsnemo.utils._small_linalg import (
+    normalized_gram_inverse,
+    normalized_inverse,
+    small_det,
+    small_inverse,
+)
 from test.mesh.mesh.test_slicing_sync import _cuda_sync_budget
 
 
@@ -111,29 +116,36 @@ def _reference_vertex_angles(mesh: Mesh) -> torch.Tensor:
 
 
 def _reference_cotan_weights(mesh: Mesh) -> torch.Tensor:
-    """FEM cotangent weights via batched Gram inverses and C = H G^-1 H^T."""
+    """FEM cotangent weights via batched Gram inverses and C = H G^-1 H^T.
+
+    With the edges at unit length, G = D G_hat D. Degenerate cells, with
+    det(G_hat) < 1e-12 or an edge of no length, invert the identity in place of
+    G_hat, as the closed form does.
+    """
     n = mesh.n_manifold_dims
     dtype = mesh.points.dtype
     unique_edges, inverse_indices = extract_unique_edges(mesh)
     vertices = mesh.points[mesh.cells]
     E = vertices[:, 1:, :] - vertices[:, :1, :]
-    G = E @ E.transpose(-1, -2)
-    length_scale = E.norm(dim=-1).mean(dim=-1)
-    has_extent = length_scale > torch.finfo(dtype).tiny ** 0.5
-    g_scale = torch.where(has_extent, length_scale, 1.0).square()
-    is_degenerate = ~has_extent | (
-        torch.linalg.det(G / g_scale[:, None, None]).abs() < 1e-12
-    )
-    eye = torch.eye(n, dtype=dtype, device=G.device)
-    G = torch.where(is_degenerate[:, None, None], g_scale[:, None, None] * eye, G)
+    lengths = E.norm(dim=-1)
+    has_length = lengths > torch.finfo(dtype).tiny ** 0.5
+    lengths = torch.where(has_length, lengths, 1.0)
+    E_hat = E / lengths[..., None]
+    G_hat = E_hat @ E_hat.transpose(-1, -2)
+    is_degenerate = ~has_length.all(dim=-1) | (torch.linalg.det(G_hat) < 1e-12)
+    eye = torch.eye(n, dtype=dtype, device=G_hat.device)
+    G_hat = torch.where(is_degenerate[:, None, None], eye, G_hat)
     H = torch.cat([-torch.ones(1, n, dtype=dtype), torch.eye(n, dtype=dtype)]).to(
-        G.device
+        G_hat.device
     )
     # Unchecked, as main inverted G: LAPACK may meet an exactly zero pivot in float32
-    C = H @ torch.linalg.inv_ex(G, check_errors=False).inverse @ H.T
+    G_inv = torch.linalg.inv_ex(G_hat, check_errors=False).inverse / (
+        lengths[:, :, None] * lengths[:, None, :]
+    )
+    C = H @ G_inv @ H.T
     rows, cols = torch.triu_indices(n + 1, n + 1, offset=1)
     per_cell = -mesh.cell_areas[:, None] * C[:, rows, cols]
-    weights = torch.zeros(len(unique_edges), dtype=dtype, device=G.device)
+    weights = torch.zeros(len(unique_edges), dtype=dtype, device=G_hat.device)
     return weights.scatter_add_(0, inverse_indices, per_cell.reshape(-1))
 
 
@@ -146,6 +158,69 @@ def test_small_det_and_inverse_match_linalg(n, batch_shape, device):
 
     torch.testing.assert_close(small_det(matrices), torch.linalg.det(matrices))
     torch.testing.assert_close(small_inverse(matrices), torch.linalg.inv(matrices))
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 4])
+def test_normalized_inverse_ignores_row_lengths(n, device):
+    """Rows of very different lengths (a stretched cell) are not singular."""
+    generator = torch.Generator().manual_seed(n)
+    directions = torch.randn(64, n, n, generator=generator, dtype=torch.float64)
+    directions = directions + 3.0 * torch.eye(n, dtype=torch.float64)
+    lengths = 10.0 ** (
+        16 * torch.rand(64, n, generator=generator, dtype=torch.float64) - 8
+    )
+    matrices = (lengths[..., None] * directions).to(device)
+
+    inverse, row_lengths, is_singular = normalized_inverse(matrices)
+
+    assert not is_singular.any()
+    # inv(M) = inv(M_hat) D^-1
+    identity = (inverse / row_lengths[..., None, :]) @ matrices
+    torch.testing.assert_close(
+        identity, torch.eye(n, dtype=torch.float64, device=device).expand_as(identity)
+    )
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_normalized_inverse_flags_singular_matrices(dtype, device):
+    """Zero rows and rows dependent up to rounding are singular; gradients are finite."""
+    e1 = torch.tensor([0.3, -0.7, 0.2], dtype=dtype)
+    e2 = torch.tensor([0.9, 0.4, -0.1], dtype=dtype)
+    matrices = torch.stack(
+        [
+            torch.stack([e1, e2, torch.zeros(3, dtype=dtype)]),  # zero row
+            torch.stack([e1, e2, 2 * e1]),  # repeated direction
+            torch.stack([e1, e2, e1 + e2]),  # dependent up to rounding
+            torch.stack([e1, e2, torch.tensor([0.0, 0.0, 1e4], dtype=dtype)]),  # fine
+        ]
+    ).to(device)
+    matrices.requires_grad_(True)
+
+    inverse, _, is_singular = normalized_inverse(matrices)
+
+    assert is_singular.tolist() == [True, True, True, False]
+    inverse.sum().backward()
+    assert torch.isfinite(matrices.grad).all()
+
+
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_normalized_gram_inverse_matches_gram_inverse(n, device):
+    """inv(G) = D^-1 inv(G_hat) D^-1 for rows of very different lengths."""
+    generator = torch.Generator().manual_seed(n)
+    rows = torch.randn(64, n, n + 1, generator=generator, dtype=torch.float64)
+    lengths = 10.0 ** (
+        8 * torch.rand(64, n, generator=generator, dtype=torch.float64) - 4
+    )
+    rows = (lengths[..., None] * rows / rows.norm(dim=-1, keepdim=True)).to(device)
+
+    inverse, row_lengths, is_singular = normalized_gram_inverse(rows)
+
+    assert not is_singular.any()
+    gram = rows @ rows.transpose(-1, -2)
+    torch.testing.assert_close(
+        inverse / (row_lengths[..., :, None] * row_lengths[..., None, :]),
+        torch.linalg.inv(gram),
+    )
 
 
 @pytest.mark.parametrize(
@@ -267,6 +342,52 @@ def test_float32_cotan_weights_of_thin_cells(
     assert fast <= 2 * batched
     if n_manifold_dims == n_spatial_dims:
         assert fast <= batched / 10
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("length", [1e4, 1e6])
+def test_cotan_weights_of_stretched_cells(dtype, length, device):
+    """A long, thin but well-shaped tetrahedron is not treated as degenerate."""
+    points = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, length]],
+        dtype=torch.float64,
+    )
+    cells = torch.tensor([[0, 1, 2, 3]])
+    mesh = Mesh(points=points.to(device=device, dtype=dtype), cells=cells.to(device))
+
+    weights, edges = compute_cotan_weights_fem(mesh)
+
+    # Float64 FEM weights without any degeneracy cutoff; for one cell the unique
+    # edges are in itertools.combinations order
+    E = points[1:] - points[:1]
+    H = torch.cat(
+        [-torch.ones(1, 3, dtype=torch.float64), torch.eye(3, dtype=torch.float64)]
+    )
+    C = H @ torch.linalg.inv(E @ E.T) @ H.T
+    rows, cols = torch.triu_indices(4, 4, offset=1)
+    expected = -(length / 6) * C[rows, cols]
+    assert edges.tolist() == [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]
+    torch.testing.assert_close(
+        weights.double().cpu(),
+        expected,
+        rtol=1e-5 if dtype == torch.float32 else 1e-9,
+        atol=1e-6 * expected.abs().max(),
+    )
+
+
+def test_float16_cotan_weights(device):
+    """16-bit meshes run in float32, so the degeneracy cutoff still works."""
+    points = torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [2.0, 0.0]])
+    cells = torch.tensor([[0, 1, 2], [0, 1, 3]])  # cell 1 is collinear
+    half = compute_cotan_weights_fem(
+        Mesh(points=points.half().to(device), cells=cells.to(device))
+    )[0]
+    full = compute_cotan_weights_fem(
+        Mesh(points=points.to(device), cells=cells.to(device))
+    )[0]
+
+    assert half.dtype == torch.float16
+    torch.testing.assert_close(half.float(), full, rtol=1e-3, atol=1e-3)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")

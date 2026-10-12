@@ -91,6 +91,8 @@ def stable_angle_between_vectors(v1: torch.Tensor, v2: torch.Tensor) -> torch.Te
     >>> torch.allclose(angle, torch.tensor([torch.pi / 2]))
     True
     """
+    # torch.linalg.cross needs inputs with the same number of dimensions
+    v1, v2 = torch.broadcast_tensors(v1, v2)
     dot_product = (v1 * v2).sum(dim=-1)
 
     n_dims = v1.shape[-1]

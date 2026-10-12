@@ -43,7 +43,7 @@ from physicsnemo.mesh.generate._simplex_ops import (
     signed_volumes,
     volume_length_quality,
 )
-from physicsnemo.utils._small_linalg import small_inverse
+from physicsnemo.utils._small_linalg import normalized_inverse
 
 __all__ = [
     "peel_boundary_slivers",
@@ -198,12 +198,13 @@ def pin_feature_points(points, cells, targets, h):
         # sum_k bary_k (v_k - v0). rel stores edges as ROWS, so solve the
         # transposed system (using rel directly silently answers a
         # different question -- found by adversarial fuzzing, round 2):
-        # bary = inv(rel^T) (x - v0) = inv(rel)^T (x - v0). Edges in units
-        # of h keep the closed-form inverse in range; cells failing vol_ok
-        # invert the identity instead and are never hosts.
-        eye = torch.eye(d, dtype=points.dtype, device=points.device)
-        rel_inv = small_inverse(torch.where(vol_ok[:, None, None], rel / h, eye))
-        bary = (rel_inv * ((x - p0) / h)[:, :, None]).sum(dim=1)
+        # bary = inv(rel^T) (x - v0) = inv(rel)^T (x - v0). With the edges
+        # scaled to unit length, rel = D rel_hat, so bary = D^-1 inv(rel_hat)^T
+        # (x - v0), which stays in range. Singular cells invert the identity
+        # instead and, like cells failing vol_ok, are never hosts.
+        rel_hat_inv, edge_lengths, is_singular = normalized_inverse(rel)
+        vol_ok = vol_ok & ~is_singular
+        bary = (rel_hat_inv * (x - p0)[:, :, None]).sum(dim=1) / edge_lengths
         lam0 = 1.0 - bary.sum(dim=1)
         eps = 1e-9
         lam = torch.cat([lam0[:, None], bary], dim=1)  # (M, d+1) barycentric

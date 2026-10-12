@@ -656,6 +656,20 @@ class TestHigherDimensionalAngles:
             stable_angle_between_vectors(v1, v2), expected, rtol=1e-6, atol=0
         )
 
+    @pytest.mark.parametrize("n_dims", [2, 3, 4])
+    def test_stable_angle_between_vectors_broadcasts(self, device, n_dims):
+        """One vector against a batch of vectors, in every dimension."""
+        v1 = torch.zeros(n_dims, device=device)
+        v1[0] = 1.0
+        v2 = torch.zeros(2, n_dims, device=device)
+        v2[0, 1] = 1.0
+        v2[1, :2] = 1.0
+
+        torch.testing.assert_close(
+            stable_angle_between_vectors(v1, v2),
+            torch.tensor([torch.pi / 2, torch.pi / 4], device=device),
+        )
+
     def test_edges_in_higher_dim_space(self, device):
         """Test 1D manifold (edges) embedded in higher dimensional space."""
         # Create bent polyline in 4D space (not straight)

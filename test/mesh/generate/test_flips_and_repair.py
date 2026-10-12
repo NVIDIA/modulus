@@ -472,3 +472,18 @@ def test_pin_feature_point_splits_host_cell(device, d, scale):
     vol = signed_volumes(new_points, new_cells)
     assert bool((vol > 0).all())
     torch.testing.assert_close(vol.sum(), vol0, rtol=1e-12, atol=0)
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("offset", [0.0, 100.0])
+def test_radon_signs_reject_exactly_coplanar_clusters(dtype, offset):
+    """Clusters of 5 points exactly on one plane are never in general position,
+    including in float32, where their minors round to about 1e-6."""
+    generator = torch.Generator().manual_seed(0)
+    xy = torch.randint(-64, 64, (2000 * 5, 2), generator=generator) / 16
+    points = torch.cat([xy, xy[:, :1] + 2 * xy[:, 1:]], dim=1)  # z = x + 2y
+    clusters = torch.arange(2000 * 5).view(2000, 5)
+
+    _, ok = _radon_signs((points + offset).to(dtype), clusters)
+
+    assert not ok.any()

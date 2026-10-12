@@ -92,11 +92,14 @@ def _radon_signs(points, cluster_verts):
     minors = small_det(sub[:, :, 1:, :] - sub[:, :, :1, :])  # (k, d+2)
     lam = torch.where(j % 2 == 0, minors, -minors)
     lam_max = lam.abs().max(dim=1, keepdim=True).values
-    # Scale-free rank test: every |det| below 1e-12 L^d means a is
-    # numerically rank-deficient (e.g. all d+2 points in one hyperplane).
-    full_rank = lam_max[:, 0] > 1e-12
-    lam = lam / lam_max.clamp_min(1e-12)
-    signs = torch.sign(torch.where(lam.abs() < 1e-9, torch.zeros_like(lam), lam))
+    # Scale-free rank test: every |det| within rounding of 0 (in units of L^d)
+    # means a is numerically rank-deficient (e.g. all d+2 points in one
+    # hyperplane). Dtype-aware, like rel_eps in _candidates: the minors of
+    # exactly coplanar float32 points round to about 1e-6, far above 1e-12.
+    tol = max(1e-9, 64.0 * torch.finfo(p.dtype).eps)
+    full_rank = lam_max[:, 0] > tol
+    lam = lam / lam_max.clamp_min(tol)
+    signs = torch.sign(torch.where(lam.abs() < tol, torch.zeros_like(lam), lam))
     ok = (signs != 0).all(dim=1) & full_rank
     return signs, ok
 

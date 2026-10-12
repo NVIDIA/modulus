@@ -214,3 +214,38 @@ def test_embedded_circumcenters_match_lstsq(
     radius = (vertices.double().cpu() - reference[:, None, :]).norm(dim=-1).mean(dim=-1)
     error = (centers.double().cpu() - reference).norm(dim=-1) / radius
     assert float(error.max()) < (1e-2 if dtype == torch.float32 else 1e-10)
+
+
+@pytest.mark.parametrize(
+    ("dtype", "length"),
+    [(torch.float32, 1e4), (torch.float32, 1e6), (torch.float64, 1e9)],
+)
+def test_stretched_square_cells_keep_their_circumcenter(device, dtype, length) -> None:
+    """Long, thin but well-shaped cells are not degenerate: a triangle in 2D and
+    a tetrahedron in 3D with one long edge keep their exact circumcenter."""
+    triangle = torch.tensor([[[0.0, 0.0], [1.0, 0.0], [0.0, length]]], dtype=dtype)
+    tetrahedron = torch.tensor(
+        [[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, length]]],
+        dtype=dtype,
+    )
+    for vertices, expected in (
+        (triangle, [[0.5, length / 2]]),
+        (tetrahedron, [[0.5, 0.5, length / 2]]),
+    ):
+        torch.testing.assert_close(
+            compute_circumcenters(vertices.to(device)),
+            torch.tensor(expected, dtype=dtype, device=device),
+        )
+
+
+def test_float16_circumcenters(device) -> None:
+    """16-bit cells run in float32, so degenerate cells are still flagged."""
+    vertices = torch.tensor(
+        [[[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]]],
+        device=device,
+    )
+    centers = compute_circumcenters(vertices.half())
+    assert centers.dtype == torch.float16
+    torch.testing.assert_close(
+        centers.float(), torch.tensor([[0.5, 0.5], [1.0, 0.0]], device=device)
+    )

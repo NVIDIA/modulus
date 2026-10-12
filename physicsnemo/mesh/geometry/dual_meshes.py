@@ -54,7 +54,11 @@ import torch
 from jaxtyping import Float, Int
 
 from physicsnemo.mesh.utilities._tolerances import safe_eps
-from physicsnemo.utils._small_linalg import small_det, small_inverse, small_lstsq
+from physicsnemo.utils._small_linalg import (
+    normalized_gram_inverse,
+    normalized_inverse,
+    small_lstsq,
+)
 
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh
@@ -465,10 +469,10 @@ def compute_circumcenters(
 
     Then :math:`c = v_0 + d`. Square systems (full-dimensional cells) use the
     closed form :math:`d = \tfrac{1}{2} E^{-1} [\|e_i\|^2]_i` with
-    :math:`E = A / 2` (rows :math:`v_i - v_0`), in units of the mean edge length so the closed-form
-    determinant and inverse stay in floating-point range at any scale.
-    Degenerate cells, whose normalized determinant is numerically zero, have
-    no circumcenter and return their centroid. Under-determined systems
+    :math:`E = A / 2` (rows :math:`v_i - v_0`), with each edge scaled to unit
+    length, so the closed form stays in floating-point range at any scale.
+    Degenerate cells, whose unit edges have a numerically zero determinant,
+    have no circumcenter and return their centroid. Under-determined systems
     (manifolds embedded in a higher-dimensional space) use the minimum-norm
     least-squares solution, which lies in the cell's affine hull.
     """
@@ -487,6 +491,9 @@ def compute_circumcenters(
         case (3, 3):
             return _compute_triangle_circumcenters_3d(vertices)
 
+    if vertices.dtype in (torch.float16, torch.bfloat16):  # tolerances need float32
+        return compute_circumcenters(vertices.float()).to(vertices.dtype)
+
     ### Build linear system A @ (c - v0) = b for each simplex
     v0 = vertices[:, 0, :]  # (n_cells, n_spatial_dims)
     relative_vecs = vertices[:, 1:, :] - v0.unsqueeze(1)
@@ -494,31 +501,15 @@ def compute_circumcenters(
 
     if n_manifold_dims == n_spatial_dims:
         ### Square system: closed form c - v0 = inv(E) b with b_i = |e_i|^2 / 2
-        # Batched solve/lstsq factorize every tiny matrix separately. In units of
-        # the mean edge length L, c - v0 = L * inv(E / L) (b / L^2), so the
-        # closed-form determinant and inverse stay in range for tiny or huge cells.
-        dtype = vertices.dtype
-        edge_length_scale = relative_vecs.norm(dim=-1).mean(dim=-1)  # (n_cells,)
-        has_extent = edge_length_scale > torch.finfo(dtype).tiny ** 0.5
-        length_scale = torch.where(has_extent, edge_length_scale, 1.0)
-        E_normalized = relative_vecs / length_scale[:, None, None]
-        b_normalized = 0.5 * (E_normalized * E_normalized).sum(dim=-1)
-        # Degenerate cells have no circumcenter, so they return their centroid.
-        # The cutoff flags only numerically singular cells, whose determinant
-        # rounds to a few eps (not always 0, e.g. with fused multiply-adds on
-        # CUDA): near-degenerate cells keep their exact (distant) circumcenter.
-        # Degenerate cells invert the identity instead, which keeps values and
-        # gradients finite, branchlessly.
-        singular_tolerance = n_manifold_dims * torch.finfo(dtype).eps
-        is_degenerate = ~has_extent | (
-            small_det(E_normalized).abs() <= singular_tolerance
-        )
-        eye = torch.eye(n_manifold_dims, dtype=dtype, device=vertices.device)
-        E_inv = small_inverse(
-            torch.where(is_degenerate[:, None, None], eye, E_normalized)
-        )
+        # Batched solve/lstsq factorize every tiny matrix separately. With the
+        # edges scaled to unit length, E = D Ê, inv(E) b = inv(Ê) (|e_i| / 2)_i,
+        # which stays in range for tiny or huge cells. Degenerate cells have no
+        # circumcenter and return their centroid; normalized_inverse flags only
+        # cells singular to working precision, so stretched and near-degenerate
+        # cells keep their exact (possibly distant) circumcenter.
+        E_hat_inv, edge_lengths, is_degenerate = normalized_inverse(relative_vecs)
         # Broadcast-and-sum: a batched matmul of millions of tiny matrices is slow.
-        c_minus_v0 = length_scale[:, None] * (E_inv * b_normalized[:, None, :]).sum(-1)
+        c_minus_v0 = (E_hat_inv * (0.5 * edge_lengths)[:, None, :]).sum(dim=-1)
         return torch.where(
             is_degenerate[:, None], vertices.mean(dim=1), v0 + c_minus_v0
         )
@@ -595,6 +586,8 @@ def compute_cotan_weights_fem(
 
     device = mesh.points.device
     dtype = mesh.points.dtype
+    # The degeneracy cutoff below needs at least float32 precision
+    compute_dtype = torch.promote_types(dtype, torch.float32)
     n_cells = mesh.n_cells
     n_manifold_dims = mesh.n_manifold_dims
 
@@ -611,59 +604,31 @@ def compute_cotan_weights_fem(
 
     ### Compute edge vectors from reference vertex (vertex 0 of each cell)
     # cell_vertices: (n_cells, n_verts_per_cell, n_spatial_dims)
-    cell_vertices = mesh.points[mesh.cells]
+    cell_vertices = mesh.points[mesh.cells].to(compute_dtype)
     # E: (n_cells, n_manifold_dims, n_spatial_dims) - rows are e_k = v_k - v_0
     E = cell_vertices[:, 1:, :] - cell_vertices[:, :1, :]
 
-    ### Handle degenerate cells by substituting an isotropic Gram matrix
-    # Degenerate cells (collinear/coplanar vertices) have det(G) ~ 0, so inverting
-    # G as-is would fail. Their contribution is meant to vanish anyway, because
-    # their cell volume is ~0, so we swap in an isotropic Gram matrix of the same
-    # magnitude: strictly positive and diagonal, hence exactly invertible, and
-    # scaled so that the volume suppresses the contribution at any coordinate
-    # scale. (Adding a bare identity instead would be a no-op once the entries of
-    # G exceed the dtype's unit-in-last-place, leaving G singular.)
-
-    # A cell's mean edge length is its natural scale. Floor it where squaring
-    # would underflow, so g_scale -- the magnitude of an entry of G -- is always a
-    # normal positive number and G / g_scale is a dimensionless O(1) matrix.
-    edge_length_scale = E.norm(dim=-1).mean(dim=-1)  # (n_cells,)
-    has_extent = edge_length_scale > torch.finfo(dtype).tiny ** 0.5  # (n_cells,)
-    length_scale = torch.where(has_extent, edge_length_scale, 1.0)  # (n_cells,)
-    g_scale = length_scale.square()  # (n_cells,)
-    eye = torch.eye(n_manifold_dims, dtype=dtype, device=device)
-
-    # det(G) == det(G / g_scale) * g_scale**n, so thresholding the dimensionless
-    # determinant applies exactly the same criterion as a scale-aware threshold on
-    # det(G), without the under/overflow that the g_scale**n factor would suffer.
-    # Cells with no usable extent carry no direction at all, so are always degenerate.
+    ### Invert the Gram matrix G = E E^T, with the edges scaled to unit length
+    # With E = D Ê (D the diagonal of edge lengths), inv(G) = D^-1 inv(Ê Êᵀ) D^-1,
+    # and the normalized inverse stays in range for tiny or huge cells.
+    # Degenerate cells (collinear or coplanar vertices) have no inverse. Their
+    # contribution is meant to vanish anyway, since their volume is ~0, so they
+    # invert the identity instead. The cutoff, |det(Ê)| < 1e-6, is the one main
+    # applied to G in units of the mean edge length, |det(G / g)| < 1e-12; unit
+    # edges stop it from also flagging long, thin but well-shaped cells.
     # Written branchlessly so torch.compile can trace through without graph breaks.
-    # Every normalized matrix inverted below is then invertible by construction:
-    # degenerate cells hold the identity, and the rest satisfy
-    # |det(G / g_scale)| >= 1e-12. Inverting the O(1) normalized matrix and
-    # rescaling, inv(G) = inv(G / g_scale) / g_scale, keeps closed-form
-    # determinants of tiny or huge cells in range.
     if n_manifold_dims == mesh.n_spatial_dims:
         ### Full-dimensional cells: invert E itself, inv(G) = inv(E)^T inv(E)
         # Forming G squares the condition number of E, which in float32 costs thin
-        # cells most of their accuracy. det(G / g_scale) == det(E / length_scale)**2.
-        E_normalized = E / length_scale[:, None, None]
-        is_degenerate = ~has_extent | (small_det(E_normalized).square() < 1e-12)
-        E_normalized = torch.where(is_degenerate[:, None, None], eye, E_normalized)
-        E_inv = small_inverse(E_normalized)
+        # cells most of their accuracy.
+        E_hat_inv, edge_lengths, _ = normalized_inverse(E, tolerance=1e-6)
         # Broadcast-and-sum: a batched matmul of millions of tiny matrices is slow.
-        G_normalized_inv = (E_inv.unsqueeze(-1) * E_inv.unsqueeze(-2)).sum(dim=-3)
+        G_hat_inv = (E_hat_inv.unsqueeze(-1) * E_hat_inv.unsqueeze(-2)).sum(dim=-3)
     else:
-        ### Gram matrix G = E @ E^T: (n_cells, n_manifold_dims, n_manifold_dims)
-        # Broadcast-and-sum: a batched matmul of millions of tiny matrices is slow.
-        G = (E.unsqueeze(-2) * E.unsqueeze(-3)).sum(dim=-1)
-        G_normalized = G / g_scale[:, None, None]
-        is_degenerate = ~has_extent | (small_det(G_normalized).abs() < 1e-12)
-        G_normalized = torch.where(is_degenerate[:, None, None], eye, G_normalized)
-        G_normalized_inv = small_inverse(G_normalized)
+        G_hat_inv, edge_lengths, _ = normalized_gram_inverse(E, tolerance=1e-6)
 
     # G_inv: (n_cells, n_manifold_dims, n_manifold_dims)
-    G_inv = G_normalized_inv / g_scale[:, None, None]
+    G_inv = G_hat_inv / (edge_lengths[:, :, None] * edge_lengths[:, None, :])
 
     ### Extract gradient dot products for each local edge pair (i, j), i < j
     # These are the upper-triangle entries of C = H @ G_inv @ H^T, where
@@ -683,17 +648,17 @@ def compute_cotan_weights_fem(
 
     ### Compute cotangent weight contributions per cell per edge
     # w = -|sigma| * (grad lambda_i . grad lambda_j)
-    cell_volumes = mesh.cell_areas  # (n_cells,)
+    cell_volumes = mesh.cell_areas.to(compute_dtype)  # (n_cells,)
     weights_per_cell = -cell_volumes[:, None] * grad_dots  # (n_cells, n_pairs)
 
     ### Accumulate contributions to unique edges via scatter_add
-    cotan_weights = torch.zeros(n_unique_edges, dtype=dtype, device=device)
+    cotan_weights = torch.zeros(n_unique_edges, dtype=compute_dtype, device=device)
     # inverse_indices maps each candidate edge to its unique edge index.
     # For 1D: shape (n_cells,); for nD>1: shape (n_cells * n_pairs,)
     # weights_per_cell.reshape(-1) aligns with inverse_indices in both cases.
     cotan_weights.scatter_add_(0, inverse_indices, weights_per_cell.reshape(-1))
 
-    return cotan_weights, unique_edges
+    return cotan_weights.to(dtype), unique_edges
 
 
 def compute_dual_volumes_1(
