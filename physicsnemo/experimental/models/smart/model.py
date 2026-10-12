@@ -16,8 +16,8 @@
 
 r"""Independent implementation of the SMART paper, arXiv:2601.18707v2.
 
-See the example's IMPLEMENTATION.md for equation mappings and choices not
-specified by the paper. No research implementation is used as a dependency.
+See the example's README.md for model choices and training recipes.
+No research implementation is used as a dependency.
 """
 
 from __future__ import annotations
