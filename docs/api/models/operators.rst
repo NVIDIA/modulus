@@ -15,3 +15,15 @@ These utilities are essential for implementing and training Domino-based models.
 .. automodule:: physicsnemo.models.domino.utils
     :members:
     :show-inheritance:
+
+SMART (Experimental)
+--------------------
+
+SMART encodes sampled geometry into latent contexts and predicts surface or
+volume fields at independent query coordinates. This implementation is based on
+the published paper; its configurable engineering choices and CFD-mesh recipe
+are described in the external-aerodynamics SMART example.
+
+.. autoclass:: physicsnemo.experimental.models.smart.SMART
+    :show-inheritance:
+    :members: encode_geometry, decode_queries

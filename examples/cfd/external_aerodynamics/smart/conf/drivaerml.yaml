@@ -1,0 +1,135 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Shared CFD-only DrivAerML recipe; select a surface or volume preset.
+seed: 42
+output_dir: ./runs/smart-drivaerml-surface_coordinates
+model:
+  surface_channels: 4
+  volume_channels: 0
+  parameter_channels: 2
+  hidden_dim: 448
+  num_heads: 8
+  num_layers: 6
+  num_latents: 2048
+  geometry_subsample: 16384
+  mlp_ratio: 4
+  share_weights: true
+  eval_seed: 0
+  attention_precision: null
+  qk_normalization: true
+  attention_precision_scope: decoder_sdpa
+  qk_temperature_max: 4.0
+  surface_query_feature_channels: 0
+  volume_query_feature_channels: 0
+data:
+  train_path: ./data/drivaerml/train
+  val_path: ./data/drivaerml/val
+  surface_points: 200000
+  volume_points: 200000
+  coordinate_center:
+  - 0.0
+  - 0.0
+  - 0.0
+  coordinate_scale:
+  - 1.0
+  - 1.0
+  - 1.0
+  parameter_mean: []
+  parameter_std: []
+  workers: 4
+  prefetch: 2
+  format: drivaerml_zarr
+  reference_density: 1.205
+  reference_speed: 30.0
+  normalization_dir: ../transformer_models/src
+  geometry_points: null
+  volume_read_multiplier: 25
+  reference_scale:
+  - 12.0
+  - 4.5
+  - 3.25
+  io_threads: 8
+  pin_memory: true
+  cuda_streams: true
+  to_device: true
+  cache_validation: true
+  torch_num_threads: 4
+  field_statistics:
+    surface:
+      mean:
+      - -0.19829848408699036
+      - -0.0010390880052000284
+      - 1.2543803222797578e-06
+      - -6.078572914702818e-05
+      std:
+      - 0.17764700949192047
+      - 0.001359861227683723
+      - 0.000886362511664629
+      - 0.0007295786635950208
+    volume:
+      mean:
+      - 0.5053386092185974
+      - -0.0011122958967462182
+      - 0.011512947268784046
+      - -0.17798687517642975
+      - 3.1237361781677464e-06
+      std:
+      - 0.3946593105792999
+      - 0.19797326624393463
+      - 0.1518254578113556
+      - 0.16828122735023499
+      - 4.560497018246679e-06
+  geometry_source: cfd_surface
+  coordinate_frame: cfd_surface_bbox
+  geometry_rng_streams: true
+  cfd_feature_mesh_root: ./data/drivaerml/native
+optimizer:
+  _target_: optimizers.muon_adamw
+  lr: 0.001
+  betas:
+  - 0.9
+  - 0.999
+  weight_decay: 0.0001
+  eps: 1.0e-08
+training:
+  epochs: 500
+  batch_size: 1
+  precision: float32
+  gradient_clip: 0.0
+  resume: false
+  loss: mse
+  save_interval: 5
+  log_interval: 10
+  grad_scaler_init_scale: 8192.0
+  matmul_precision: highest
+  compile_blocks: false
+  resume_from: null
+  resume_repacked_data: false
+  resume_precision_change: false
+  relative_l2_space: physical
+  encoder_attention_float32: true
+  initial_weights: null
+  max_updates: 54500
+  scheduler_interval: update
+validation:
+  chunk_size: 32768
+  points: 200000
+  full_float32_attention: true
+scheduler:
+  _target_: torch.optim.lr_scheduler.StepLR
+  step_size: 10900
+  gamma: 0.5

@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023 - 2026 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+defaults:
+  - config
+  - _self_
+
+output_dir: ./runs/smoke
+model:
+  hidden_dim: 24
+  num_heads: 4
+  num_layers: 2
+  num_latents: 8
+  geometry_subsample: 16
+  parameter_channels: 2
+data:
+  surface_points: 32
+  volume_points: 40
+  parameter_mean: [0.0, 0.0]
+  parameter_std: [1.0, 1.0]
+  prefetch: 0
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 0.003
+training:
+  epochs: 3
+  precision: float32
+validation:
+  chunk_size: 31

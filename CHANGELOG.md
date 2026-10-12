@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Adds an experimental, independently implemented SMART operator and an external
+  aerodynamics example with CFD-only DrivAerML surface/volume training, optional
+  query features, reproducible geometry sampling, and chunked field inference.
+
 - Adds standalone FLARE++ attention and model APIs, with input-conditioned
   dynamic routing, plus a ``GALE_FPP`` backend for using the same mixer inside
   GeoTransolver.
