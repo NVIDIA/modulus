@@ -176,10 +176,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `tolerance` of `sample_data_at_points`, `find_containing_cells` and
   `find_all_containing_cells` is now relative. Barycentric coordinates must
   still be `>= -tolerance`, but the distance from a point to a cell's affine
-  hull and the BVH box padding are now limited to `tolerance` times the
-  largest absolute coordinate of the mesh, instead of `tolerance` in mesh
-  units. Results no longer depend on the mesh's length unit and are identical
-  when the mesh and query points are scaled by a power of two.
+  hull is now limited to `tolerance` times the largest absolute coordinate of
+  the mesh, instead of `tolerance` in mesh units. Results no longer depend on
+  the mesh's length unit and are identical when the mesh and query points are
+  scaled by a power of two.
 
 ### Deprecated
 
