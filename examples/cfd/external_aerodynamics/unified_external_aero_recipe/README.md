@@ -139,6 +139,10 @@ flowchart LR
 
   Also supports temperature, density, and identity (pass-through) field
   types, and provides an `inverse()` for re-dimensionalizing predictions.
+  When `L_ref` is in `global_data` the mesh coordinates are divided by it
+  as well, once per instance: a chain that needs a second instance (say
+  interior `point_data` fields first, boundary `cell_data` fields second)
+  sets `scale_geometry: false` on the second one.
   Input points are non-dimensionalized by a single reference scalar
   `L_ref` (rather than scaling x/y/z independently) so geometry aspect
   ratios are preserved.
@@ -206,7 +210,7 @@ geometric embeddings.
 
 ### DomainMesh contract and the data-to-model mapping
 
-Each dataset YAML's pipeline produces a [`DomainMesh`](../../../physicsnemo/mesh/domain_mesh.py)
+Each dataset YAML's pipeline produces a [`DomainMesh`](../../../../physicsnemo/mesh/domain_mesh.py)
 that follows a simple semantic contract:
 
 - **`interior`** — answers "where should the output be?". For surface
@@ -526,7 +530,7 @@ Notes on the composition:
   against a top-level `out_dim` value that `build_dataloaders()`
   computes from the chosen dataset's `targets:` block (sum of channel
   counts via `field_dim()`). GLOBE templates declare per-target
-  `output_field_ranks` instead and don't touch `out_dim`.
+  `output_schema` instead and don't touch `out_dim`.
 - `conf/infer.yaml` follows the same shape:
   `defaults: - base, - model: ???, - _self_` with checkpoint /
   output-path knobs in place of the training schedule. `base.yaml` is
@@ -632,13 +636,18 @@ pipeline:
   augmentations:
     - _target_: ${dp:RandomRotateMesh}
       axes: ["z"]
+      mode: axis_aligned
       transform_cell_data: true
       transform_global_data: true
     - _target_: ${dp:RandomTranslateMesh}
       distribution:
         _target_: torch.distributions.Uniform
-        low: [-1.0, -1.0, 0.0]
-        high: [1.0, 1.0, 0.0]
+        low:
+          _target_: torch.tensor
+          data: [-1.0, -1.0, 0.0]
+        high:
+          _target_: torch.tensor
+          data: [1.0, 1.0, 0.0]
   transforms:
     - _target_: ${dp:DropMeshFields}
       global_data: [TimeValue]
