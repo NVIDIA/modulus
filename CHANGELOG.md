@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Adds opt-in SMART surface and volume support to the unified external aerodynamics
+  recipe, with full CFD geometry and independent online field-query sampling.
 - Adds an experimental, independently implemented SMART operator and an external
   aerodynamics example with CFD-only DrivAerML surface/volume training, optional
   query features, reproducible geometry sampling, and chunked field inference.

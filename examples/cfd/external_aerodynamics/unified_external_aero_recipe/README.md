@@ -15,6 +15,7 @@ Here, you're able to train (and run inference with) the following models:
 - [DoMINO](https://arxiv.org/abs/2501.13350) coming soon
 - [Transolver](https://arxiv.org/abs/2402.02366)
 - [GeoTransolver](https://arxiv.org/abs/2512.20399), optionally using the [FLARE](https://arxiv.org/abs/2508.12594) attention mechanism backend
+- [SMART](https://arxiv.org/abs/2601.18707) (experimental, separate surface/volume heads)
 - [GLOBE](https://arxiv.org/abs/2511.15856)
 
 We currently support the following datasets:
@@ -609,6 +610,66 @@ python src/train.py model=domino_volume dataset=drivaer_ml_volume \
 Note the `+` prefix on `+model.attention_type=...` — Hydra requires `+`
 when the override key isn't already present in the model template (FA
 attention is opt-in, not the default).
+
+### SMART with independent geometry and query sampling
+
+SMART uses the same trainer, Muon/AdamW optimizer, loss, field normalization,
+metrics, checkpointing, and physical-unit inference as the other models. Select
+its CFD-only dataset variant explicitly:
+
+```bash
+python src/train.py model=smart_surface dataset=drivaer_ml_smart_surface
+python src/train.py model=smart_volume dataset=drivaer_ml_smart_volume
+
+# Same commands with torchrun for distributed training.
+torchrun --standalone --nproc_per_node=4 src/train.py \
+    model=smart_surface dataset=drivaer_ml_smart_surface
+
+python src/infer.py model=smart_surface dataset=drivaer_ml_smart_surface \
+    run_id=<training_run_id> infer_split=test
+```
+
+Set `datasets/dataset_paths.yaml` as for the other DrivAerML recipes. The native
+CFD files must contain the `vehicle` boundary and the usual freestream metadata;
+these variants do not read CAD or auxiliary STL files.
+
+Three counts have different meanings:
+
+- **Full geometry pool:** all CFD vehicle cell centroids, with no outer cap.
+  Coordinates are retained, but the full cloud is never embedded or attended to.
+- **Encoder sample:** `model.geometry_subsample=16384`, freshly sampled per layer
+  and training case/epoch, with `model.num_latents=2048` selected from the same
+  full cloud. Changing this count does not change field-query samples.
+- **Field queries:** `sampling_resolution=200000` during training. Surface queries
+  are sampled online with coordinates, normals, targets, and integration measures
+  kept aligned. Volume queries reuse the reader's efficient cyclic block sampling;
+  a spatially shuffled on-disk point order is preferable. The CFD boundary is
+  retained in full regardless of the query budget.
+
+Reader-derived case/epoch seeds isolate geometry and query randomness. SMART's
+`independent_validation=true` gives validation a separate reader at epoch zero;
+training resamples each epoch. Inference inherits the recipe's large query cap
+(`sampling_resolution=100000000`), while `model.eval_chunk_size=8192` bounds
+SMART decoder activations. Geometry is encoded once per case and reused across
+all chunks. Ensure the query cap exceeds the case size for full-mesh fields and
+surface drag/lift integration. Full query arrays and predictions still occupy
+memory; chunking does not make data loading out-of-core.
+
+Surface normals enter the existing additive query projection; volume features
+use the recipe's signed SDF/closest-point direction operation on the **CFD**
+boundary. The fast pseudo-normal sign depends on boundary orientation; it does
+not make an open or non-manifold surface watertight. Freestream velocity supplies
+three global conditioning channels. Geometry and queries are centered together
+on the complete CFD boundary and scaled by `L_ref`, so the coordinate frame does
+not change with query sampling. Full surface data is loaded before online query
+selection; volume target reads remain subsampled. Existing model/dataset configs
+and their sampling behavior are unchanged.
+
+These are new unified training recipes, not reproductions of the standalone
+SMART example: preprocessing, global conditioning, signed SDF, and the inherited
+training defaults differ. Train new checkpoints; standalone checkpoints are not
+interchangeable. `compile=false` is the SMART default because sampling uses an
+explicit per-case generator. No accuracy parity with another model is claimed.
 
 ### Dataset config anatomy
 
