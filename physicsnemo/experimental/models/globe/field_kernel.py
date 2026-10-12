@@ -113,10 +113,15 @@ def _device_total_memory_bytes(device: torch.device) -> int:
     raise ValueError(f"Unsupported {device.type=!r}")
 
 
-@torch.compiler.disable
+@torch._dynamo.assume_constant_result
 def _device_chunk_budget_bytes(device: torch.device) -> int:
     """Static memory budget for a single chunked kernel evaluation."""
     return _device_total_memory_bytes(device) * _CHUNK_MEMORY_BUDGET_PERCENT // 100
+
+
+def _take_last(x: torch.Tensor, idx: tuple[int, ...]) -> torch.Tensor:
+    r"""``x[..., idx]`` from int views: no host-to-device index upload."""
+    return torch.stack([x[..., i] for i in idx], dim=-1) if idx else x[..., :0]
 
 
 def _require_supported(schema: FieldSchema, *, label: str) -> None:
@@ -620,8 +625,9 @@ class Kernel(Module):
 
         ### Vector magnitude, direction, and log-magnitude features
         with record_function("kernel::feature_engineering"):
-            vectors_mag_squared: TensorDict = (
-                (vectors * vectors).sum(dim=-1) + self._smoothing_radius_sq
+            # Per leaf: TD + 0-dim tensor would .item() the radius (a sync).
+            vectors_mag_squared: TensorDict = (vectors * vectors).sum(dim=-1).apply(
+                lambda t: t + self._smoothing_radius_sq
             )
             vectors_mag = vectors_mag_squared.sqrt()
             vectors_hat = vectors / vectors_mag.unsqueeze(-1)
@@ -638,8 +644,8 @@ class Kernel(Module):
             vectors_hat_concatenated: torch.Tensor = concatenate_leaves(vectors_hat)
             # shape: (*interaction_dims, n_spatial_dims, n_vectors_in)
 
-            v1_hat = vectors_hat_concatenated[..., :, k1]
-            v2_hat = vectors_hat_concatenated[..., :, k2]
+            v1_hat = _take_last(vectors_hat_concatenated, k1)
+            v2_hat = _take_last(vectors_hat_concatenated, k2)
             cos_theta_pairs = torch.sum(v1_hat * v2_hat, dim=-2)
             # shape: (*interaction_dims, len(keypairs))
 
@@ -649,8 +655,8 @@ class Kernel(Module):
             )[1:]
 
             vectors_mag_concatenated: torch.Tensor = concatenate_leaves(vectors_mag)
-            v1_mag = vectors_mag_concatenated[..., k1]
-            v2_mag = vectors_mag_concatenated[..., k2]
+            v1_mag = _take_last(vectors_mag_concatenated, k1)
+            v2_mag = _take_last(vectors_mag_concatenated, k2)
 
             for i, harmonics in enumerate(spherical_harmonics):
                 scalars[f"pairwise_spherical_harmonics_{i}"] = (
@@ -938,7 +944,6 @@ class BarnesHutKernel(Kernel):
         TensorDict[str, Float[torch.Tensor, "n_targets ..."]]
             Kernel output fields at target points.
         """
-        from physicsnemo.mesh.spatial._ragged import _ragged_arange
         from physicsnemo.mesh.spatial.cluster_tree import (
             ClusterTree,
             DualInteractionPlan,
@@ -973,7 +978,7 @@ class BarnesHutKernel(Kernel):
         if dual_plan is None:
             dual_plan = cluster_tree.find_dual_interaction_pairs(
                 target_tree=target_tree, theta=theta,
-                expand_far_targets=expand_far_targets,
+                expand_far_targets=expand_far_targets, validate=False,
             )
 
         ### Compute source aggregates for far-field clusters.
@@ -1108,7 +1113,7 @@ class BarnesHutKernel(Kernel):
                     )
 
                 with record_function("bh_kernel::near_scatter"):
-                    chunk_strengths = source_strengths[chunk_src_ids]
+                    chunk_strengths = torch.index_select(source_strengths, 0, chunk_src_ids)
                     self._pack_and_scatter(
                         chunk_result, chunk_strengths, chunk_tgt_ids, packed_buf
                     )
@@ -1134,12 +1139,10 @@ class BarnesHutKernel(Kernel):
 
             ### Broadcast node-level results to individual targets.
             with record_function("bh_kernel::far_node_broadcast"):
-                far_strengths = node_total_strength[far_src_nids]
+                far_strengths = torch.index_select(node_total_strength, 0, far_src_nids)
 
-                node_starts = target_tree.node_range_start[far_tgt_nids]
-                node_counts = target_tree.node_range_count[far_tgt_nids]
-                positions, pair_ids = _ragged_arange(node_starts, node_counts)
-                expanded_tgt_ids = target_tree.sorted_source_order[positions]
+                expanded_tgt_ids = dual_plan.far_broadcast_target_ids
+                pair_ids = dual_plan.far_broadcast_pair_ids
 
                 ### Broadcast node-level outputs to individual targets via
                 ### ``pair_ids`` (which point back into the per-node result
@@ -1154,25 +1157,30 @@ class BarnesHutKernel(Kernel):
         # Phase C: (near,far) - individual targets × source node centroids
         # ==================================================================
         if n_nf > 0:
-            nf_tgt_ids = dual_plan.nf_target_ids
-            nf_src_nids = dual_plan.nf_source_node_ids
+            ### Chunked like Phase A: with ``expand_far_targets`` this stream
+            ### carries almost every interaction, and evaluating it in one
+            ### call materializes every hidden activation for all of it.
+            nf_chunk = self._auto_chunk_size(n_nf, device)
+            for start in range(0, n_nf, nf_chunk):
+                nf_tgt_ids = dual_plan.nf_target_ids[start : start + nf_chunk]
+                nf_src_nids = dual_plan.nf_source_node_ids[start : start + nf_chunk]
 
-            ### Same evaluation as Phase B (source centroids + aggregates),
-            # but same scatter as Phase A (per-target, no broadcast).
-            with record_function("bh_kernel::nf_evaluate"):
-                nf_result = self._maybe_checkpointed_evaluate(
-                    nf_tgt_ids, nf_src_nids,
-                    target_points, aggregates.node_centroid,
-                    agg_scalars, agg_vectors,
-                    global_scalars, global_vectors,
-                    reference_length, device,
-                )
+                ### Same evaluation as Phase B (source centroids + aggregates),
+                # but same scatter as Phase A (per-target, no broadcast).
+                with record_function("bh_kernel::nf_evaluate"):
+                    nf_result = self._maybe_checkpointed_evaluate(
+                        nf_tgt_ids, nf_src_nids,
+                        target_points, aggregates.node_centroid,
+                        agg_scalars, agg_vectors,
+                        global_scalars, global_vectors,
+                        reference_length, device,
+                    )
 
-            with record_function("bh_kernel::nf_scatter"):
-                nf_strengths = node_total_strength[nf_src_nids]
-                self._pack_and_scatter(
-                    nf_result, nf_strengths, nf_tgt_ids, packed_buf
-                )
+                with record_function("bh_kernel::nf_scatter"):
+                    nf_strengths = torch.index_select(node_total_strength, 0, nf_src_nids)
+                    self._pack_and_scatter(
+                        nf_result, nf_strengths, nf_tgt_ids, packed_buf
+                    )
 
         # ==================================================================
         # Phase D: (far,near) - target node centroid × individual sources,
@@ -1196,13 +1204,10 @@ class BarnesHutKernel(Kernel):
 
             ### Broadcast to stage-1 survivors via the ragged mapping.
             with record_function("bh_kernel::fn_broadcast"):
-                fn_strengths = source_strengths[fn_src_ids]
+                fn_strengths = torch.index_select(source_strengths, 0, fn_src_ids)
 
-                positions, pair_ids = _ragged_arange(
-                    dual_plan.fn_broadcast_starts,
-                    dual_plan.fn_broadcast_counts,
-                )
-                expanded_tgt_ids = dual_plan.fn_broadcast_targets[positions]
+                expanded_tgt_ids = dual_plan.fn_expanded_target_ids
+                pair_ids = dual_plan.fn_expanded_pair_ids
 
                 self._pack_and_scatter(
                     fn_result, fn_strengths, expanded_tgt_ids,
@@ -1297,7 +1302,7 @@ class BarnesHutKernel(Kernel):
 
         weighted = packed * weights.unsqueeze(-1)
         if broadcast_pair_ids is not None:
-            weighted = weighted[broadcast_pair_ids]
+            weighted = torch.index_select(weighted, 0, broadcast_pair_ids)
 
         ### ``index_add_`` rather than ``scatter_add_`` with broadcasted
         ### indices: equivalent semantics, but ``index_add_`` takes a 1-D
@@ -1417,8 +1422,13 @@ class BarnesHutKernel(Kernel):
         separately (magnitudes, dot products, basis construction).
         """
         n_pairs = tgt_ids.shape[0]
+        ### ``index_select`` rather than ``x[idx]``: same forward, but its
+        ### backward is an ``index_add_`` instead of the sort-based
+        ### ``index_put_(accumulate=True)`` (``indexing_backward``), which was
+        ### the largest GPU kernel of a DrivAerML training step on GB300.
         chunk_r = (
-            target_positions[tgt_ids] - source_positions[src_ids]
+            torch.index_select(target_positions, 0, tgt_ids)
+            - torch.index_select(source_positions, 0, src_ids)
         ) / reference_length
 
         ### Flatten source scalars into one tensor, gather once, split back.
@@ -1431,7 +1441,9 @@ class BarnesHutKernel(Kernel):
             source_scalars.keys(include_nested=True, leaves_only=True),
             key=str,
         )
-        gathered_src_scalars = concatenate_leaves(source_scalars)[src_ids]
+        gathered_src_scalars = torch.index_select(
+            concatenate_leaves(source_scalars), 0, src_ids
+        )
         scalars = TensorDict(
             {
                 "source_scalars": TensorDict(
@@ -1457,7 +1469,9 @@ class BarnesHutKernel(Kernel):
             source_vectors.keys(include_nested=True, leaves_only=True),
             key=str,
         )
-        gathered_src_vectors = concatenate_leaves(source_vectors)[src_ids]
+        gathered_src_vectors = torch.index_select(
+            concatenate_leaves(source_vectors), 0, src_ids
+        )
         vectors = TensorDict(
             {
                 "source_vectors": TensorDict(
@@ -1476,7 +1490,6 @@ class BarnesHutKernel(Kernel):
 
         return self._evaluate_interactions(scalars=scalars, vectors=vectors, device=device)
 
-    @torch.compiler.disable
     def _auto_chunk_size(self, n_total_pairs: int, device: torch.device) -> int:
         """Determine chunk size for pair-batched kernel evaluation.
 
@@ -1830,7 +1843,7 @@ class MultiscaleKernel(Module):
             if dual_plan is None:
                 dual_plan = cluster_tree.find_dual_interaction_pairs(
                     target_tree=target_tree, theta=theta,
-                    expand_far_targets=expand_far_targets,
+                    expand_far_targets=expand_far_targets, validate=False,
                 )
         with record_function("multiscale_kernel::compute_aggregates"):
             source_aggregates = cluster_tree.compute_source_aggregates(
