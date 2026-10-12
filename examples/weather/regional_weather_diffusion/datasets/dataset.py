@@ -309,6 +309,13 @@ class StormCastDataSource(ABC):
         each fall inside a single group.
 
         The lengths must sum to ``len(self)``.
+
+        For example, a source concatenating two domains of 100 and 50 samples
+        returns ``[100, 50]``. With 4 ranks, each rank then owns 25 contiguous
+        samples of the first domain and 12 or 13 of the second. Without
+        segments, the 150 concatenated samples would be split into 4 blocks, so
+        ranks 0 and 1 would see only the first domain and rank 3 only the
+        second.
         """
         return None
 

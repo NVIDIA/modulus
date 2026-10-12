@@ -332,7 +332,7 @@ class Trainer:
         dataset_cls = dataset_classes[self.cfg.dataset.name]
         dataset_kwargs = self.cfg.dataset.__dict__.copy()
         del dataset_kwargs["name"]
-        # `loader` configures how batches are produced (see _make_loader), it
+        # `loader` configures how batches are produced (see _setup_loader), it
         # is not forwarded to the dataset constructor.
         self._loader_cfg = dataset_kwargs.pop("loader", None)
         self.dataset_train = dataset_cls(dataset_kwargs, train=True)
@@ -348,7 +348,7 @@ class Trainer:
         # Dataloaders. The dataset owns its loading strategy (see
         # `StormCastDataSource.make_loader`); the trainer only states what it
         # needs via the LoaderSpec.
-        self.train_dataloader = self._make_loader(self.dataset_train)
+        self.train_dataloader = self._setup_loader(self.dataset_train)
         self.dataset_iterator = self.parallel_helper.sharded_data_iter(
             self.train_dataloader
         )
@@ -379,7 +379,7 @@ class Trainer:
                 "Scalar conditions are only supported for the 'dit' architecture."
             )
 
-    def _make_loader(
+    def _setup_loader(
         self,
         source,
         *,
@@ -966,7 +966,7 @@ class Trainer:
         np.random.seed(val_seed % (1 << 31))
         torch.manual_seed(val_seed)
 
-        valid_dataloader = self._make_loader(
+        valid_dataloader = self._setup_loader(
             self.dataset_valid,
             shuffle=False,
             seed=0,

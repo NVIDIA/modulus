@@ -340,7 +340,12 @@ After you have implemented the custom dataset, create a configuration file in `c
 
 Every dataset serves batches through `make_loader(spec)`, where `spec` is a `LoaderSpec` describing what the trainer needs (batch size, worker count, device, an already rank-sharded sample stream, etc. -- see `datasets/dataset.py`). `StormCastDataset.make_loader` defaults to building the classic PyTorch `DataLoader` (fork worker processes), which is what every dataset in this recipe used before and requires no changes to keep using.
 
-A dataset can opt into a different loading strategy by overriding `make_loader`. `datasets/mock.py` shows both strategies side by side for exactly this reason: `make_loader` dispatches on `spec.backend` to either the default PyTorch path or a PhysicsNeMo [`datapipes`](../../../physicsnemo/datapipes/) loader (threads instead of forked processes, and, with `use_streams: true`, host-to-device copies and device-side transforms overlapped with training compute on a side CUDA stream). Which strategy actually runs is controlled entirely by config, not by which dataset class you pick:
+A dataset can opt into a different loading strategy by overriding `make_loader`. `datasets/mock.py` shows both strategies side by side for exactly this reason: `make_loader` dispatches on `spec.backend` to either the default PyTorch path or a PhysicsNeMo [`datapipes`](../../../physicsnemo/datapipes/) loader (threads instead of forked processes, and, with `use_streams: true`, host-to-device copies and device-side transforms overlapped with training compute on a side CUDA stream). Which strategy actually runs is controlled entirely by config, not by which dataset class you pick.
+
+When to use which:
+
+- **`torch`** (default): works with every dataset in this recipe, including `HrrrEra5Dataset`, with no extra work. Workers are forked processes. Use this unless you have measured a data-loading bottleneck.
+- **`datapipes`**: workers are threads rather than forked processes, and with `use_streams: true` host-to-device copies and device-side transforms overlap with training compute, so this option can be more performant for more complex data laoders that do preprocessing/regridding. A dataset must implement it by overriding `make_loader`. Currently only `mock.MockDataset` does, so using it with your own data means writing a datapipe `Reader` for it. See the [datapipes documentation](../../../physicsnemo/datapipes/) for the available readers, transforms and loader options.
 
 ```yaml
 dataset:
@@ -354,7 +359,7 @@ dataset:
     shard_by_domain: true  # give each rank a slice of every index segment, not just a contiguous block
 ```
 
-Fields a chosen backend can't honor are simply ignored, so the same `loader` block is valid regardless of `backend`. If training seems data-bound (see [Training is slow](#training-is-slow)) and your dataset implements a `datapipes` loader, trying `backend: "datapipes"` is one of the first things worth testing.
+Fields a chosen backend can't honor are simply ignored, so the same `loader` block is valid regardless of `backend`. If training seems data-bound (see [Training is slow](#training-is-slow)) and your dataset implements a `torch` loader, `backend: "datapipes"` is worth testing.
 
 If you are implementing a custom dataset and want it to support both backends, look at `datasets/mock.py`'s `make_loader`/`_make_datapipe_loader` for the pattern: dispatch on `spec.backend`, keep the PhysicsNeMo datapipe import inside the `"datapipes"` branch so the `torch` path has no hard dependency on it, and make sure both backends draw from `spec.sampler` and produce identical batch shapes for the same index (this recipe's test suite checks exactly that in `test_loader_backend_batches`).
 
@@ -372,7 +377,7 @@ Possible solutions include decreasing batch size, training with more GPUs and us
 
 ### How do I train a model without low-resolution conditioning (for example, a nowcasting model)?
 
-Ensure that the `model.diffusion_conditions` and `model.regression_conditions` settings for your model don't include `"background"`. Your dataset may omit returning background/low-resolution conditioning (that is, the `"background"` key may be missing from the dict returned by `__getitem__`); if your dataset does provide it, it will be ignored. Refer to [Model types](#model-types).
+Keep `"background"` in the `model.diffusion_conditions` and `model.regression_conditions` settings for your model. A nowcasting-type model has no low-resolution conditioning, but it still needs the past state as input, and that goes into `background`: have your dataset concatenate the past state onto the `"background"` tensor as extra channels and leave out any low-resolution fields. Refer to [Model types](#model-types).
 
 ### How do I train a pure downscaling model without state update?
 
