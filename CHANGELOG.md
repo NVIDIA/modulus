@@ -71,8 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ClusterTree` builds tighter trees by default (`split="morton"`), so
   Barnes-Hut plans need 2-4x fewer interactions at the same `theta`.
   `split="midpoint"` gives the previous trees.
-- GLOBE's default `theta` is 0.6 (was 1.0): with the new trees, it is as
-  accurate as 1.0 was before and still 1.5x faster.
+- GLOBE's default `theta` is 1.5 (was 1.0). With the new trees, DrivAerML
+  training reaches about 40% lower validation loss in the same time.
 - GLOBE's default `expand_far_targets` is `True` (was `False`), as in its
   examples.
 - `ClusterTree.compute_source_aggregates` is 20-30x faster, and
