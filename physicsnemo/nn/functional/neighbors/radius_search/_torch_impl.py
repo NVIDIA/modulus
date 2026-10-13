@@ -111,10 +111,15 @@ def radius_search_impl(
     k = min(max_points, dists.shape[1])
     values, indices = torch.topk(dists, k=k, dim=1, largest=False)
 
-    # Pad if k < max_points (fewer points than requested)
+    # Pad if k < max_points (fewer points than requested).
+    # Padded distance slots are filled with +inf so that the radius mask below never selects them:
+    # a 0.0 fill would pass `values <= radius` and surface point 0 as a phantom neighbor
+    # (with its coordinates and gradient) for every query.
     if k < max_points:
         pad_size = max_points - k
-        values = torch.nn.functional.pad(values, (0, 0, 0, pad_size), value=0.0)
+        values = torch.nn.functional.pad(
+            values, (0, 0, 0, pad_size), value=float("inf")
+        )
         indices = torch.nn.functional.pad(indices, (0, 0, 0, pad_size), value=0)
 
     # Filter to within radius: (B, max_points, Q)
