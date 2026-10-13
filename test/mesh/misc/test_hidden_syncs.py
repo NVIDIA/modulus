@@ -30,6 +30,7 @@ from tensordict import TensorDict
 
 from physicsnemo.mesh import Mesh
 from physicsnemo.mesh.boundaries import extract_candidate_facets
+from physicsnemo.mesh.boundaries._topology import _check_3d_vertex_manifold
 from physicsnemo.mesh.calculus._exterior_derivative import exterior_derivative_1
 from physicsnemo.mesh.primitives.planar import structured_grid
 from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
@@ -242,3 +243,12 @@ def test_subdivision_synchronizations_are_bounded(subdivision, max_syncs):
     mesh.subdivide(levels=1, filter=subdivision)
     n_syncs = _count_cuda_syncs(lambda: mesh.subdivide(levels=1, filter=subdivision))
     assert n_syncs <= max_syncs
+
+
+@requires_cuda
+def test_vertex_manifold_check_synchronizations_are_bounded():
+    """The vertex-manifold check copies no index tables from the host."""
+    mesh = MESHES["tetrahedra"]("cuda")
+    assert _check_3d_vertex_manifold(mesh)  # also caches the adjacency
+    # The remaining syncs come from boolean masks, union-find and the result
+    assert _count_cuda_syncs(lambda: _check_3d_vertex_manifold(mesh)) <= 10
