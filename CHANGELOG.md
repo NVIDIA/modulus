@@ -112,6 +112,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `NotImplementedError` for fields it does not implement (rank 2 and above,
   pseudotensors) instead of silently dropping or misreading them. The GLOBE
   examples and the unified external-aerodynamics recipe configs are updated.
+- Cell-to-cell adjacency pairs the cells of each shared facet in one
+  vectorized pass, adjacency offsets come from a binary search instead of
+  `bincount`, and adjacencies carry their device, so cached adjacencies are
+  reused without revalidation. Cell adjacency and the dual graph are 1.4-1.6x
+  faster with 30% less peak memory, and synchronize CUDA 5 times instead of 38.
 - `physicsnemo.mesh.Mesh`, `DomainMesh`, `Adjacency`, `BVH`, `ClusterTree`,
   `DualInteractionPlan`, and `SourceAggregates` now inherit directly from
   `TensorClass` instead of using the `@tensorclass` decorator. Existing
@@ -119,6 +124,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   available, and nested mesh types survive memmap round trips. The memmap
   layout is unchanged: existing `.pmsh` / `.pdmsh` files remain readable, and
   new files are byte-identical to those written with the decorator.
+- Mesh facet extraction, repair, merging, smoothing, subdivision and quality
+  metrics avoid CUDA synchronizations hidden in indexing with Python lists,
+  blocking copies of small host tables, boolean masks and one `.item()` per
+  count. Laplacian smoothing synchronizes at most 4 times instead of about 30,
+  independent of the number of iterations, and `remove_degenerate_cells` is
+  about 5x faster. Results are unchanged.
 - Mesh integration uses a shared `_effective_measure` field for complete cell
   and point measures. Cell measures fall back to geometry; point measures are
   explicit and independent of connectivity. `Mesh.integrate_samples` evaluates
@@ -180,6 +191,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the mesh, instead of `tolerance` in mesh units. Results no longer depend on
   the mesh's length unit and are identical when the mesh and query points are
   scaled by a power of two.
+- `fix_orientation` orients cells of any dimension and is 6x faster on the
+  DrivAerML surface. Cells that fill their space, such as tetrahedra in 3D,
+  come out with positive volumes. Its stats add `n_cells_flipped`, with
+  `n_faces_flipped` kept as an alias, and `n_non_orientable_components`.
+- `repair_mesh(fix_orientation=True)` orients every mesh except point clouds,
+  instead of only surfaces in 3D.
 
 ### Deprecated
 
@@ -237,6 +254,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filename index, preventing resumes that mix epochs. Missing required weights
   raise before any model or training state is restored. Distributed loads validate
   on every rank using rank 0's file lookup.
+- `fix_orientation` no longer leaves opposite windings across sharp creases,
+  such as the edges of a cube.
 - Mesh slicing reuses integer indices across connectivity, fields, and caches
   to avoid repeated CUDA synchronization for the same boolean mask.
   Point slicing skips mask processing when the output has no cells because

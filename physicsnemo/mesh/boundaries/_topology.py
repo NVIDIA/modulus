@@ -504,13 +504,11 @@ def _check_3d_vertex_manifold(mesh: "Mesh") -> bool:
     v_occurrence_count = (tet_verts == vertex_ids.unsqueeze(1)).sum(dim=1)
     is_degenerate = v_occurrence_count > 1
 
-    # Precomputed lookup: given v is at column c, take columns COL_MAP[c]
-    _COL_MAP = torch.tensor(
-        [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]],
-        dtype=torch.long,
-        device=device,
-    )
-    gather_cols = _COL_MAP[v_col]  # (total, 3)
+    # Every column but v_col, built arithmetically on the device (as in
+    # _compute_simplex_altitudes): a lookup table copied from the host would
+    # synchronize the device.
+    other = torch.arange(3, device=device)
+    gather_cols = other + (other >= v_col.unsqueeze(1))  # (total, 3)
     link_faces = torch.gather(tet_verts, 1, gather_cols)  # (total, 3)
 
     # Sort each link face for canonical ordering
@@ -519,7 +517,7 @@ def _check_3d_vertex_manifold(mesh: "Mesh") -> bool:
     ### Step 3: Generate all edges of all link faces
     # Each sorted face (a, b, c) gives edges: (a,b), (a,c), (b,c)
     edge_ab = link_faces[:, :2]  # (total, 2) -> columns 0,1
-    edge_ac = link_faces[:, [0, 2]]  # (total, 2) -> columns 0,2
+    edge_ac = link_faces[:, ::2]  # (total, 2) -> columns 0,2
     edge_bc = link_faces[:, 1:]  # (total, 2) -> columns 1,2
 
     all_edges = torch.cat([edge_ab, edge_ac, edge_bc], dim=0)  # (3*total, 2)
