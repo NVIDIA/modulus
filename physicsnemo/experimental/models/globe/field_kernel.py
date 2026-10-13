@@ -131,6 +131,18 @@ def _require_supported(schema: FieldSchema, *, label: str) -> None:
     true vectors, and build vector outputs on a basis of true vectors.  A
     field of rank 2 or more would be silently left out, and a pseudotensor
     would transform with the wrong sign under reflections.
+
+    Parameters
+    ----------
+    schema : FieldSchema
+        Parsed field declarations to check.
+    label : str
+        Name of the schema argument, used in error messages.
+
+    Raises
+    ------
+    NotImplementedError
+        If a field has rank other than 0 or 1, or has ``parity='odd'``.
     """
     for name, spec in schema.items():
         if spec.rank not in (0, 1):
@@ -1091,7 +1103,11 @@ class BarnesHutKernel(Kernel):
                 else self._auto_chunk_size(n_near, device)
             )
 
-            for start in range(0, n_near, chunk_size):
+            ### Loop over the chunk count, not ``range(0, n_near, chunk_size)``:
+            ### torch.compile specializes ``range`` arguments, so that form would
+            ### recompile for every new pair count (each new geometry).
+            for i_chunk in range(_ceil_div(n_near, chunk_size)):
+                start = i_chunk * chunk_size
                 end = min(start + chunk_size, n_near)
 
                 chunk_tgt_ids = near_tgt_ids[start:end]
@@ -1160,8 +1176,10 @@ class BarnesHutKernel(Kernel):
             ### Chunked like Phase A: with ``expand_far_targets`` this stream
             ### carries almost every interaction, and evaluating it in one
             ### call materializes every hidden activation for all of it.
+            ### It loops over the chunk count for the same reason as Phase A.
             nf_chunk = self._auto_chunk_size(n_nf, device)
-            for start in range(0, n_nf, nf_chunk):
+            for i_chunk in range(_ceil_div(n_nf, nf_chunk)):
+                start = i_chunk * nf_chunk
                 nf_tgt_ids = dual_plan.nf_target_ids[start : start + nf_chunk]
                 nf_src_nids = dual_plan.nf_source_node_ids[start : start + nf_chunk]
 

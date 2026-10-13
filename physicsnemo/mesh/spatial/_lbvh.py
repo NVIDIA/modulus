@@ -273,7 +273,7 @@ def build_morton_topology(
     boxes of the resulting nodes span both sides of every cut.
 
     The topology depends on the codes, so each level synchronizes once to
-    size the next.
+    size the next, and nothing else synchronizes.
 
     Parameters
     ----------
@@ -305,18 +305,25 @@ def build_morton_topology(
     ### the consecutive ids ``base + 2k`` and ``base + 2k + 1``, so each level
     ### writes its children's ranges as one contiguous slice.
     children = torch.full((2, max_nodes), -1, dtype=torch.long, device=device)
+    ### Host scalars are written with ``fill_``: assigning them by indexing, or
+    ### building small tensors from Python lists, copies them from the host and
+    ### synchronizes.
     ranges = torch.zeros((2, max_nodes), dtype=torch.long, device=device)
-    ranges[1, 0] = n_items
+    ranges[1, :1].fill_(n_items)
     node_count = 1
+    n_internal = 0
     internal_nodes_per_level: list[torch.Tensor] = []
 
     ### Ranges still to split, packed as ``[start, end, node id]``.
-    segments = torch.tensor([[0], [n_items], [0]], dtype=torch.long, device=device)
+    segments = torch.zeros((3, 1), dtype=torch.long, device=device)
+    segments[1].fill_(n_items)
     width = 1 if n_items > leaf_size else 0
     # For d in [2**k, 2**(k+1)), searchsorted(powers, d, right=True) == k + 1
     # and prefix_masks[k + 1] == -(2**k) clears the bits below k, exactly for
     # all 63-bit codes. d == 0 gives index 0, whose mask keeps every bit.
-    powers = torch.tensor([1 << k for k in range(63)], dtype=torch.long, device=device)
+    powers = torch.ones(63, dtype=torch.long, device=device) << torch.arange(
+        63, device=device
+    )
     prefix_masks = torch.cat([powers.new_full((1,), -1), -powers])
     # ``codes_before[i] == codes[i - 1]``: the code just left of split position i.
     codes_before = torch.cat([codes[:1], codes[:-1]])
@@ -345,16 +352,18 @@ def build_morton_topology(
         ranges[1, node_count : node_count + 2 * width] = child_count
         internal_nodes_per_level.append(node)
         node_count += 2 * width
+        n_internal += width
 
         keep = (child_count > leaf_size).nonzero(as_tuple=True)[0]
         width = keep.shape[0]
         segments = torch.stack([child_start, child_end, ids]).index_select(1, keep)
 
     ### Every range with more than ``leaf_size`` items was split, so the
-    ### leaves are exactly the nodes with at most ``leaf_size`` items.
+    ### leaves are exactly the nodes with at most ``leaf_size`` items. Every
+    ### split makes two nonempty children, so there are ``n_internal + 1``.
     range_start, range_count = ranges[0], ranges[1]
     is_leaf = range_count[:node_count] <= leaf_size
-    leaf_node_ids = is_leaf.nonzero(as_tuple=True)[0]
+    leaf_node_ids = torch.nonzero_static(is_leaf, size=n_internal + 1)[:, 0]
     leaf_start = torch.full((max_nodes,), -1, dtype=torch.long, device=device)
     leaf_count = torch.zeros(max_nodes, dtype=torch.long, device=device)
     leaf_starts = range_start[leaf_node_ids]

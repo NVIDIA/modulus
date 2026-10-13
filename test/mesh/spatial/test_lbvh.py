@@ -35,6 +35,7 @@ from physicsnemo.mesh.mesh import Mesh
 from physicsnemo.mesh.spatial._lbvh import build_lbvh_topology, build_morton_topology
 from physicsnemo.mesh.spatial.bvh import BVH, _compute_morton_codes
 from physicsnemo.mesh.spatial.cluster_tree import ClusterTree
+from test.mesh.mesh.test_slicing_sync import _cuda_sync_budget
 
 DEVICE = torch.device("cpu")
 
@@ -218,3 +219,19 @@ class TestMortonBuilder:
         codes = torch.tensor([0, 1 << 59, (1 << 60) - 1], dtype=torch.long)
         topo = build_morton_topology(codes, 1, balance=0)
         assert int(topo.range_count[topo.left_child[0]]) == 1
+
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(), reason="CUDA required to count synchronizations"
+    )
+    @pytest.mark.parametrize("leaf_size", [1, 4])
+    def test_synchronizes_once_per_level(self, leaf_size):
+        """Each level reads back how many ranges it leaves to split, and nothing
+        else waits for the device."""
+        g = torch.Generator().manual_seed(3)
+        points = torch.rand(2000, 3, generator=g).cuda()
+        codes = _compute_morton_codes(points, isotropic=True).sort().values
+        topo = build_morton_topology(codes, leaf_size)  # also warms up CUDA
+        torch.cuda.synchronize()
+        with _cuda_sync_budget(topo.max_depth):
+            build_morton_topology(codes, leaf_size)
+        torch.cuda.synchronize()

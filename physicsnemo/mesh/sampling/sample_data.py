@@ -242,9 +242,9 @@ def _find_containing_pairs(
         Bounding Volume Hierarchy for the mesh.
     tolerance : float
         Relative containment tolerance. Barycentric coordinates must be
-        ``>= -tolerance``; the distance to the cell's affine hull and the AABB
-        padding are limited to ``tolerance`` times the largest absolute
-        coordinate of the mesh.
+        ``>= -tolerance``, and the distance to the cell's affine hull is
+        limited to ``tolerance`` times the largest absolute coordinate of the
+        mesh. The AABB padding covers both.
 
     Returns
     -------
@@ -266,12 +266,27 @@ def _find_containing_pairs(
             bvh.node_aabb_min[0].abs(), bvh.node_aabb_max[0].abs()
         ).amax()
         distance_tolerance = tolerance * length_scale
+
+        ### Barycentric coordinates >= -tolerance accept the simplex scaled by
+        ### 1 + (n + 1) * tolerance about its centroid, which reaches up to
+        ### n * tolerance * (cell extent) past the cell's box on each axis
+        ### (n = n_manifold_dims). Off-hull points add distance_tolerance. Leaf
+        ### boxes contain their cells' boxes, so the largest leaf extent bounds
+        ### every cell's extent.
+        is_leaf = (bvh.leaf_count > 0).unsqueeze(-1)
+        max_leaf_extent = torch.where(
+            is_leaf, bvh.node_aabb_max - bvh.node_aabb_min, 0.0
+        ).amax()
+        aabb_padding = (
+            mesh.n_manifold_dims * tolerance * max_leaf_extent + distance_tolerance
+        )
     else:
         distance_tolerance = tolerance
+        aabb_padding = tolerance
 
     ### Get candidate pairs from BVH (AABB overlap test)
     candidate_adj = bvh.find_candidate_cells(
-        query_points, max_candidates_per_point=None, aabb_tolerance=distance_tolerance
+        query_points, max_candidates_per_point=None, aabb_tolerance=aabb_padding
     )
 
     if candidate_adj.n_total_neighbors == 0:
