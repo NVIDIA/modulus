@@ -49,7 +49,7 @@ Risk Control <https://arxiv.org/abs/2208.02814>`_ (Angelopoulos et al.,
 """
 
 import copy
-import math
+import struct
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
 
@@ -602,48 +602,56 @@ class FunctionalBandCalibrator(_ScaledCalibratorBase):
         )
 
 
+def _ordered_bits(x: float) -> int:
+    """Integer that sorts like the float64 ``x``; ``-0.0`` sits just below ``0.0``."""
+    bits = struct.unpack("<q", struct.pack("<d", x))[0]
+    return bits if bits >= 0 else -(bits & 0x7FFFFFFFFFFFFFFF) - 1
+
+
+def _from_ordered_bits(i: int) -> float:
+    """Inverse of ``_ordered_bits``."""
+    bits = i if i >= 0 else (-(i + 1)) | -0x8000000000000000
+    return struct.unpack("<d", struct.pack("<q", bits))[0]
+
+
 def _crc_threshold(sorted_scores: list[Tensor], alpha: float) -> float:
-    """Smallest observed ``lambda`` with ``(R(lambda) + 1) / (n + 1) <= alpha``."""
+    """Smallest observed ``lambda`` with ``(R(lambda) + 1) / (n + 1) <= alpha``.
+
+    ``R`` only drops at observed scores, so the smallest float64 that meets the
+    bound is an observed score. Bisecting over float64 bit patterns finds it in
+    at most 64 probes of one binary search per sample, without sorting the
+    pooled scores.
+    """
     n = len(sorted_scores)
     alpha_exact = require_feasible_alpha(n, alpha)
-
     scores64 = [scores.to(torch.float64) for scores in sorted_scores]
-    m = scores64[0].numel()
-    if all(scores.numel() == m for scores in scores64):
-        # Each exceeded point adds 1/m to the risk; ties at the pick only lower it.
-        allowed_exceed = math.floor(m * (alpha_exact * (n + 1) - 1))
-        k = n * m - allowed_exceed
-        return float(torch.cat(scores64).kthvalue(k).values)
 
-    def corrected_risk(candidate: Tensor) -> Fraction:
+    def within_budget(candidate: float) -> bool:
+        probe = torch.tensor(candidate, dtype=torch.float64)
         total_loss = Fraction()
         for scores in scores64:
-            exceed = scores.numel() - int(
-                torch.searchsorted(scores, candidate, right=True)
-            )
+            exceed = scores.numel() - int(torch.searchsorted(scores, probe, right=True))
             total_loss += Fraction(exceed, scores.numel())
-        return (total_loss + 1) / (n + 1)
+        return (total_loss + 1) / (n + 1) <= alpha_exact
 
-    # Duplicates are harmless: corrected_risk is monotone in the probe value.
-    candidates = torch.cat(scores64).sort().values
-
-    lo = -1
-    hi = candidates.numel() - 1
+    # Below the smallest score every point is missed; at the largest none is.
+    lo = _ordered_bits(min(float(scores[0]) for scores in scores64)) - 1
+    hi = _ordered_bits(max(float(scores[-1]) for scores in scores64))
     while hi - lo > 1:
         mid = (lo + hi) // 2
-        if corrected_risk(candidates[mid]) <= alpha_exact:
+        if within_budget(_from_ordered_bits(mid)):
             hi = mid
         else:
             lo = mid
-    return float(candidates[hi])
+    return _from_ordered_bits(hi)
 
 
 def _sorted_point_scores(normalized: Tensor) -> Tensor:
-    """Max over trailing dims to get one score per point, sorted on the CPU."""
+    """Max over trailing dims to get one score per point, sorted before the CPU copy."""
     if normalized.ndim > 1:
         normalized = normalized.amax(dim=tuple(range(1, normalized.ndim)))
     point_scores = normalized.reshape(-1)
-    return point_scores.detach().cpu().sort().values
+    return point_scores.detach().sort().values.cpu()
 
 
 class RiskControlCalibrator(_ScaledCalibratorBase):

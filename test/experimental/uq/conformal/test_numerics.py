@@ -116,6 +116,25 @@ def test_crc_threshold_matches_exact_candidate_oracle(case):
     assert corrected <= Fraction(Decimal(str(alpha)))
 
 
+@pytest.mark.parametrize("seed", range(6))
+@pytest.mark.parametrize("lengths", ["equal", "unequal"])
+def test_crc_threshold_parity_with_oracle_on_random_samples(seed, lengths):
+    """Random samples with ties, negative scores, and signed zeros, at alphas
+    near the feasibility floor and above: the bisection matches the oracle exactly."""
+    g = torch.Generator().manual_seed(seed)
+    n = int(torch.randint(3, 12, (1,), generator=g))
+    sizes = torch.randint(1, 9, (n,), generator=g)
+    if lengths == "equal":
+        sizes = sizes[:1].expand(n)
+    tensors = [
+        (torch.randn(int(m), generator=g) * 2).round() / 2 * (-1) ** seed for m in sizes
+    ]
+    tensors[0][0] = -0.0
+    for alpha in (2 / (n + 1), 0.25, 0.5, 0.9):
+        lam = _crc_threshold([t.sort().values for t in tensors], alpha)
+        assert lam == _crc_oracle(tensors, alpha)[0]
+
+
 def test_crc_threshold_compares_against_declared_decimal_alpha_exactly():
     """Binary-float equality must not admit exact risk 2/3 below a
     declared decimal alpha of 0.6666666666666666."""
