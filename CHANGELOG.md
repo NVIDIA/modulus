@@ -243,6 +243,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Small angles from `stable_angle_between_vectors`, volumes of thin
   tetrahedra in 4D or more, and FEM cotangent weights of thin cells keep their
   accuracy in float32. The first two used to come out as 0.
+- FEM cotangent weights no longer treat long, thin but well-shaped cells as
+  degenerate. A tetrahedron with one edge 5000 times longer than the others
+  used to get the weights of a degenerate cell.
 - On CUDA, the extrinsic LSQ gradient of a flat surface and
   `sample_data_at_points` next to a degenerate cell no longer raise
   `LinAlgError`. Degenerate cells contain no sample points on any device, and
