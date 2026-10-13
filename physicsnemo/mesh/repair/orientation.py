@@ -23,7 +23,7 @@ in the same general direction.
 from typing import TYPE_CHECKING
 
 import torch
-from jaxtyping import Bool, Int
+from jaxtyping import Bool, Float, Int
 
 from physicsnemo.mesh.boundaries._facet_extraction import extract_candidate_facets
 from physicsnemo.mesh.utilities._duplicate_detection import (
@@ -76,6 +76,28 @@ def _induced_facet_orientations(
     return induced, is_degenerate
 
 
+def _signed_volumes(
+    points: Float[torch.Tensor, "n_points n_dims"],
+    cells: Int[torch.Tensor, "n_cells n_vertices"],
+) -> Float[torch.Tensor, " n_cells"]:
+    """Signed volumes of full-dimensional simplices, times ``n_dims!``.
+
+    Up to three dimensions, closed forms replace batched LU factorizations,
+    which are slow for many tiny matrices.
+    """
+    points = points.to(torch.promote_types(points.dtype, torch.float32))
+    vertices = points[cells]
+    edges = vertices[:, 1:] - vertices[:, :1]  # (n_cells, n_dims, n_dims)
+    n_dims = edges.shape[-1]
+    if n_dims == 1:
+        return edges[:, 0, 0]
+    if n_dims == 2:
+        return edges[:, 0, 0] * edges[:, 1, 1] - edges[:, 0, 1] * edges[:, 1, 0]
+    if n_dims == 3:
+        return (edges[:, 0] * torch.linalg.cross(edges[:, 1], edges[:, 2])).sum(-1)
+    return torch.linalg.det(edges)
+
+
 def fix_orientation(
     mesh: "Mesh",
 ) -> tuple["Mesh", dict[str, int]]:
@@ -90,16 +112,20 @@ def fix_orientation(
     in any manifold and spatial dimension.
 
     Every connected component is oriented to agree with its lowest-index
-    cell, which is never flipped. A cell is flipped by swapping its last two
-    vertices. The orientations are solved together by a union-find over two
-    copies of every cell (as given and flipped), in which each shared facet
-    links the copies that agree on it; a component is orientable exactly when
-    the two copies of its cells stay apart. A non-orientable component, such
-    as a Möbius strip, is left as given and counted.
+    cell. If the cells fill their space (``n_manifold_dims == n_spatial_dims``,
+    such as triangles in 2D or tetrahedra in 3D), a component whose total
+    signed volume is then negative is reversed, so that volumes come out
+    positive. A cell is flipped by swapping its last two vertices. The
+    orientations are solved together by a union-find over two copies of every
+    cell (as given and flipped), in which each shared facet links the copies
+    that agree on it; a component is orientable exactly when the two copies of
+    its cells stay apart. A non-orientable component, such as a Möbius strip,
+    is left as given and counted.
 
     Only facets shared by exactly two cells relate their cells, so cells that
     meet only at non-manifold facets are oriented independently. Cells with a
-    repeated vertex have no orientation and are left as given.
+    repeated vertex have no orientation: they are left as given and do not
+    count toward the cells that share a facet.
 
     Parameters
     ----------
@@ -111,7 +137,8 @@ def fix_orientation(
     tuple[Mesh, dict[str, int]]
         Tuple of (oriented_mesh, stats_dict) where stats_dict contains:
 
-        - "n_faces_flipped": Number of cells that were flipped
+        - "n_cells_flipped": Number of cells that were flipped
+        - "n_faces_flipped": Same as "n_cells_flipped", kept for compatibility
         - "n_components": Number of facet-connected components found
         - "largest_component_size": Size of largest component
         - "n_non_orientable_components": Number of components left as given
@@ -127,7 +154,7 @@ def fix_orientation(
     >>> from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
     >>> mesh = sphere_icosahedral.load(subdivisions=2)
     >>> mesh_oriented, stats = fix_orientation(mesh)
-    >>> assert "n_faces_flipped" in stats
+    >>> assert "n_cells_flipped" in stats
     """
     if mesh.n_manifold_dims < 1:
         raise ValueError(
@@ -137,6 +164,7 @@ def fix_orientation(
 
     if mesh.n_cells == 0:
         return mesh, {
+            "n_cells_flipped": 0,
             "n_faces_flipped": 0,
             "n_components": 0,
             "largest_component_size": 0,
@@ -152,9 +180,12 @@ def fix_orientation(
     candidate_facets, parent_cells = extract_candidate_facets(cells)
 
     ### Step 2: Pair the two candidates of every facet shared by exactly two cells
+    # Facets of degenerate cells get the out-of-range vertex ``n_points``, so
+    # they never count toward the cells that share a real facet.
+    candidate_facets.masked_fill_(is_degenerate[parent_cells, None], mesh.n_points)
     _, facet_ids, facet_counts = unique_index_tuples(
         candidate_facets,
-        index_bound=mesh.n_points,
+        index_bound=mesh.n_points + 1,
         return_inverse=True,
         return_counts=True,
     )
@@ -197,7 +228,18 @@ def fix_orientation(
     # non-orientable component.
     should_flip = kept_label > flipped_label
     component = torch.minimum(kept_label, flipped_label)
+    is_orientable = kept_label != flipped_label
     is_root = component == torch.arange(n_cells, device=device)
+
+    ### Step 4: Reverse full-dimensional components of negative total volume
+    if mesh.codimension == 0:
+        volumes = _signed_volumes(mesh.points, cells)
+        total_volumes = torch.zeros_like(volumes).index_add_(
+            0, component, torch.where(should_flip, -volumes, volumes)
+        )
+        # Degenerate cells and non-orientable components stay as given
+        is_reversed = (total_volumes[component] < 0) & is_orientable & ~is_degenerate
+        should_flip = should_flip ^ is_reversed
 
     ### Component statistics, read with the flip count in one transfer
     component_sizes = torch.zeros(n_cells, dtype=torch.long, device=device)
@@ -207,11 +249,11 @@ def fix_orientation(
             should_flip.sum(),
             is_root.sum(),
             component_sizes.max(),
-            (is_root & (kept_label == flipped_label)).sum(),
+            (is_root & ~is_orientable).sum(),
         ]
     ).tolist()
 
-    ### Step 4: Apply flips by swapping the last two vertices of each flipped cell
+    ### Step 5: Apply flips by swapping the last two vertices of each flipped cell
     if n_flipped > 0:
         swapped = torch.cat([cells[:, :-2], cells[:, -1:], cells[:, -2:-1]], dim=1)
         new_cells = torch.where(should_flip[:, None], swapped, cells)
@@ -228,6 +270,7 @@ def fix_orientation(
         oriented_mesh = mesh
 
     stats = {
+        "n_cells_flipped": n_flipped,
         "n_faces_flipped": n_flipped,
         "n_components": n_components,
         "largest_component_size": largest_component_size,

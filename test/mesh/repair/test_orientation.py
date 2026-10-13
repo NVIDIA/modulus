@@ -81,6 +81,7 @@ class TestRepairsWindings:
         oriented, stats = fix_orientation(scrambled)
 
         assert stats == {
+            "n_cells_flipped": int(reversed_cells.sum()),
             "n_faces_flipped": int(reversed_cells.sum()),
             "n_components": 2,
             "largest_component_size": sphere.n_cells,
@@ -100,30 +101,33 @@ class TestRepairsWindings:
         oriented, stats = fix_orientation(scrambled)
 
         assert _orientation_conflicts(oriented.cells.cpu()) == 0
-        assert stats["n_faces_flipped"] == int(_every_third(cube.n_cells, device).sum())
+        assert stats["n_cells_flipped"] == int(_every_third(cube.n_cells, device).sum())
         # Outward like the first cell: the enclosed volume is positive.
         assert oriented.cell_normals.isfinite().all()
         volume = (oriented.cell_centroids * oriented.cell_normals).sum(-1)
         assert ((volume * oriented.cell_areas).sum() > 0).item()
 
     def test_planar_triangles(self, device):
+        """Triangles in 2D come out counterclockwise, whichever cells were reversed."""
         from physicsnemo.mesh.primitives.planar import structured_grid
 
         grid = structured_grid.load(n_x=9, n_y=7, device=device)
+        # Make every triangle counterclockwise first.
+        grid = _reverse(grid, _signed_volumes(grid) < 0)
         generator = torch.Generator().manual_seed(0)
         reversed_cells = (torch.rand(grid.n_cells, generator=generator) < 0.4).to(
             device
         )
-        reversed_cells[0] = False
+        reversed_cells[0] = True
         scrambled = _reverse(grid, reversed_cells)
 
         oriented, stats = fix_orientation(scrambled)
 
-        assert stats["n_faces_flipped"] == int(reversed_cells.sum())
-        signs = _signed_volumes(oriented).sign()
-        assert (signs == signs[0]).all()
+        assert stats["n_cells_flipped"] == int(reversed_cells.sum())
+        assert (_signed_volumes(oriented) > 0).all()
 
     def test_tetrahedra(self, device):
+        """Tetrahedra come out positive, whichever cells were reversed."""
         from physicsnemo.mesh.primitives.volumes import cube_volume
 
         cube = cube_volume.load(subdivisions=3, device=device)
@@ -134,13 +138,13 @@ class TestRepairsWindings:
         reversed_cells = (torch.rand(cube.n_cells, generator=generator) < 0.5).to(
             device
         )
-        reversed_cells[0] = False
+        reversed_cells[0] = True
         scrambled = _reverse(cube, reversed_cells)
 
         oriented, stats = fix_orientation(scrambled)
 
         assert stats["n_components"] == 1
-        assert stats["n_faces_flipped"] == int(reversed_cells.sum())
+        assert stats["n_cells_flipped"] == int(reversed_cells.sum())
         assert (_signed_volumes(oriented) > 0).all()
 
     def test_segments(self, device):
@@ -154,7 +158,7 @@ class TestRepairsWindings:
 
         oriented, stats = fix_orientation(scrambled)
 
-        assert stats["n_faces_flipped"] == int(_every_third(n, device).sum())
+        assert stats["n_cells_flipped"] == int(_every_third(n, device).sum())
         torch.testing.assert_close(oriented.cells, loop.cells, rtol=0, atol=0)
 
     def test_matches_reference_on_random_reversals(self, device):
@@ -188,7 +192,7 @@ class TestSpecialTopology:
         oriented, stats = fix_orientation(strip)
 
         assert stats["n_non_orientable_components"] == 1
-        assert stats["n_faces_flipped"] == 0
+        assert stats["n_cells_flipped"] == 0
         torch.testing.assert_close(oriented.cells, strip.cells, rtol=0, atol=0)
 
     def test_non_manifold_edges_do_not_relate_cells(self, device):
@@ -208,20 +212,25 @@ class TestSpecialTopology:
         oriented, stats = fix_orientation(Mesh(points=points, cells=cells))
 
         assert stats["n_components"] == 3
-        assert stats["n_faces_flipped"] == 0
+        assert stats["n_cells_flipped"] == 0
         torch.testing.assert_close(oriented.cells, cells, rtol=0, atol=0)
 
-    def test_degenerate_cells_are_left_as_given(self, device):
+    @pytest.mark.parametrize(
+        "degenerate", [[3, 3, 0], [1, 1, 2]], ids=["apart", "on_shared_edge"]
+    )
+    def test_degenerate_cells_are_left_as_given(self, device, degenerate):
+        """Degenerate cells are not flipped and do not unlink the cells around them."""
         points = torch.tensor(
-            [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], device=device
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]],
+            device=device,
         )
         # Cells 0 and 2 traverse their shared edge (1, 2) in the same direction
-        cells = torch.tensor([[0, 1, 2], [3, 3, 0], [1, 2, 3]], device=device)
+        cells = torch.tensor([[0, 1, 2], degenerate, [1, 2, 3]], device=device)
 
         oriented, stats = fix_orientation(Mesh(points=points, cells=cells))
 
         torch.testing.assert_close(oriented.cells[1], cells[1], rtol=0, atol=0)
-        assert stats["n_faces_flipped"] == 1
+        assert stats["n_cells_flipped"] == 1
         assert stats["n_components"] == 2
         assert _orientation_conflicts(oriented.cells[[0, 2]].cpu()) == 0
 
@@ -238,6 +247,7 @@ class TestSpecialTopology:
         oriented, stats = fix_orientation(mesh)
         assert oriented is mesh
         assert stats == {
+            "n_cells_flipped": 0,
             "n_faces_flipped": 0,
             "n_components": 0,
             "largest_component_size": 0,
@@ -245,11 +255,16 @@ class TestSpecialTopology:
         }
 
     def test_repair_pipeline_orients_volume_meshes(self, device):
+        """One inverted tetrahedron is flipped, even as the lowest-index cell."""
         from physicsnemo.mesh.primitives.volumes import cube_volume
 
         cube = cube_volume.load(subdivisions=2, device=device)
-        repaired, stats = repair_mesh(cube, merge_points=False, fix_orientation=True)
+        cube = _reverse(cube, _signed_volumes(cube) < 0)
+        first_inverted = _reverse(cube, torch.arange(cube.n_cells, device=device) == 0)
 
-        assert "skipped" not in stats["orientation"]
-        signs = _signed_volumes(repaired).sign()
-        assert (signs == signs[0]).all()
+        repaired, stats = repair_mesh(
+            first_inverted, merge_points=False, fix_orientation=True
+        )
+
+        assert stats["orientation"]["n_cells_flipped"] == 1
+        assert (_signed_volumes(repaired) > 0).all()

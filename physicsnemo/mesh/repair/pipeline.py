@@ -59,7 +59,10 @@ def repair_mesh(
     remove_isolated : bool, optional
         Remove points not referenced by any cell.
     fix_orientation : bool, optional
-        Orient all cells consistently (cells with at least two vertices).
+        Orient all cells consistently (cells with at least two vertices). Each
+        connected component follows the winding of its lowest-index cell,
+        except that cells filling their space, such as tetrahedra in 3D, get
+        positive volumes. See :func:`~physicsnemo.mesh.repair.fix_orientation`.
     fill_holes : bool, optional
         Close boundary loops (expensive).
     tolerance : float, optional
