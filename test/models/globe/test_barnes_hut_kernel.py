@@ -1746,6 +1746,65 @@ def test_bh_chunked_forward_and_gradients_match_single_chunk(
         torch.testing.assert_close(chunked_grad, single_grad, atol=1e-6, rtol=1e-5)
 
 
+def test_bh_compiled_forward_reuses_graph_for_new_pair_counts() -> None:
+    """Under ``torch.compile(dynamic=True)``, a new geometry reuses the graph.
+
+    Every geometry has its own pair counts. The near and (near,far) phases
+    loop over the number of chunks: written as ``range(0, n_pairs,
+    chunk_size)``, the loops made Dynamo specialize the pair counts, so each
+    new geometry recompiled the kernel.
+    """
+    from torch._dynamo.testing import CompileCounter
+
+    torch.manual_seed(DEFAULT_SEED)
+    bh_kernel = BarnesHutKernel(
+        n_spatial_dims=3,
+        output_schema={"p": {"rank": 0}},
+        hidden_layer_sizes=[8],
+        leaf_size=DEFAULT_LEAF_SIZE,
+    )
+    bh_kernel.eval()
+
+    def evaluate(source_pts, target_pts, cluster_tree, target_tree, plan):
+        return bh_kernel(
+            source_points=source_pts,
+            target_points=target_pts,
+            reference_length=torch.ones(()),
+            cluster_tree=cluster_tree,
+            target_tree=target_tree,
+            dual_plan=plan,
+            expand_far_targets=True,
+        )
+
+    cases = []
+    for seed in range(2):
+        g = torch.Generator().manual_seed(seed)
+        source_pts = torch.randn(60, 3, generator=g)
+        target_pts = torch.randn(30, 3, generator=g)
+        cluster_tree = ClusterTree.from_points(source_pts, leaf_size=DEFAULT_LEAF_SIZE)
+        target_tree = ClusterTree.from_points(target_pts, leaf_size=DEFAULT_LEAF_SIZE)
+        plan = cluster_tree.find_dual_interaction_pairs(
+            target_tree=target_tree, theta=1.0, expand_far_targets=True
+        )
+        ### Distinct sizes of at least 2, so that Dynamo gives each its own
+        ### symbol and the second geometry can only recompile by specializing.
+        sizes = [plan.n_near, plan.n_nf, cluster_tree.n_nodes, target_tree.n_nodes]
+        assert min(sizes) >= 2 and len(set(sizes + [60, 30, 3])) == 7, sizes
+        cases.append((source_pts, target_pts, cluster_tree, target_tree, plan))
+    assert cases[0][4].n_near != cases[1][4].n_near
+    assert cases[0][4].n_nf != cases[1][4].n_nf
+
+    counter = CompileCounter()
+    compiled = torch.compile(evaluate, backend=counter, dynamic=True)
+    with torch.no_grad():
+        evaluate(*cases[0])  # fills the kernel's cached properties
+        compiled(*cases[0])
+        n_frames = counter.frame_count
+        compiled(*cases[1])
+    assert n_frames >= 1
+    assert counter.frame_count == n_frames, "the second geometry recompiled"
+
+
 def test_compute_node_strengths_precision_at_scale() -> None:
     """Precision regression guard for ``BarnesHutKernel._compute_node_strengths``.
 
