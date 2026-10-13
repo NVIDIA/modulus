@@ -62,8 +62,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`bias_fn`, `bias_int_fn`, `slope_fn`); users can select all four
   solvers by string key through `physicsnemo.diffusion.samplers.sample`.
 
+- `ClusterTree.find_dual_interaction_pairs(source_admissible=...)` marks source
+  nodes that must never be approximated by their aggregate, such as nodes
+  whose normals differ too much.
+
 ### Changed
 
+- `ClusterTree` builds tighter trees by default (`split="morton"`), so
+  Barnes-Hut plans need 2-4x fewer interactions at the same `theta`.
+  `split="midpoint"` gives the previous trees.
+- GLOBE's default `theta` is 1.5 (was 1.0). With the new trees, DrivAerML
+  training reaches about 40% lower validation loss in the same time.
+- GLOBE's default `expand_far_targets` is `True` (was `False`), as in its
+  examples.
 - `ClusterTree.compute_source_aggregates` is 20-30x faster, and
   `ClusterTree.find_dual_interaction_pairs` is up to 1.7x faster with 40% less
   peak memory. The plan's interactions are no longer sorted by source.
@@ -119,6 +130,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   available, and nested mesh types survive memmap round trips. The memmap
   layout is unchanged: existing `.pmsh` / `.pdmsh` files remain readable, and
   new files are byte-identical to those written with the decorator.
+- Mesh facet extraction, repair, merging, smoothing, subdivision and quality
+  metrics avoid CUDA synchronizations hidden in indexing with Python lists,
+  blocking copies of small host tables, boolean masks and one `.item()` per
+  count. Laplacian smoothing synchronizes at most 4 times instead of about 30,
+  independent of the number of iterations, and `remove_degenerate_cells` is
+  about 5x faster. Results are unchanged.
 - Mesh integration uses a shared `_effective_measure` field for complete cell
   and point measures. Cell measures fall back to geometry; point measures are
   explicit and independent of connectivity. `Mesh.integrate_samples` evaluates
@@ -176,10 +193,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `tolerance` of `sample_data_at_points`, `find_containing_cells` and
   `find_all_containing_cells` is now relative. Barycentric coordinates must
   still be `>= -tolerance`, but the distance from a point to a cell's affine
-  hull and the BVH box padding are now limited to `tolerance` times the
-  largest absolute coordinate of the mesh, instead of `tolerance` in mesh
-  units. Results no longer depend on the mesh's length unit and are identical
-  when the mesh and query points are scaled by a power of two.
+  hull is now limited to `tolerance` times the largest absolute coordinate of
+  the mesh, instead of `tolerance` in mesh units. Results no longer depend on
+  the mesh's length unit and are identical when the mesh and query points are
+  scaled by a power of two.
+- `fix_orientation` orients cells of any dimension and is 6x faster on the
+  DrivAerML surface. Cells that fill their space, such as tetrahedra in 3D,
+  come out with positive volumes. Its stats add `n_cells_flipped`, with
+  `n_faces_flipped` kept as an alias, and `n_non_orientable_components`.
+- `repair_mesh(fix_orientation=True)` orients every mesh except point clouds,
+  instead of only surfaces in 3D.
 
 ### Deprecated
 
@@ -229,10 +252,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   force integration.
 - `ClusterTree.find_dual_interaction_pairs` returned an empty plan if any point
   had a NaN coordinate, and failed on plans with more than 2^31 interactions.
+- `ClusterTree.from_points` no longer keeps the autograd graph of its inputs.
+- With `expand_far_targets=True` and `leaf_size > 1`,
+  `ClusterTree.find_dual_interaction_pairs` still approximated some targets by
+  their leaf's centroid.
 - Checkpoint loading resolves model weights at the selected training checkpoint's
   filename index, preventing resumes that mix epochs. Missing required weights
   raise before any model or training state is restored. Distributed loads validate
   on every rank using rank 0's file lookup.
+- `fix_orientation` no longer leaves opposite windings across sharp creases,
+  such as the edges of a cube.
 - Mesh slicing reuses integer indices across connectivity, fields, and caches
   to avoid repeated CUDA synchronization for the same boolean mask.
   Point slicing skips mask processing when the output has no cells because
