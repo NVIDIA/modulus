@@ -394,16 +394,6 @@ The metrics of both models are in `reference_results/geotransolver` and
   network, while the network predicts the fields more accurately. Combining the
   two is a natural extension.
 
-## Tests
-
-```bash
-pytest tests
-```
-
-The tests check source decoding, the training-only preparation, the decoder and
-the jump loss, and train and evaluate small GeoTransolver and multilayer
-perceptron models on synthetic blades.
-
 ## References
 
 - [PLAID Rotor37 dataset](https://huggingface.co/datasets/PLAID-datasets/Rotor37)

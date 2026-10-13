@@ -101,6 +101,29 @@ def check_resume(cfg, run_dir, data_dir, world_size):
             raise ValueError(f"{data_dir / name} differs from the saved run")
 
 
+def last_complete_checkpoint(checkpoint_dir, model_name):
+    """Return the latest epoch with both its model and training state saved.
+
+    The two files of an epoch are written one after the other, so a run stopped
+    in between leaves a model file without its matching optimizer and scheduler
+    state. Such an epoch is skipped.
+    """
+    models = {
+        int(path.name.split(".")[2])
+        for path in checkpoint_dir.glob(f"{model_name}.0.*.mdlus")
+    }
+    states = {
+        int(path.name.split(".")[2])
+        for path in checkpoint_dir.glob("checkpoint.0.*.pt")
+    }
+    complete = models & states
+    if not complete:
+        raise FileNotFoundError(
+            f"No complete checkpoint to resume from in {checkpoint_dir}"
+        )
+    return max(complete)
+
+
 @torch.no_grad()
 def validate(model, loader, decoder, device):
     """Return mean normalized field and compressor output errors."""
@@ -192,11 +215,13 @@ def train(cfg):
     )
     first_epoch = 1
     if cfg.training.resume:
+        epoch = last_complete_checkpoint(checkpoint_dir, type(model).__name__)
         first_epoch += load_checkpoint(
             str(checkpoint_dir),
             models=model,
             optimizer=optimizer,
             scheduler=scheduler,
+            epoch=epoch,
             device=device,
         )
         if rank == 0:
