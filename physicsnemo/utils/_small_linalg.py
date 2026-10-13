@@ -20,9 +20,9 @@ Batched ``torch.linalg`` calls factorize every tiny matrix separately, which is
 slow on GPUs and a loop of LAPACK calls on CPUs. Meshes have one such matrix
 per cell, so these helpers use closed forms for matrices up to 3x3, and
 ``small_lstsq`` a Gram-Schmidt QR over the few columns of each system
-(``batched_lstsq`` picks it or ``torch.linalg.lstsq``, whichever is faster). They use
-only elementwise products and sums, so they need no CUDA synchronization and
-support autograd. Tests against tolerances (singularity, rank) need at least
+(``batched_lstsq`` picks it or closed-form normal equations, whichever is
+faster). They use only elementwise products, sums and tiny matrix products, so
+they need no CUDA synchronization and support autograd. Tests against tolerances (singularity, rank) need at least
 float32 precision, so 16-bit inputs are computed in float32.
 """
 
@@ -376,25 +376,173 @@ def batched_lstsq(
 ) -> Float[torch.Tensor, "... d n_rhs"]:
     """Minimum-norm least-squares solution of each small system ``A X = B``.
 
-    Uses the faster method for the device, as measured on meshes of 1M cells
-    (32 Grace cores) and 10M cells (GB300). On CPU, :func:`small_lstsq` is
-    15-50x faster than batched ``torch.linalg.lstsq``, which loops over LAPACK
-    calls. On CUDA, batched ``torch.linalg.lstsq`` is 2-4x faster than
-    :func:`small_lstsq`, but its only driver, ``gels``, assumes full rank, so on
-    CUDA rank-deficient systems are not supported: ``gels`` returns NaN, inf or
-    a large non-minimum-norm answer for them, as it did before this function
-    existed. When a batch of two or more systems contains an exactly
-    rank-deficient one (such as a flat stencil in a coordinate plane),
-    ``gels`` raises instead, and the batch falls back to :func:`small_lstsq`.
+    Float32 systems with at most 3 unknowns, such as LSQ gradient stencils,
+    use :func:`_normal_equations_lstsq`; all others use :func:`small_lstsq`.
+    Both give the minimum-norm solution with the rank decision of CPU
+    ``torch.linalg.lstsq``, on every device, and need no CUDA synchronization.
+    (CUDA ``torch.linalg.lstsq`` has only the driver ``gels``, which assumes
+    full rank: it returns NaN, inf or a large wrong answer for rank-deficient
+    systems such as flat stencils.) The normal equations are 3 to 8 times
+    faster than :func:`small_lstsq` on GB300 and 1.6 to 8 times faster on
+    CPU. On GB300 they are as fast as CUDA ``torch.linalg.lstsq`` for 2
+    unknowns, and about 2 times slower for 3.
     """
-    if A.dtype in _HALF_DTYPES:  # neither solver handles 16-bit rank tests
+    if A.dtype in _HALF_DTYPES:  # the rank tests need float32 precision
         return batched_lstsq(A.float(), B.float()).to(A.dtype)
-    if A.is_cuda:
-        try:
-            return torch.linalg.lstsq(A, B).solution
-        except torch.linalg.LinAlgError:
-            pass
+    if A.dtype == torch.float32 and A.shape[-1] <= 3:
+        return _normal_equations_lstsq(A, B)
     return small_lstsq(A, B)
+
+
+def _normal_equations_lstsq(
+    A: Float[torch.Tensor, "... k d"],
+    B: Float[torch.Tensor, "... k n_rhs"],
+) -> Float[torch.Tensor, "... d n_rhs"]:
+    """Minimum-norm least squares of float32 systems with ``d <= 3`` unknowns.
+
+    Solves the normal equations ``M X = A^T B``, ``M = A^T A``, formed in
+    float64, in which products of float32 entries are exact. Squaring the
+    condition number then costs less accuracy than a float32 QR factorization
+    loses: on random systems with condition numbers up to 1e5, the largest
+    errors are about 1000 times smaller than those of :func:`small_lstsq`.
+
+    ``M`` is divided by its trace, so that its eigenvalues sum to 1. As in
+    :func:`small_lstsq`, singular values of ``A`` below ``rcond`` times the
+    largest count as zero, with ``rcond = eps * max(k, d)`` of the input
+    dtype, so eigenvalues of ``M`` below ``rcond**2`` do. The pseudo-inverse is
+    in closed form: the inverse at full rank, and ``M`` itself at rank 1, since
+    then ``M = v v^T`` for a unit vector ``v`` (which also gives 0 for
+    ``A = 0``). For ``d = 3``, the largest diagonal entry of ``M`` is
+    eliminated first, as in pivoted Cholesky, so that the 2x2 Schur complement
+    resolves the two smallest eigenvalues even when both are small. The
+    elimination gives a generalized inverse ``G``; at rank 2, the
+    pseudo-inverse is ``P G P``, with ``P`` the projector onto the range of
+    ``M``.
+
+    Every branch is finite for every input, so gradients are finite also for
+    rank-deficient systems, and NaN or inf entries propagate. Each entry of
+    ``M`` and of its pseudo-inverse is a separate tensor over the batch: in
+    float64, batched matrix products of tiny matrices are many times slower
+    than elementwise operations, on GPUs and on CPUs.
+    """
+    k, d = A.shape[-2:]
+    eigenvalue_tolerance = (torch.finfo(A.dtype).eps * max(k, d)) ** 2
+    a = [A[..., i].double() for i in range(d)]  # columns of A, each (..., k)
+    B = B.double()
+    m = {(i, j): (a[i] * a[j]).sum(-1) for i in range(d) for j in range(i, d)}
+    rhs = [(a[i].unsqueeze(-1) * B).sum(-2) for i in range(d)]  # each (..., n_rhs)
+
+    ### Divide M by its trace, the sum of its eigenvalues
+    trace = sum(m[i, i] for i in range(d))  # (...)
+    trace = torch.where(trace == 0, 1.0, trace)  # A = 0; keeps NaN and inf
+    m = {key: value / trace for key, value in m.items()}
+
+    def times(
+        symmetric: dict[tuple[int, int], torch.Tensor], v: list[torch.Tensor]
+    ) -> list[torch.Tensor]:
+        """Product of a symmetric matrix, given by its upper entries, and v.
+
+        Entries of v may have a trailing dimension of right-hand sides.
+        """
+
+        def entry(i: int, j: int) -> torch.Tensor:
+            x = symmetric[min(i, j), max(i, j)]
+            return x.unsqueeze(-1) if v[j].dim() > x.dim() else x
+
+        return [sum(entry(i, j) * v[j] for j in range(d)) for i in range(d)]
+
+    ### Pseudo-inverse of M in closed form, by its upper entries
+    # Written so that NaN counts as full rank and propagates.
+    if d == 1:
+        pseudo_inverse = m
+    elif d == 2:
+        det = m[0, 0] * m[1, 1] - m[0, 1].square()
+        # det is the product of the eigenvalues, the larger in [1/2, 1]
+        full_rank = ~(det <= eigenvalue_tolerance)
+        det = torch.where(full_rank, det, 1.0)
+        pseudo_inverse = {
+            (0, 0): torch.where(full_rank, m[1, 1] / det, m[0, 0]),
+            (0, 1): torch.where(full_rank, -m[0, 1] / det, m[0, 1]),
+            (1, 1): torch.where(full_rank, m[0, 0] / det, m[1, 1]),
+        }
+    else:
+        # Symmetric elimination of the largest diagonal entry, as in pivoted
+        # Cholesky: the 2x2 Schur complement S holds the two smallest
+        # eigenvalues at their own scale, so that its determinant resolves
+        # them (the 3x3 determinant cannot, when both are small).
+        p0 = (m[0, 0] >= m[1, 1]) & (m[0, 0] >= m[2, 2])
+        p1 = ~p0 & (m[1, 1] >= m[2, 2])
+
+        def pick(x0: torch.Tensor, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+            """x_p for the pivot p."""
+            return torch.where(p0, x0, torch.where(p1, x1, x2))
+
+        # Rows and columns in the order (p, q, r), with (q, r) cyclic after p
+        pivot = pick(m[0, 0], m[1, 1], m[2, 2])  # at least 1/3, or 0 for A = 0
+        pivot = torch.where(pivot > 0, pivot, 1.0)
+        b_q, b_r = pick(m[0, 1], m[1, 2], m[0, 2]), pick(m[0, 2], m[0, 1], m[1, 2])
+        S_qq = pick(m[1, 1], m[2, 2], m[0, 0]) - b_q.square() / pivot
+        S_rr = pick(m[2, 2], m[0, 0], m[1, 1]) - b_r.square() / pivot
+        S_qr = pick(m[1, 2], m[0, 2], m[0, 1]) - b_q * b_r / pivot
+        trace_S = S_qq + S_rr  # within a factor 3 of the two smallest eigenvalues
+        det_S = S_qq * S_rr - S_qr.square()
+        rank_2 = ~(trace_S <= eigenvalue_tolerance)
+        full_rank = rank_2 & ~(det_S <= eigenvalue_tolerance * trace_S)
+
+        # Inverse of S at full rank, else its pseudo-inverse S / tr(S)^2 (rank 1)
+        det_S = torch.where(full_rank, det_S, 1.0)
+        trace_S2 = torch.where(rank_2, trace_S, 1.0).square()
+        Sg_qq = torch.where(full_rank, S_rr / det_S, S_qq / trace_S2)
+        Sg_rr = torch.where(full_rank, S_qq / det_S, S_rr / trace_S2)
+        Sg_qr = torch.where(full_rank, -S_qr / det_S, S_qr / trace_S2)
+        # A generalized inverse G of M by block elimination: M G M = M
+        h_q = (Sg_qq * b_q + Sg_qr * b_r) / pivot
+        h_r = (Sg_qr * b_q + Sg_rr * b_r) / pivot
+        G = {
+            (0, 0): (1 + b_q * h_q + b_r * h_r) / pivot,
+            (0, 1): -h_q,
+            (0, 2): -h_r,
+            (1, 1): Sg_qq,
+            (1, 2): Sg_qr,
+            (2, 2): Sg_rr,
+        }
+
+        # At rank 2 the pseudo-inverse is P G P, with P = I - n n^T the
+        # projector onto the range of M. Its null vector n solves S (s_q, s_r)
+        # = 0; take the column of adj(S) with the larger diagonal entry.
+        larger_rr = S_rr >= S_qq
+        s_q = torch.where(larger_rr, S_rr, -S_qr)
+        s_r = torch.where(larger_rr, -S_qr, S_qq)
+        s_p = -(b_q * s_q + b_r * s_r) / pivot
+        # Guarded before the square root, whose gradient at 0 is infinite
+        null_norm2 = s_p.square() + s_q.square() + s_r.square()
+        null_norm = torch.where(null_norm2 > 0, null_norm2, 1.0).sqrt()
+        # n = 0 at full rank, where P G P = G
+        n = [torch.where(full_rank, 0.0, x / null_norm) for x in (s_p, s_q, s_r)]
+        Gn = times(G, n)
+        nGn = sum(n_i * g_i for n_i, g_i in zip(n, Gn))
+        PGP = {
+            (i, j): G[i, j] - n[i] * Gn[j] - Gn[i] * n[j] + nGn * n[i] * n[j]
+            for i in range(3)
+            for j in range(i, 3)
+        }
+
+        # Back to the original order (p, q, r = 0, 1, 2 / 1, 2, 0 / 2, 0, 1),
+        # and M itself at rank 1
+        unpermuted = {
+            (0, 0): pick(PGP[0, 0], PGP[2, 2], PGP[1, 1]),
+            (0, 1): pick(PGP[0, 1], PGP[0, 2], PGP[1, 2]),
+            (0, 2): pick(PGP[0, 2], PGP[1, 2], PGP[0, 1]),
+            (1, 1): pick(PGP[1, 1], PGP[0, 0], PGP[2, 2]),
+            (1, 2): pick(PGP[1, 2], PGP[0, 1], PGP[0, 2]),
+            (2, 2): pick(PGP[2, 2], PGP[1, 1], PGP[0, 0]),
+        }
+        pseudo_inverse = {
+            key: torch.where(rank_2, value, m[key]) for key, value in unpermuted.items()
+        }
+
+    X = times(pseudo_inverse, rhs)
+    return (torch.stack(X, dim=-2) / trace[..., None, None]).to(A.dtype)
 
 
 def _solve_upper_triangular(

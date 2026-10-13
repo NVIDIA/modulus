@@ -140,6 +140,26 @@ def test_cotan_weight_inverse_is_sync_free(monkeypatch, n_spatial_dims) -> None:
 
 
 @pytest.mark.skipif(not _CUDA, reason="CUDA required to detect host synchronizations")
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_batched_lstsq_is_sync_free(dtype) -> None:
+    """Least squares checks no errors on the host, also for rank-deficient systems."""
+    from physicsnemo.utils._small_linalg import batched_lstsq
+
+    A = torch.randn(64, 6, 3, dtype=dtype, device="cuda")
+    A[0, :, 2] = 0.0  # a flat stencil
+    B = torch.randn(64, 6, 2, dtype=dtype, device="cuda")
+    batched_lstsq(A, B)  # warm up outside the guard
+    torch.cuda.synchronize()
+
+    previous_mode = torch.cuda.get_sync_debug_mode()
+    torch.cuda.set_sync_debug_mode("error")
+    try:
+        batched_lstsq(A, B)
+    finally:
+        torch.cuda.set_sync_debug_mode(previous_mode)
+
+
+@pytest.mark.skipif(not _CUDA, reason="CUDA required to detect host synchronizations")
 def test_cached_normal_transformation_is_sync_free() -> None:
     """Inverse-transpose cache propagation must not synchronize CUDA.
 

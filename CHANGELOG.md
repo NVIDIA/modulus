@@ -246,8 +246,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FEM cotangent weights no longer treat long, thin but well-shaped cells as
   degenerate. A tetrahedron with one edge 5000 times longer than the others
   used to get the weights of a degenerate cell.
-- On CUDA, the extrinsic LSQ gradient of a flat surface and
-  `sample_data_at_points` next to a degenerate cell no longer raise
+- On CUDA, LSQ gradients of rank-deficient stencils, such as those of a flat
+  surface, are now minimum-norm solutions, as on CPU. They used to be NaN,
+  wrong by orders of magnitude, or a `LinAlgError`.
+- On CUDA, `sample_data_at_points` next to a degenerate cell no longer raises
   `LinAlgError`. Degenerate cells contain no sample points on any device, and
   `compute_circumcenters` returns their centroid instead of NaN or infinity.
 - Edge flips in `mesh_implicit_domain` work at any coordinate scale; below

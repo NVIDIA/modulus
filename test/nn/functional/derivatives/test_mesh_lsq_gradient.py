@@ -437,16 +437,18 @@ def _make_stencils(kind: str, n_systems: int = 256) -> torch.Tensor:
 )
 @pytest.mark.parametrize("length_scale", [1e-8, 1.0, 1e8])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("solver", ["small_lstsq", "batched_lstsq"])
 def test_small_lstsq_matches_lstsq(
-    device: str, kind: str, length_scale: float, dtype: torch.dtype
+    device: str, kind: str, length_scale: float, dtype: torch.dtype, solver: str
 ):
-    """small_lstsq gives the minimum-norm solutions of CPU lstsq, also when rank-deficient."""
-    from physicsnemo.utils._small_linalg import small_lstsq
+    """small_lstsq and batched_lstsq (float64 normal equations for float32 inputs)
+    give the minimum-norm solutions of CPU lstsq, also when rank-deficient."""
+    from physicsnemo.utils import _small_linalg
 
     A = (_make_stencils(kind) * length_scale).to(dtype=dtype, device=device)
     B = torch.randn(*A.shape[:-1], 2, dtype=dtype, device=device)
 
-    solution = small_lstsq(A, B)
+    solution = getattr(_small_linalg, solver)(A, B)
     reference = _lstsq_reference(A, B)
 
     assert solution.shape == reference.shape
@@ -458,19 +460,23 @@ def test_small_lstsq_matches_lstsq(
     assert (error <= tolerance * scale).all(), (error / scale).max()
 
 
-def test_small_lstsq_gradients(device: str):
-    """small_lstsq is differentiable, with finite gradients on rank-deficient systems."""
-    from physicsnemo.utils._small_linalg import small_lstsq
+@pytest.mark.parametrize("solver", ["small_lstsq", "_normal_equations_lstsq"])
+def test_small_lstsq_gradients(device: str, solver: str):
+    """The solvers are differentiable, with finite gradients on rank-deficient systems."""
+    from physicsnemo.utils import _small_linalg
 
+    lstsq = getattr(_small_linalg, solver)
     A = torch.randn(8, 6, 3, dtype=torch.float64, device=device, requires_grad=True)
     B = torch.randn(8, 6, 2, dtype=torch.float64, device=device, requires_grad=True)
-    assert torch.autograd.gradcheck(small_lstsq, (A, B))
+    assert torch.autograd.gradcheck(lstsq, (A, B))
 
+    # The normal equations are for float32 inputs
+    dtype = torch.float64 if solver == "small_lstsq" else torch.float32
     for kind in ("planar_3d", "collinear_3d", "underdetermined_k2_d3", "all_zero"):
-        A = _make_stencils(kind, n_systems=8).to(device).requires_grad_(True)
+        A = _make_stencils(kind, n_systems=8).to(device, dtype).requires_grad_(True)
         B = torch.randn(*A.shape[:-1], 2, dtype=A.dtype, device=device)
         B.requires_grad_(True)
-        small_lstsq(A, B).square().sum().backward()
+        lstsq(A, B).square().sum().backward()
         assert torch.isfinite(A.grad).all()
         assert torch.isfinite(B.grad).all()
 
@@ -510,22 +516,11 @@ def _rank_deficient_case(case: str, device: str, dtype: torch.dtype):
     "case", ["planar", "single_planar", "tilted", "collinear", "underdetermined"]
 )
 def test_mesh_lsq_gradient_torch_rank_deficient_stencils(
-    device: str, dtype: torch.dtype, case: str, monkeypatch, request
+    device: str, dtype: torch.dtype, case: str, monkeypatch
 ):
-    """Rank-deficient 3D stencils give the minimum-norm gradients of CPU lstsq.
-
-    On CUDA, batched_lstsq keeps CUDA lstsq (gels), which assumes full rank. Only
-    a batch of two or more stencils with an exactly rank-deficient one raises
-    and falls back to small_lstsq (the planar case); the others are expected to
-    fail there until CUDA gets a rank-revealing solver.
-    """
-    if torch.device(device).type == "cuda" and case != "planar":
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                reason="CUDA lstsq (gels) assumes full rank; see batched_lstsq",
-            )
-        )
+    """Rank-deficient 3D stencils give the minimum-norm gradients of CPU lstsq,
+    on every device. (CUDA lstsq, whose only driver gels assumes full rank, gave
+    NaN for a single flat stencil and a large wrong answer for a tilted plane.)"""
     from physicsnemo.nn.functional.derivatives.mesh_lsq_gradient import _torch_impl
 
     points, offsets, indices = _rank_deficient_case(case, device, dtype)
@@ -546,9 +541,12 @@ def test_mesh_lsq_gradient_torch_rank_deficient_stencils(
     )
 
 
-def test_small_lstsq_propagates_nan_and_inf(device: str):
+@pytest.mark.parametrize("solver", ["small_lstsq", "batched_lstsq"])
+def test_small_lstsq_propagates_nan_and_inf(device: str, solver: str):
     """A NaN or inf entry gives NaN rather than a plausible zero, in its own system only."""
-    from physicsnemo.utils._small_linalg import small_lstsq
+    from physicsnemo.utils import _small_linalg
+
+    small_lstsq = getattr(_small_linalg, solver)
 
     A = torch.tensor([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]], device=device)
     A = A.expand(3, 3, 2).clone()
@@ -563,9 +561,12 @@ def test_small_lstsq_propagates_nan_and_inf(device: str):
     torch.testing.assert_close(solution[2], _lstsq_reference(A[2:], B[2:])[0])
 
 
-def test_small_lstsq_bfloat16(device: str):
+@pytest.mark.parametrize("solver", ["small_lstsq", "batched_lstsq"])
+def test_small_lstsq_bfloat16(device: str, solver: str):
     """16-bit systems are solved in float32, so the rank test is not swamped by eps."""
-    from physicsnemo.utils._small_linalg import small_lstsq
+    from physicsnemo.utils import _small_linalg
+
+    small_lstsq = getattr(_small_linalg, solver)
 
     generator = torch.Generator().manual_seed(0)
     x = torch.rand(2000, 20, generator=generator) * 2 - 1
