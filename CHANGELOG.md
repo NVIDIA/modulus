@@ -248,9 +248,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Small angles from `stable_angle_between_vectors`, volumes of thin
   tetrahedra in 4D or more, and FEM cotangent weights of thin cells keep their
   accuracy in float32. The first two used to come out as 0.
-- FEM cotangent weights no longer treat long, thin but well-shaped cells as
-  degenerate. A tetrahedron with one edge 5000 times longer than the others
-  used to get the weights of a degenerate cell.
+- FEM cotangent weights of long, thin but well-shaped cells are accurate in
+  any vertex order. A tetrahedron with one edge 5000 times longer than the
+  others used to get the weights of a degenerate cell.
+- Vertex angles of triangles in 3D are correct in float16 and at any
+  coordinate scale, and `stable_angle_between_vectors` is correct in float16.
+  Both used to return NaN or wrong angles there.
 - On CUDA, LSQ gradients of rank-deficient stencils, such as those of a flat
   surface, are now minimum-norm solutions, as on CPU. They used to be NaN,
   wrong by orders of magnitude, or a `LinAlgError`.

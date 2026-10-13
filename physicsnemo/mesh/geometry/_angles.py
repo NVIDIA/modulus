@@ -68,7 +68,9 @@ def stable_angle_between_vectors(v1: torch.Tensor, v2: torch.Tensor) -> torch.Te
     issues when vectors are nearly parallel or anti-parallel. The magnitude
     ``|v1 x v2|`` comes from the cross product (in 2D and 3D) or the 2x2 minors
     of ``[v1; v2]`` (in other dimensions), not from
-    ``|v1|^2 |v2|^2 - (v1 . v2)^2``, which cancels for those vectors.
+    ``|v1|^2 |v2|^2 - (v1 . v2)^2``, which cancels for those vectors. Float16
+    and bfloat16 inputs are computed in float32: products of float16 entries
+    overflow above about 256.
 
     Parameters
     ----------
@@ -93,6 +95,8 @@ def stable_angle_between_vectors(v1: torch.Tensor, v2: torch.Tensor) -> torch.Te
     """
     # torch.linalg.cross needs inputs with the same number of dimensions
     v1, v2 = torch.broadcast_tensors(v1, v2)
+    if v1.dtype in (torch.float16, torch.bfloat16):
+        return stable_angle_between_vectors(v1.float(), v2.float()).to(v1.dtype)
     dot_product = (v1 * v2).sum(dim=-1)
 
     n_dims = v1.shape[-1]
@@ -215,28 +219,25 @@ def compute_vertex_angles(
         and mesh.n_spatial_dims in (2, 3)
         and mesh.cells.shape[1] == 3
     ):
-        cell_vertices = mesh.points[mesh.cells]
+        # One scale for the whole mesh, which the angles do not depend on.
+        # With coordinates of at most 1, products of edges cannot overflow. In
+        # float32 they underflow only for edges below the rounding error of the
+        # coordinates, which are lost anyway, but in float16 they would.
+        points = mesh.points
+        if points.dtype in (torch.float16, torch.bfloat16):
+            points = points.float()
+        if points.numel() > 0:  # an empty tensor has no largest entry
+            scale = points.detach().abs().amax()
+            points = points / torch.where(scale > 0, scale, 1.0)
+        cell_vertices = points[mesh.cells]
         v0 = cell_vertices[:, 0, :]
         v1 = cell_vertices[:, 1, :]
         v2 = cell_vertices[:, 2, :]
-
-        def _angle(edge_a: torch.Tensor, edge_b: torch.Tensor) -> torch.Tensor:
-            if mesh.n_spatial_dims == 2:
-                cross_norm = (
-                    edge_a[:, 0] * edge_b[:, 1] - edge_a[:, 1] * edge_b[:, 0]
-                ).abs()
-            else:
-                cross_norm = torch.linalg.vector_norm(
-                    torch.linalg.cross(edge_a, edge_b, dim=-1), dim=-1
-                )
-            dot_product = (edge_a * edge_b).sum(dim=-1)
-            return torch.atan2(cross_norm, dot_product)
-
         return torch.stack(
             [
-                _angle(v1 - v0, v2 - v0),
-                _angle(v2 - v1, v0 - v1),
-                _angle(v0 - v2, v1 - v2),
+                stable_angle_between_vectors(v1 - v0, v2 - v0),
+                stable_angle_between_vectors(v2 - v1, v0 - v1),
+                stable_angle_between_vectors(v0 - v2, v1 - v2),
             ],
             dim=1,
         ).to(input_dtype)

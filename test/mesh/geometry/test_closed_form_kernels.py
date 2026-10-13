@@ -21,6 +21,8 @@ closed forms replace, kept here verbatim in spirit so that any drift in the
 fast paths shows up as a numerical mismatch.
 """
 
+import itertools
+
 import pytest
 import torch
 
@@ -30,10 +32,12 @@ from physicsnemo.mesh.geometry.dual_meshes import compute_cotan_weights_fem
 from physicsnemo.mesh.utilities._tolerances import safe_eps
 from physicsnemo.mesh.utilities._topology import extract_unique_edges
 from physicsnemo.utils._small_linalg import (
+    best_base_first,
     normalized_gram_inverse,
     normalized_inverse,
     small_det,
     small_inverse,
+    undo_base_rotation,
 )
 from test.mesh.mesh.test_slicing_sync import _cuda_sync_budget
 
@@ -118,14 +122,14 @@ def _reference_vertex_angles(mesh: Mesh) -> torch.Tensor:
 def _reference_cotan_weights(mesh: Mesh) -> torch.Tensor:
     """FEM cotangent weights via batched Gram inverses and C = H G^-1 H^T.
 
-    With the edges at unit length, G = D G_hat D. Degenerate cells, with
-    det(G_hat) < 1e-12 or an edge of no length, invert the identity in place of
-    G_hat, as the closed form does.
+    With the edges from the best base vertex (best_base_first) at unit length,
+    G = D G_hat D. Degenerate cells, with det(G_hat) < 1e-12 or an edge of no
+    length, invert the identity in place of G_hat, as the closed form does.
     """
     n = mesh.n_manifold_dims
     dtype = mesh.points.dtype
     unique_edges, inverse_indices = extract_unique_edges(mesh)
-    vertices = mesh.points[mesh.cells]
+    vertices, base = best_base_first(mesh.points[mesh.cells])
     E = vertices[:, 1:, :] - vertices[:, :1, :]
     lengths = E.norm(dim=-1)
     has_length = lengths > torch.finfo(dtype).tiny ** 0.5
@@ -143,6 +147,11 @@ def _reference_cotan_weights(mesh: Mesh) -> torch.Tensor:
         lengths[:, :, None] * lengths[:, None, :]
     )
     C = H @ G_inv @ H.T
+    # Back from the rotated vertex order: vertex a of the cell is at (a - base) % (n + 1)
+    position = (torch.arange(n + 1, device=C.device) - base[:, None]) % (n + 1)
+    C = C.gather(1, position[:, :, None].expand_as(C)).gather(
+        2, position[:, None, :].expand_as(C)
+    )
     rows, cols = torch.triu_indices(n + 1, n + 1, offset=1)
     per_cell = -mesh.cell_areas[:, None] * C[:, rows, cols]
     weights = torch.zeros(len(unique_edges), dtype=dtype, device=G_hat.device)
@@ -158,6 +167,27 @@ def test_small_det_and_inverse_match_linalg(n, batch_shape, device):
 
     torch.testing.assert_close(small_det(matrices), torch.linalg.det(matrices))
     torch.testing.assert_close(small_inverse(matrices), torch.linalg.inv(matrices))
+
+
+def test_best_base_first_avoids_the_tip_of_a_needle(device):
+    """The base vertex is one of the three at the short edges, never the tip,
+    and undo_base_rotation restores the input order."""
+    vertices = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 2000.0]],
+        device=device,
+    )
+    orders = torch.tensor(list(itertools.permutations(range(4))), device=device)
+
+    rotated, base = best_base_first(vertices[orders])
+
+    assert not (rotated[:, 0, 2] == 2000.0).any()
+    order = (torch.arange(4, device=device) + base[:, None]) % 4
+    torch.testing.assert_close(
+        rotated, vertices[orders].gather(1, order[:, :, None].expand(-1, -1, 3))
+    )
+    torch.testing.assert_close(
+        undo_base_rotation(rotated[..., 2], base), vertices[orders][..., 2]
+    )
 
 
 @pytest.mark.parametrize("n", [1, 2, 3, 4])
@@ -347,15 +377,12 @@ def test_float32_cotan_weights_of_thin_cells(
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize("length", [1e4, 1e6])
 def test_cotan_weights_of_stretched_cells(dtype, length, device):
-    """A long, thin but well-shaped tetrahedron is not treated as degenerate."""
+    """A long, thin but well-shaped tetrahedron is not treated as degenerate,
+    in any vertex order: listed from its tip, its edges are nearly parallel."""
     points = torch.tensor(
         [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, length]],
         dtype=torch.float64,
     )
-    cells = torch.tensor([[0, 1, 2, 3]])
-    mesh = Mesh(points=points.to(device=device, dtype=dtype), cells=cells.to(device))
-
-    weights, edges = compute_cotan_weights_fem(mesh)
 
     # Float64 FEM weights without any degeneracy cutoff; for one cell the unique
     # edges are in itertools.combinations order
@@ -366,13 +393,19 @@ def test_cotan_weights_of_stretched_cells(dtype, length, device):
     C = H @ torch.linalg.inv(E @ E.T) @ H.T
     rows, cols = torch.triu_indices(4, 4, offset=1)
     expected = -(length / 6) * C[rows, cols]
-    assert edges.tolist() == [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]
-    torch.testing.assert_close(
-        weights.double().cpu(),
-        expected,
-        rtol=1e-5 if dtype == torch.float32 else 1e-9,
-        atol=1e-6 * expected.abs().max(),
-    )
+    for order in itertools.permutations(range(4)):
+        mesh = Mesh(
+            points=points.to(device=device, dtype=dtype),
+            cells=torch.tensor([order], device=device),
+        )
+        weights, edges = compute_cotan_weights_fem(mesh)
+        assert edges.tolist() == [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]
+        torch.testing.assert_close(
+            weights.double().cpu(),
+            expected,
+            rtol=1e-5 if dtype == torch.float32 else 1e-9,
+            atol=1e-6 * expected.abs().max(),
+        )
 
 
 def test_float16_cotan_weights(device):

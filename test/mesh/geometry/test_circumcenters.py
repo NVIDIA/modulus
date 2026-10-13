@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import itertools
+
 import pytest
 import torch
 
@@ -249,3 +251,29 @@ def test_float16_circumcenters(device) -> None:
     torch.testing.assert_close(
         centers.float(), torch.tensor([[0.5, 0.5], [1.0, 0.0]], device=device)
     )
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_circumcenters_do_not_depend_on_vertex_order(device, dtype) -> None:
+    """A needle tetrahedron listed from its tip keeps its circumcenter: every
+    vertex order gives the same one, also when rotated (review of #2067)."""
+    needle = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 2000.0]],
+        dtype=torch.float64,
+    )
+    rotation = torch.linalg.qr(
+        torch.randn(
+            3, 3, generator=torch.Generator().manual_seed(0), dtype=torch.float64
+        )
+    ).Q
+    orders = torch.tensor(list(itertools.permutations(range(4))))
+    center = torch.tensor([0.5, 0.5, 1000.0], dtype=torch.float64)
+    tolerance = 0.05 if dtype == torch.float32 else 1e-9  # the needle is 2000 long
+    for vertices, expected in (
+        (needle, center),
+        (needle @ rotation.T + 10.0, center @ rotation.T + 10.0),
+    ):
+        centers = compute_circumcenters(vertices[orders].to(device=device, dtype=dtype))
+        torch.testing.assert_close(
+            centers.double().cpu(), expected.expand(24, 3), rtol=0, atol=tolerance
+        )

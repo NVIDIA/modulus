@@ -30,7 +30,11 @@ from tensordict import TensorDict
 from physicsnemo.mesh.neighbors._adjacency import Adjacency, build_adjacency_from_pairs
 from physicsnemo.mesh.spatial import BVH
 from physicsnemo.nn.functional.neighbors import knn
-from physicsnemo.utils._small_linalg import normalized_inverse
+from physicsnemo.utils._small_linalg import (
+    best_base_first,
+    normalized_inverse,
+    undo_base_rotation,
+)
 
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh
@@ -102,6 +106,9 @@ def _solve_barycentric_system(
     factorize every tiny matrix separately and, for ``solve``, synchronize CUDA
     for an error check. Edge vectors and query are first divided by the cell's
     mean edge length, so products of tiny or huge edge vectors stay in range.
+    The callers take the edges from the base vertex whose edges are closest to
+    orthogonal (``best_base_first``): from the tip of a needle, a well-shaped
+    cell would look degenerate.
 
     - Square systems (``n_spatial_dims == n_manifold_dims``): the closed-form
       inverse of the edge matrix.
@@ -240,12 +247,15 @@ def compute_barycentric_coordinates(
         - barycentric_coords: shape (n_queries, n_cells, n_vertices_per_cell)
         - reconstruction_error: shape (n_queries, n_cells). Zero for codimension-0.
     """
+    # Edges from the best base vertex of each cell; see best_base_first
+    cell_vertices, base = best_base_first(cell_vertices)
     v0 = cell_vertices[:, 0:1, :]  # (n_cells, 1, n_spatial_dims)
     relative_vectors = cell_vertices[:, 1:, :] - v0
     query_relative = query_points.unsqueeze(1) - v0.squeeze(1).unsqueeze(0)
     relative_vectors_expanded = relative_vectors.unsqueeze(0)
 
-    return _solve_barycentric_system(relative_vectors_expanded, query_relative)
+    coords, error = _solve_barycentric_system(relative_vectors_expanded, query_relative)
+    return undo_base_rotation(coords, base), error
 
 
 def compute_barycentric_coordinates_pairwise(
@@ -286,11 +296,14 @@ def compute_barycentric_coordinates_pairwise(
     >>> bary, err = compute_barycentric_coordinates_pairwise(query_points, cell_vertices)
     >>> assert bary.shape == (1000, 3)
     """
+    # Edges from the best base vertex of each cell; see best_base_first
+    cell_vertices, base = best_base_first(cell_vertices)
     v0 = cell_vertices[:, 0, :]  # (n_pairs, n_spatial_dims)
     relative_vectors = cell_vertices[:, 1:, :] - v0.unsqueeze(1)
     query_relative = query_points - v0
 
-    return _solve_barycentric_system(relative_vectors, query_relative)
+    coords, error = _solve_barycentric_system(relative_vectors, query_relative)
+    return undo_base_rotation(coords, base), error
 
 
 # ---------------------------------------------------------------------------

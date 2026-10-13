@@ -670,6 +670,45 @@ class TestHigherDimensionalAngles:
             torch.tensor([torch.pi / 2, torch.pi / 4], device=device),
         )
 
+    @pytest.mark.parametrize("n_dims", [2, 3, 4])
+    def test_stable_angle_between_vectors_in_float16(self, device, n_dims):
+        """Products of float16 entries overflow above about 256."""
+        v1 = torch.zeros(n_dims, device=device, dtype=torch.float16)
+        v2 = torch.zeros(n_dims, device=device, dtype=torch.float16)
+        v1[0] = 1000.0
+        v2[0], v2[1] = 2000.0, 1000.0
+
+        angle = stable_angle_between_vectors(v1, v2)
+
+        assert angle.dtype == torch.float16
+        torch.testing.assert_close(
+            angle.float(), torch.tensor(0.4636, device=device), rtol=0, atol=1e-3
+        )
+
+    @pytest.mark.parametrize("n_spatial_dims", [2, 3])
+    @pytest.mark.parametrize(
+        ("dtype", "scale"),
+        [(torch.float16, 1.0), (torch.float32, 1e-28), (torch.float32, 1e22)],
+    )
+    def test_triangle_angles_neither_overflow_nor_underflow(
+        self, device, n_spatial_dims, dtype, scale
+    ):
+        """Products of the coordinates themselves overflow in float16 and
+        underflow near 1e-25 in float32 (review of #2067)."""
+        points = torch.tensor([[0.0, 0.0], [1000.0, 0.0], [2000.0, 1000.0]])
+        points = torch.nn.functional.pad(points, (0, n_spatial_dims - 2))
+        cells = torch.tensor([[0, 1, 2]], device=device)
+        expected = compute_vertex_angles(
+            Mesh(points=points.double().to(device), cells=cells)
+        )
+
+        scaled = (scale * points.double()).to(device=device, dtype=dtype)
+        angles = compute_vertex_angles(Mesh(points=scaled, cells=cells))
+
+        assert angles.dtype == dtype
+        tolerance = 2e-3 if dtype == torch.float16 else 1e-6
+        torch.testing.assert_close(angles.double(), expected, rtol=0, atol=tolerance)
+
     def test_edges_in_higher_dim_space(self, device):
         """Test 1D manifold (edges) embedded in higher dimensional space."""
         # Create bent polyline in 4D space (not straight)

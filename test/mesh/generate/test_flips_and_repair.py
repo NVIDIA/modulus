@@ -487,3 +487,20 @@ def test_radon_signs_reject_exactly_coplanar_clusters(dtype, offset):
     _, ok = _radon_signs((points + offset).to(dtype), clusters)
 
     assert not ok.any()
+
+
+def test_pin_feature_point_in_needle_listed_from_its_tip(device):
+    """A feature inside a needle tetrahedron listed from its tip splits it: from
+    the tip, the edges look dependent in float32 (review of #2067)."""
+    points = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 2000.0]],
+        device=device,
+    )
+    cells = torch.tensor([[3, 0, 2, 1]], device=device)  # positively oriented
+    x = points.mean(dim=0)
+
+    new_points, new_cells, fixed = pin_feature_points(points, cells, x[None, :], 1.0)
+
+    assert new_cells.shape[0] == 4
+    assert torch.equal(new_points[fixed[0]], x)
+    assert bool((signed_volumes(new_points, new_cells) > 0).all())

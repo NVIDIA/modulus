@@ -43,7 +43,11 @@ from physicsnemo.mesh.generate._simplex_ops import (
     signed_volumes,
     volume_length_quality,
 )
-from physicsnemo.utils._small_linalg import normalized_inverse
+from physicsnemo.utils._small_linalg import (
+    best_base_first,
+    normalized_inverse,
+    undo_base_rotation,
+)
 
 __all__ = [
     "peel_boundary_slivers",
@@ -190,9 +194,11 @@ def pin_feature_points(points, cells, targets, h):
             points[vid] = x
             fixed_idx.append(vid)
             continue
-        # Containing cell via barycentric coordinates (batched inverse).
-        p0 = points[cells[:, 0]]
-        rel = points[cells[:, 1:]] - p0[:, None, :]
+        # Containing cell via barycentric coordinates (batched inverse), with
+        # the edges from the best base vertex of each cell (best_base_first).
+        cell_points, base = best_base_first(points[cells])
+        p0 = cell_points[:, 0]
+        rel = cell_points[:, 1:] - p0[:, None, :]
         vol_ok = signed_volumes(points, cells).abs() > 1e-12 * h**d
         # Columns of the system matrix are the edge vectors: x - v0 =
         # sum_k bary_k (v_k - v0). rel stores edges as ROWS, so solve the
@@ -207,7 +213,8 @@ def pin_feature_points(points, cells, targets, h):
         bary = (rel_hat_inv * (x - p0)[:, :, None]).sum(dim=1) / edge_lengths
         lam0 = 1.0 - bary.sum(dim=1)
         eps = 1e-9
-        lam = torch.cat([lam0[:, None], bary], dim=1)  # (M, d+1) barycentric
+        # (M, d+1) barycentric, in the vertex order of cells
+        lam = undo_base_rotation(torch.cat([lam0[:, None], bary], dim=1), base)
         # Any cell whose CLOSURE contains the feature is split by replacing
         # each positive-coordinate vertex with the new vertex. This one rule
         # covers interior points (d+1 sub-cells), on-facet points (d cells

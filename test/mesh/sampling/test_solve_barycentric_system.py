@@ -16,12 +16,19 @@
 
 """Tests the closed-form barycentric solver against the torch.linalg one it replaced."""
 
+import itertools
+
 import pytest
 import torch
 
 from physicsnemo.mesh.mesh import Mesh
 from physicsnemo.mesh.sampling import find_all_containing_cells, sample_data_at_points
-from physicsnemo.mesh.sampling.sample_data import _solve_barycentric_system
+from physicsnemo.mesh.sampling.sample_data import (
+    _solve_barycentric_system,
+    compute_barycentric_coordinates,
+    compute_barycentric_coordinates_pairwise,
+    find_containing_cells,
+)
 
 ### (n_manifold_dims, n_spatial_dims): triangles and tetrahedra filling their
 ### space, edges in 2D and 3D, triangles in 3D, and cells of codimension 2.
@@ -318,3 +325,26 @@ def test_stretched_cells_contain_their_centroid(length, device):
             bary, torch.full((1, n_verts), 1 / n_verts, device=device)
         )
         assert float(error[0]) == 0.0
+
+
+def test_barycentric_coordinates_do_not_depend_on_vertex_order(device):
+    """Every vertex order of a needle tetrahedron gives the same coordinates,
+    also when it is listed from its tip (float32, review of #2067)."""
+    vertices = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 2000.0]],
+        device=device,
+    )
+    orders = torch.tensor(list(itertools.permutations(range(4))), device=device)
+    cells = vertices[orders]  # (24, 4, 3)
+    # 0.1 * centroid + 0.9 * vertex 3: coordinate 0.925 at vertex 3, else 0.025
+    query = 0.1 * vertices.mean(dim=0) + 0.9 * vertices[3]
+    expected = torch.where(orders == 3, 0.925, 0.025)
+
+    pairwise, _ = compute_barycentric_coordinates_pairwise(query.expand(24, 3), cells)
+    product, _ = compute_barycentric_coordinates(query[None], cells)
+
+    torch.testing.assert_close(pairwise, expected, rtol=0, atol=1e-5)
+    torch.testing.assert_close(product[0], expected, rtol=0, atol=1e-5)
+    mesh = Mesh(points=vertices, cells=torch.tensor([[3, 0, 2, 1]], device=device))
+    cell_indices, _ = find_containing_cells(mesh, vertices.mean(dim=0, keepdim=True))
+    assert cell_indices.tolist() == [0]

@@ -26,8 +26,10 @@ they need no CUDA synchronization and support autograd. Tests against tolerances
 float32 precision, so 16-bit inputs are computed in float32.
 """
 
+import itertools
+
 import torch
-from jaxtyping import Bool, Float
+from jaxtyping import Bool, Float, Int
 
 _HALF_DTYPES = (torch.float16, torch.bfloat16)
 
@@ -125,6 +127,70 @@ def _invert_or_identity(
     safe_adjugate = torch.where(is_singular[..., None, None], eye, adjugate)
     safe_det = torch.where(is_singular, 1.0, det)
     return safe_adjugate / safe_det[..., None, None]
+
+
+def best_base_first(
+    vertices: Float[torch.Tensor, "... n_vertices n_dims"],
+) -> tuple[Float[torch.Tensor, "... n_vertices n_dims"], Int[torch.Tensor, "..."]]:
+    """Rotate the vertices of each simplex so that its best base vertex is first.
+
+    Closed forms in the edges from vertex 0 lose accuracy when those edges are
+    nearly parallel, as from the tip of a needle, even when the cell is well
+    shaped. ``|det E|`` is the same from every vertex, but the product of the
+    edge lengths is not: the vertex with the smallest product of incident edge
+    lengths gives the largest normalized determinant ``|det E| / prod |e_i|``
+    (see :func:`normalized_inverse`), and so the most accurate closed forms.
+
+    Vertex ``i`` of the result is vertex ``(i + base) % n_vertices`` of the
+    input. Returns the rotated vertices and ``base``.
+    """
+    n_vertices = vertices.shape[-2]
+    if n_vertices <= 2:  # an edge has the same edge from both ends
+        base = torch.zeros(
+            vertices.shape[:-2], dtype=torch.long, device=vertices.device
+        )
+        return vertices, base
+    # Squared lengths overflow float16 for edges longer than 256
+    v = vertices.detach()
+    if v.dtype in _HALF_DTYPES:
+        v = v.float()
+
+    def squared_length(i: int, j: int) -> torch.Tensor:
+        e = v[..., i, :] - v[..., j, :]
+        return (e * e).sum(dim=-1)
+
+    if n_vertices == 3:
+        ### Triangles: the edges at a vertex have product abc / (the opposite edge)
+        opposite = [squared_length(1, 2), squared_length(2, 0), squared_length(0, 1)]
+        base = torch.stack(opposite, dim=-1).argmax(dim=-1)
+    else:
+        ### Sum of the log lengths of the edges at each vertex
+        # Logs, not products, which overflow or underflow for huge or tiny cells
+        sums: list[torch.Tensor | None] = [None] * n_vertices
+        for i, j in itertools.combinations(range(n_vertices), 2):
+            log_length = squared_length(i, j).log()
+            for k in (i, j):
+                sums[k] = log_length if sums[k] is None else sums[k] + log_length
+        base = torch.stack(sums, dim=-1).argmin(dim=-1)
+    ### Rotate: vertex i of the result is vertex (i + base) % n_vertices
+    order = (
+        torch.arange(n_vertices, device=vertices.device) + base[..., None]
+    ) % n_vertices
+    return vertices.gather(-2, order[..., None].expand(vertices.shape)), base
+
+
+def undo_base_rotation(
+    values: Float[torch.Tensor, "... n_vertices"],
+    base: Int[torch.Tensor, "..."],
+) -> Float[torch.Tensor, "... n_vertices"]:
+    """Per-vertex values, such as barycentric coordinates, in the vertex order
+    from before :func:`best_base_first`. ``base`` broadcasts against the
+    leading dimensions of ``values``."""
+    n_vertices = values.shape[-1]
+    index = (
+        torch.arange(n_vertices, device=values.device) - base[..., None]
+    ) % n_vertices
+    return values.gather(-1, index.expand(values.shape))
 
 
 def normalized_inverse(

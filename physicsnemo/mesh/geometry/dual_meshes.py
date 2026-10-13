@@ -55,6 +55,7 @@ from jaxtyping import Float, Int
 
 from physicsnemo.mesh.utilities._tolerances import safe_eps
 from physicsnemo.utils._small_linalg import (
+    best_base_first,
     normalized_gram_inverse,
     normalized_inverse,
     small_lstsq,
@@ -471,8 +472,11 @@ def compute_circumcenters(
     closed form :math:`d = \tfrac{1}{2} E^{-1} [\|e_i\|^2]_i` with
     :math:`E = A / 2` (rows :math:`v_i - v_0`), with each edge scaled to unit
     length, so the closed form stays in floating-point range at any scale.
-    Degenerate cells, whose unit edges have a numerically zero determinant,
-    have no circumcenter and return their centroid. Under-determined systems
+    The base vertex :math:`v_0` is the one whose edges are closest to
+    orthogonal (see ``best_base_first``), so the result does not depend on
+    the order of the vertices. Degenerate cells, whose unit edges have a
+    numerically zero determinant, have no circumcenter and return their
+    centroid. Under-determined systems
     (manifolds embedded in a higher-dimensional space) use the minimum-norm
     least-squares solution, which lies in the cell's affine hull.
     """
@@ -489,10 +493,15 @@ def compute_circumcenters(
             # issues with underdetermined lstsq for edges in higher dimensions.
             return vertices.mean(dim=1)
         case (3, 3):
+            # In float64, which is accurate from any base vertex
             return _compute_triangle_circumcenters_3d(vertices)
 
     if vertices.dtype in (torch.float16, torch.bfloat16):  # tolerances need float32
         return compute_circumcenters(vertices.float()).to(vertices.dtype)
+
+    # The circumcenter does not depend on the order of the vertices, and the
+    # edges from the best base vertex give the most accurate closed forms.
+    vertices, _ = best_base_first(vertices)
 
     ### Build linear system A @ (c - v0) = b for each simplex
     v0 = vertices[:, 0, :]  # (n_cells, n_spatial_dims)
@@ -521,6 +530,26 @@ def compute_circumcenters(
     A = 2 * relative_vecs
     rhs = (relative_vecs**2).sum(dim=-1).unsqueeze(-1)  # (n_cells, n_manifold_dims, 1)
     return v0 + small_lstsq(A, rhs).squeeze(-1)
+
+
+def _rotated_pair_index(
+    n_vertices: int, device: torch.device
+) -> Int[torch.Tensor, "n_vertices n_pairs"]:
+    """Where each local edge goes when a cell's vertices are rotated.
+
+    Local edges are the vertex pairs ``(a, b)``, ``a < b``, in
+    ``itertools.combinations`` order. Row ``base`` holds, for each of them, the
+    position of the same edge among the edges of the vertices rotated by
+    :func:`~physicsnemo.utils._small_linalg.best_base_first`, in which vertex
+    ``a`` is at ``(a - base) % n_vertices``. Built on the device, so that no
+    host-to-device copy synchronizes CUDA.
+    """
+    a, b = torch.triu_indices(n_vertices, n_vertices, offset=1, device=device)
+    shift = torch.arange(n_vertices, device=device)[:, None]
+    a, b = (a - shift) % n_vertices, (b - shift) % n_vertices
+    low, high = torch.minimum(a, b), torch.maximum(a, b)
+    # Position of the pair (low, high) in itertools.combinations order
+    return low * (2 * n_vertices - low - 1) // 2 + (high - low - 1)
 
 
 def compute_cotan_weights_fem(
@@ -555,7 +584,9 @@ def compute_cotan_weights_fem(
             \quad \text{for } k, l \ge 1.
 
     For pairs involving vertex 0, the constraint
-    :math:`\sum_i \nabla \lambda_i = 0` is used. When the cells are
+    :math:`\sum_i \nabla \lambda_i = 0` is used. Vertex 0 here is the base
+    vertex whose edges are closest to orthogonal (see ``best_base_first``), so
+    the weights do not depend on the order of the vertices. When the cells are
     full-dimensional (:math:`n = d`), :math:`E` is square and
     :math:`G^{-1} = E^{-\top} E^{-1}` comes from the inverse of :math:`E` itself:
     forming :math:`G` would square the condition number of thin cells.
@@ -602,9 +633,12 @@ def compute_cotan_weights_fem(
             unique_edges,
         )
 
-    ### Compute edge vectors from reference vertex (vertex 0 of each cell)
-    # cell_vertices: (n_cells, n_verts_per_cell, n_spatial_dims)
-    cell_vertices = mesh.points[mesh.cells].to(compute_dtype)
+    ### Compute edge vectors from the best base vertex of each cell
+    # The weights do not depend on the base vertex, but the closed forms below
+    # do: from the tip of a needle, a well-shaped cell would look degenerate.
+    # cell_vertices: (n_cells, n_verts_per_cell, n_spatial_dims), rotated so
+    # that vertex i is vertex (i + base) % n_verts_per_cell of mesh.cells
+    cell_vertices, base = best_base_first(mesh.points[mesh.cells].to(compute_dtype))
     # E: (n_cells, n_manifold_dims, n_spatial_dims) - rows are e_k = v_k - v_0
     E = cell_vertices[:, 1:, :] - cell_vertices[:, :1, :]
 
@@ -645,6 +679,16 @@ def compute_cotan_weights_fem(
 
     # grad_dots: (n_cells, n_pairs) - one value per cell per local edge
     grad_dots = torch.cat([-G_inv.sum(dim=-2), G_inv[:, pair_i, pair_j]], dim=1)
+    # Local edges in the vertex order of mesh.cells, not the rotated one. take
+    # on the flat table: on CUDA, indexing its rows by millions of cells is 15x
+    # slower.
+    n_pairs = grad_dots.shape[1]
+    rotated_pairs = (
+        _rotated_pair_index(n_manifold_dims + 1, device)
+        .reshape(-1)
+        .take(base[:, None] * n_pairs + torch.arange(n_pairs, device=device))
+    )
+    grad_dots = grad_dots.gather(1, rotated_pairs)
 
     ### Compute cotangent weight contributions per cell per edge
     # w = -|sigma| * (grad lambda_i . grad lambda_j)
