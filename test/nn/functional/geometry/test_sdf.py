@@ -317,6 +317,91 @@ def test_signed_distance_field_backward_finite_differences(
     torch.testing.assert_close(grad_points, fd_points, atol=1e-3, rtol=0.0)
 
 
+# Far from the origin, a query a few thousandths from a corner or an edge
+# still gets the direction to its closest point. The coordinates and offsets
+# are exact in float32.
+@requires_module("warp")
+@pytest.mark.parametrize(
+    "query, direction, weights",
+    [
+        # Nearest the corner at (1000, 0, 0).
+        (
+            (999.9990234375, -0.0009765625, -0.0009765625),
+            (-1.0, -1.0, -1.0),
+            (1.0, 0.0),
+        ),
+        # Nearest the midpoint of the edge from (1000, 0, 0) to (1001, 0, 0).
+        ((1000.5, -0.0009765625, -0.0009765625), (0.0, -1.0, -1.0), (0.5, 0.5)),
+    ],
+)
+def test_signed_distance_field_backward_far_from_origin(
+    query: tuple, direction: tuple, weights: tuple, device: str
+):
+    device = torch.device(device)
+    mesh_vertices = torch.tensor(
+        [
+            [1000.0, 0.0, 0.0],
+            [1001.0, 0.0, 0.0],
+            [1000.0, 1.0, 0.0],
+            [1000.0, 0.0, 1.0],
+        ],
+        device=device,
+        requires_grad=True,
+    )
+    mesh_indices = torch.tensor(
+        [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]], device=device, dtype=torch.int32
+    )
+    query_points = torch.tensor([query], device=device, requires_grad=True)
+
+    sdf_out, _, _ = signed_distance_field(mesh_vertices, mesh_indices, query_points)
+    grad_vertices, grad_points = torch.autograd.grad(
+        sdf_out.sum(), (mesh_vertices, query_points)
+    )
+
+    expected = torch.tensor(direction, device=device)
+    expected = expected / expected.norm()
+    torch.testing.assert_close(grad_points[0], expected, atol=1e-5, rtol=0.0)
+    # The closest point is a combination of vertices 0 and 1 only.
+    expected_vertices = torch.zeros(4, 3, device=device)
+    expected_vertices[0] = -weights[0] * expected
+    expected_vertices[1] = -weights[1] * expected
+    torch.testing.assert_close(grad_vertices, expected_vertices, atol=1e-5, rtol=0.0)
+
+
+# Rounding the hit point to a float16 query dtype would turn the gradient,
+# so the backward pass recomputes the closest point at full precision.
+@requires_module("warp")
+def test_signed_distance_field_backward_half_precision_queries(device: str):
+    device = torch.device(device)
+    mesh_vertices = torch.tensor(
+        [[0.0, -1.0, 0.0], [2.0, -1.0, 2.0], [0.0, 3.0, 0.0]],
+        device=device,
+        requires_grad=True,
+    )
+    mesh_indices = torch.tensor([[0, 1, 2]], device=device, dtype=torch.int32)
+    query_points = torch.tensor(
+        [[1.0, 0.0, 1.0009765625]],
+        device=device,
+        dtype=torch.float16,
+        requires_grad=True,
+    )
+
+    sdf_out, _, _ = signed_distance_field(mesh_vertices, mesh_indices, query_points)
+    grad_vertices, grad_points = torch.autograd.grad(
+        sdf_out.sum(), (mesh_vertices, query_points)
+    )
+
+    # The closest point (1.00048828125, 0, 1.00048828125) lies between two
+    # float16 values; the query sits on the side its face normal points to.
+    direction = torch.tensor([-1.0, 0.0, 1.0], device=device) / 2.0**0.5
+    assert grad_points.dtype == torch.float16
+    torch.testing.assert_close(grad_points[0].float(), direction, atol=1e-3, rtol=0.0)
+    weights = torch.tensor([0.249755859375, 0.500244140625, 0.25], device=device)
+    torch.testing.assert_close(
+        grad_vertices, -weights[:, None] * direction, atol=1e-6, rtol=0.0
+    )
+
+
 # Only the distance carries gradients; queries beyond max_dist contribute
 # none, and their NaN distance does not leak into the vertex gradient.
 @requires_module("warp")
