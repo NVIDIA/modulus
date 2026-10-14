@@ -25,6 +25,7 @@ import torch
 
 from physicsnemo.mesh.mesh import Mesh
 from physicsnemo.mesh.spatial import BVH
+from physicsnemo.mesh.spatial import bvh as bvh_module
 from physicsnemo.mesh.spatial.bvh import _compute_morton_codes
 
 ### Helper Functions ###
@@ -586,8 +587,6 @@ class TestBVHTraversal:
     @pytest.mark.parametrize("max_candidates", [None, 2])
     def test_query_slices_match_single_traversal(self, monkeypatch, max_candidates):
         """Traversing queries in slices gives the same adjacency as one pass."""
-        from physicsnemo.mesh.spatial import bvh as bvh_module
-
         torch.manual_seed(0)
         points = torch.rand(40, 2)
         cells = torch.randint(0, 40, (60, 3))
