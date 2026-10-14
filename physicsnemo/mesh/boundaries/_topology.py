@@ -25,7 +25,11 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 
-from physicsnemo.utils._index_tuple_ops import sort_index_tuples, unique_index_tuples
+from physicsnemo.utils._index_tuple_ops import (
+    _packed_tuple_capacity_fits,
+    sort_index_tuples,
+    unique_index_tuples,
+)
 
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh
@@ -279,6 +283,7 @@ def _check_3d_edge_link_connectivity(mesh: "Mesh") -> bool:
     )
     n_unique_edges = len(unique_edges)
     n_candidates = len(candidate_edges)
+    del unique_edges
 
     if n_unique_edges == 0:
         return True
@@ -292,11 +297,13 @@ def _check_3d_edge_link_connectivity(mesh: "Mesh") -> bool:
     # edge - making their link-faces adjacent.
 
     tet_verts = mesh.cells[parent_cell_indices]  # (n_candidates, 4)
+    del parent_cell_indices
     edge_v0 = candidate_edges[:, 0].unsqueeze(1)  # (n_candidates, 1)
     edge_v1 = candidate_edges[:, 1].unsqueeze(1)  # (n_candidates, 1)
 
     # Mask: which columns of each tet are NOT part of the edge
     not_edge = (tet_verts != edge_v0) & (tet_verts != edge_v1)  # (n_candidates, 4)
+    del candidate_edges, edge_v0, edge_v1
 
     # Extract the two non-edge vertices per candidate: the first and the last
     # True column of not_edge. A degenerate tet (an edge vertex repeated) has
@@ -308,6 +315,7 @@ def _check_3d_edge_link_connectivity(mesh: "Mesh") -> bool:
     third_verts = torch.gather(
         tet_verts, 1, torch.stack([first_col, last_col], dim=1)
     )  # (n_candidates, 2)
+    del tet_verts, not_edge, first_col, last_col
 
     ### Step 4: Build adjacency between candidates that share both the same
     # unique edge AND at least one third vertex.  Two candidates (c_a, c_b)
@@ -322,23 +330,37 @@ def _check_3d_edge_link_connectivity(mesh: "Mesh") -> bool:
     # to candidate i (matching the interleaved layout of flatten()).
     edge_ids_2x = edge_inverse.repeat_interleave(2)  # (2 * n_candidates,)
     third_verts_flat = third_verts.flatten()  # (2 * n_candidates,)
-    cand_indices_2x = torch.arange(n_candidates, device=device).repeat_interleave(2)
+    del third_verts
 
-    # Use lexicographic sort via two stable argsorts to avoid integer overflow
-    order = torch.argsort(third_verts_flat.long(), stable=True)
-    order = order[torch.argsort(edge_ids_2x[order].long(), stable=True)]
-
-    sorted_cand = cand_indices_2x[order]
-    sorted_edge_ids = edge_ids_2x[order]
-    sorted_third_verts = third_verts_flat[order]
+    # Lexicographic stable sort by (edge_id, third_vertex): one sort of a packed
+    # key when it fits in int64, else two stable argsorts. Both give the same
+    # order, so the pairs below are the same.
+    if _packed_tuple_capacity_fits(max(n_unique_edges, mesh.n_points), 2):
+        edge_ids_2x *= mesh.n_points
+        edge_ids_2x += third_verts_flat
+        del third_verts_flat
+        sorted_keys, order = torch.sort(edge_ids_2x, stable=True)
+        del edge_ids_2x
+        same_key = sorted_keys[:-1] == sorted_keys[1:]
+        del sorted_keys
+    else:
+        order = torch.argsort(third_verts_flat.long(), stable=True)
+        order = order[torch.argsort(edge_ids_2x[order].long(), stable=True)]
+        sorted_edge_ids = edge_ids_2x[order]
+        sorted_third_verts = third_verts_flat[order]
+        del edge_ids_2x, third_verts_flat
+        same_key = (sorted_edge_ids[:-1] == sorted_edge_ids[1:]) & (
+            sorted_third_verts[:-1] == sorted_third_verts[1:]
+        )
+        del sorted_edge_ids, sorted_third_verts
 
     # Consecutive entries with the same (edge_id, third_vertex) pair
-    # are candidates sharing a link-adjacent face.
-    same_key = (sorted_edge_ids[:-1] == sorted_edge_ids[1:]) & (
-        sorted_third_verts[:-1] == sorted_third_verts[1:]
-    )
+    # are candidates sharing a link-adjacent face. Entry k is candidate k // 2.
+    sorted_cand = order // 2
+    del order
     pair_a = sorted_cand[:-1][same_key]
     pair_b = sorted_cand[1:][same_key]
+    del sorted_cand, same_key
 
     ### Step 5: Union-find over candidates to find connected components per edge
     from physicsnemo.mesh.utilities._duplicate_detection import (
@@ -346,7 +368,9 @@ def _check_3d_edge_link_connectivity(mesh: "Mesh") -> bool:
     )
 
     pairs = torch.stack([pair_a, pair_b], dim=1)
+    del pair_a, pair_b
     labels = vectorized_connected_components(pairs, n_candidates)
+    del pairs
 
     ### Step 6: Check single connected component per unique edge.
     # For each unique edge, all candidate entries must share the same root.
@@ -498,59 +522,83 @@ def _check_3d_vertex_manifold(mesh: "Mesh") -> bool:
 
     ### Step 2: Extract link faces (3 non-v vertices per incident tet)
     tet_verts = mesh.cells[tet_ids]  # (total, 4)
+    del tet_ids
 
     # Find which column of each tet holds the vertex v
     # (total, 4) == (total, 1) -> bool mask, argmax gives first True column
-    v_col = (tet_verts == vertex_ids.unsqueeze(1)).byte().argmax(dim=1)  # (total,)
+    is_v = tet_verts == vertex_ids.unsqueeze(1)
+    v_col = is_v.byte().argmax(dim=1)  # (total,)
 
     # Detect degenerate tets (vertex appears more than once)
-    v_occurrence_count = (tet_verts == vertex_ids.unsqueeze(1)).sum(dim=1)
-    is_degenerate = v_occurrence_count > 1
+    is_degenerate = is_v.sum(dim=1) > 1
+    del is_v
 
     # Every column but v_col, built arithmetically on the device (as in
     # _compute_simplex_altitudes): a lookup table copied from the host would
     # synchronize the device.
     other = torch.arange(3, device=device)
     gather_cols = other + (other >= v_col.unsqueeze(1))  # (total, 3)
+    del v_col
     link_faces = torch.gather(tet_verts, 1, gather_cols)  # (total, 3)
+    del gather_cols, tet_verts
 
     # Sort each link face for canonical ordering
     link_faces = sort_index_tuples(link_faces)
 
-    ### Step 3: Generate all edges of all link faces
-    # Each sorted face (a, b, c) gives edges: (a,b), (a,c), (b,c)
-    edge_ab = link_faces[:, :2]  # (total, 2) -> columns 0,1
-    edge_ac = link_faces[:, ::2]  # (total, 2) -> columns 0,2
-    edge_bc = link_faces[:, 1:]  # (total, 2) -> columns 1,2
+    ### Step 3-4: Find pairs of link faces sharing an edge at the same vertex
+    # Each sorted face (a, b, c) gives edges (a,b), (a,c), (b,c); entry k of
+    # the 3 * total entries below is an edge of face k % total. Sort them
+    # stably by (vertex_id, edge_v0, edge_v1) to group identical (vertex, edge)
+    # tuples together: consecutive entries sharing a key are face pairs
+    # connected via that edge. One sort of a packed key does this when
+    # n_points**3 fits in int64, else three stable argsorts; both give the same
+    # order, so the pairs are the same.
+    n_points = mesh.n_points
+    if _packed_tuple_capacity_fits(n_points, 3):
+        a, b, c = link_faces.long().unbind(dim=1)
+        del link_faces
+        vertex_keys = vertex_ids * (n_points * n_points)
+        keys = torch.cat(
+            [
+                vertex_keys + a * n_points + b,
+                vertex_keys + a * n_points + c,
+                vertex_keys + b * n_points + c,
+            ]
+        )
+        del vertex_keys, a, b, c
+        sorted_keys, order = torch.sort(keys, stable=True)
+        del keys
+        same_key = sorted_keys[:-1] == sorted_keys[1:]
+        del sorted_keys
+    else:
+        edge_ab = link_faces[:, :2]  # (total, 2) -> columns 0,1
+        edge_ac = link_faces[:, ::2]  # (total, 2) -> columns 0,2
+        edge_bc = link_faces[:, 1:]  # (total, 2) -> columns 1,2
+        all_edges = torch.cat([edge_ab, edge_ac, edge_bc], dim=0)  # (3*total, 2)
+        del edge_ab, edge_ac, edge_bc, link_faces
+        vertex_ids_3x = vertex_ids.repeat(3)  # (3*total,)
 
-    all_edges = torch.cat([edge_ab, edge_ac, edge_bc], dim=0)  # (3*total, 2)
+        order = torch.argsort(all_edges[:, 1], stable=True)
+        order = order[torch.argsort(all_edges[order, 0], stable=True)]
+        order = order[torch.argsort(vertex_ids_3x[order], stable=True)]
 
-    # Matching vertex_ids and face indices, repeated 3x
-    face_indices = torch.arange(total, device=device)
-    vertex_ids_3x = vertex_ids.repeat(3)  # (3*total,)
-    face_indices_3x = face_indices.repeat(3)  # (3*total,)
+        sorted_vertex_ids = vertex_ids_3x[order]
+        sorted_edges = all_edges[order]
+        del vertex_ids_3x, all_edges
 
-    ### Step 4: Find pairs of link faces sharing an edge at the same vertex
-    # Sort by composite key (vertex_id, edge_v0, edge_v1) to group identical
-    # (vertex, edge) tuples together. Consecutive entries sharing a key are
-    # face pairs connected via that edge.
-    # Use lexicographic sort via three stable argsorts to avoid integer overflow
-    order = torch.argsort(all_edges[:, 1], stable=True)
-    order = order[torch.argsort(all_edges[order, 0], stable=True)]
-    order = order[torch.argsort(vertex_ids_3x[order], stable=True)]
+        # Adjacent entries with the same (vertex_id, edge_v0, edge_v1) are face pairs
+        same_key = (
+            (sorted_vertex_ids[:-1] == sorted_vertex_ids[1:])
+            & (sorted_edges[:-1, 0] == sorted_edges[1:, 0])
+            & (sorted_edges[:-1, 1] == sorted_edges[1:, 1])
+        )
+        del sorted_vertex_ids, sorted_edges
 
-    sorted_face_idx = face_indices_3x[order]
-    sorted_vertex_ids = vertex_ids_3x[order]
-    sorted_edges = all_edges[order]
-
-    # Adjacent entries with the same (vertex_id, edge_v0, edge_v1) are face pairs
-    same_key = (
-        (sorted_vertex_ids[:-1] == sorted_vertex_ids[1:])
-        & (sorted_edges[:-1, 0] == sorted_edges[1:, 0])
-        & (sorted_edges[:-1, 1] == sorted_edges[1:, 1])
-    )
+    sorted_face_idx = order % total
+    del order
     pair_f1 = sorted_face_idx[:-1][same_key]
     pair_f2 = sorted_face_idx[1:][same_key]
+    del sorted_face_idx, same_key
 
     if len(pair_f1) == 0:
         # No shared edges at all - each link face is isolated.
@@ -565,7 +613,9 @@ def _check_3d_vertex_manifold(mesh: "Mesh") -> bool:
     )
 
     pairs = torch.stack([pair_f1, pair_f2], dim=1)
+    del pair_f1, pair_f2
     labels = vectorized_connected_components(pairs, total)
+    del pairs
 
     ### Step 6: Check single connected component per vertex
     # For each vertex, all its link faces must share the same root label.
