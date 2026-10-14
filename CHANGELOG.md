@@ -138,6 +138,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   available, and nested mesh types survive memmap round trips. The memmap
   layout is unchanged: existing `.pmsh` / `.pdmsh` files remain readable, and
   new files are byte-identical to those written with the decorator.
+- `from_pyvista(point_source="cell_centroids", manifold_dim=1)` builds the
+  dual graph of line, triangle and tetrahedral meshes 25-30x faster, with
+  identical output. With the default `force_copy=False`, `to_pyvista` output
+  of 1D and 3D meshes now shares cell storage with the `Mesh`, as 2D output
+  already did.
 - Mesh facet extraction, repair, merging, smoothing, subdivision and quality
   metrics avoid CUDA synchronizations hidden in indexing with Python lists,
   blocking copies of small host tables, boolean masks and one `.item()` per
