@@ -1670,6 +1670,10 @@ def from_pyvista(
             if polydata_tri_faces is None:
                 raise RuntimeError("PolyData surface triangles were not initialized.")
             tri_faces = _maybe_copy(polydata_tri_faces)
+        elif homogeneous_simplex_selected:
+            # All cells are 3-point TRIANGLEs (_homogeneous_simplex_dimension);
+            # copy the connectivity view into independent storage.
+            tri_faces = np.asarray(pyvista_mesh.cell_connectivity).reshape(-1, 3).copy()
         elif isinstance(pyvista_mesh, pv.UnstructuredGrid):
             # cells_dict materializes independent regular connectivity arrays.
             tri_faces = pyvista_mesh.cells_dict[np.uint8(pv.CellType.TRIANGLE)]
@@ -1682,17 +1686,23 @@ def from_pyvista(
     elif manifold_dim == 3:
         # Tetrahedral cells - extract from cells
         # After triangulation, all cells should be tetrahedra
-        cells_dict = pyvista_mesh.cells_dict
-        if pv.CellType.TETRA not in cells_dict:
-            cell_type_names = ", ".join(
-                _vtk_cell_type_name(int(cell_type)) for cell_type in cells_dict
-            )
-            raise ValueError(
-                "Expected TETRA cells after triangulation, but got "
-                f"{cell_type_names or 'no cells'}."
-            )
-        # cells_dict materializes independent regular connectivity arrays.
-        tetra_cells = cells_dict[np.uint8(pv.CellType.TETRA)]
+        if homogeneous_simplex_selected:
+            # All cells are 4-point TETRAs (_homogeneous_simplex_dimension);
+            # copy the connectivity view into independent storage.
+            tetra_cells = np.asarray(pyvista_mesh.cell_connectivity)
+            tetra_cells = tetra_cells.reshape(-1, 4).copy()
+        else:
+            cells_dict = pyvista_mesh.cells_dict
+            if pv.CellType.TETRA not in cells_dict:
+                cell_type_names = ", ".join(
+                    _vtk_cell_type_name(int(cell_type)) for cell_type in cells_dict
+                )
+                raise ValueError(
+                    "Expected TETRA cells after triangulation, but got "
+                    f"{cell_type_names or 'no cells'}."
+                )
+            # cells_dict materializes independent regular connectivity arrays.
+            tetra_cells = cells_dict[np.uint8(pv.CellType.TETRA)]
         cells = torch.from_numpy(tetra_cells).long()
 
     ### Restore source point IDs after dimension selection compacted the grid.
