@@ -619,10 +619,7 @@ def _normal_equations_lstsq(
     pseudo_inverse = _pseudo_inverse(m)
     X = times(pseudo_inverse, rhs)
     del pseudo_inverse, rhs
-    # Divided and cast one row at a time, so that no float64 (..., d, n_rhs)
-    # quotient is ever alive
-    trace = trace[..., None]
-    return torch.stack([(x / trace).to(A.dtype) for x in X], dim=-2)
+    return (torch.stack(X, dim=-2) / trace[..., None, None]).to(A.dtype)
 
 
 def _solve_upper_triangular(
