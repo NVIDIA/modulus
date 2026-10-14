@@ -2072,22 +2072,29 @@ def _simplex_dual_graph_edges(
     sorted_cells = np.sort(cells, axis=1)
     if (sorted_cells[:, 1:] == sorted_cells[:, :-1]).any():
         return None
+    del sorted_cells
 
     ### Sort every facet's vertices, then sort all facets so equal ones are adjacent.
     # Without repeated vertices, a cell contains all points of another cell's
     # facet exactly when it has that facet, and only once, so matching facets
-    # reproduces GetCellNeighbors' point-set matching.
+    # reproduces GetCellNeighbors' point-set matching. Each full-size
+    # intermediate is freed as soon as it is used to keep the peak low.
     local_facets = _SIMPLEX_FACETS[cell_size]
     n_facets = len(local_facets)
-    facets = np.sort(cells[:, local_facets], axis=2).reshape(n_cells * n_facets, -1)
+    facets = cells[:, local_facets]
+    facets.sort(axis=2)
+    facets = facets.reshape(n_cells * n_facets, -1)
     order = np.lexsort(facets.T[::-1])
-    sorted_facets = facets[order]
+    facets = facets[order]
+    # same[t] says sorted facets t and t+1 are equal.
+    same = (facets[1:] == facets[:-1]).all(axis=1)
+    del facets
     owner = order // n_facets
-    local_index = order % n_facets
+    local_index = (order % n_facets).astype(np.int8)
+    del order
 
     ### Pair facets at distance d inside each run of equal facets (d = 1, 2, ...).
-    # same[t] says sorted facets t and t+1 are equal; run[t] says t..t+d are.
-    same = (sorted_facets[1:] == sorted_facets[:-1]).all(axis=1)
+    # run[t] says sorted facets t..t+d are all equal.
     run = same
     pairs_i, pairs_f, pairs_j = [], [], []
     d = 1
@@ -2101,14 +2108,21 @@ def _simplex_dual_graph_edges(
         pairs_f.append(np.where(a_is_lower, local_index[a], local_index[b]))
         run = run[:-1] & same[d:]
         d += 1
+    del owner, local_index, same, run
 
     if not pairs_i:
         return np.empty((0, 2), dtype=np.int64)
     i = np.concatenate(pairs_i)
     f = np.concatenate(pairs_f)
     j = np.concatenate(pairs_j)
+    del pairs_i, pairs_f, pairs_j
     edge_order = np.lexsort((j, f, i))
-    return np.stack([i[edge_order], j[edge_order]], axis=1).astype(np.int64, copy=False)
+    del f
+    edges = np.empty((len(i), 2), dtype=np.int64)
+    edges[:, 0] = i[edge_order]
+    del i
+    edges[:, 1] = j[edge_order]
+    return edges
 
 
 @require_version_spec("vtk")
