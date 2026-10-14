@@ -132,16 +132,22 @@ def unique_index_tuples(
             return_counts=return_counts,
         )
 
-    rows_i64 = rows.to(dtype=torch.int64)
-    packed = rows_i64[:, 0]
+    # Accumulate the keys in place; the first product is a new tensor, so the
+    # in-place updates never write to ``rows``.
+    packed = rows[:, 0].to(dtype=torch.int64)
     for column_idx in range(1, n_columns):
-        packed = packed * index_bound + rows_i64[:, column_idx]
+        if column_idx == 1:
+            packed = packed * index_bound
+        else:
+            packed *= index_bound
+        packed += rows[:, column_idx]
 
     unique_result = torch.unique(
         packed,
         return_inverse=return_inverse,
         return_counts=return_counts,
     )
+    del packed
 
     if isinstance(unique_result, tuple):
         unique_packed = unique_result[0]
@@ -149,16 +155,21 @@ def unique_index_tuples(
     else:
         unique_packed = unique_result
         extra_outputs = ()
+    del unique_result
 
     unique_rows = torch.empty(
         (unique_packed.numel(), n_columns),
         dtype=rows.dtype,
         device=rows.device,
     )
+    # Unpack by dividing the unique keys in place: this is their last use.
     remainder = unique_packed
+    del unique_packed
     for column_idx in range(n_columns - 1, -1, -1):
-        unique_rows[:, column_idx] = (remainder % index_bound).to(rows.dtype)
-        remainder = remainder // index_bound
+        unique_rows[:, column_idx] = remainder % index_bound
+        if column_idx > 0:
+            remainder.div_(index_bound, rounding_mode="floor")
+    del remainder
 
     if extra_outputs:
         return (unique_rows, *extra_outputs)
