@@ -1120,7 +1120,8 @@ class Mesh(
         n_vertices_per_cell = self.cells.shape[1]
 
         ### Weight each cell normal at each of its vertices: (n_cells, V or 1, d)
-        # Broadcast products: no materialized (n_cells * V, d) copy of the normals
+        # Broadcast products: the (n_cells * V, d) source is materialized only
+        # once, for the scatter
         if weighting == "unweighted":
             normals_to_accumulate = cell_normals.unsqueeze(1)
 
