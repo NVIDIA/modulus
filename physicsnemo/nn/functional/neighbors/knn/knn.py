@@ -24,12 +24,13 @@ from physicsnemo.core.function_spec import FunctionSpec
 from ._cuml_impl import knn_impl as knn_cuml
 from ._scipy_impl import knn_impl as knn_scipy
 from ._torch_impl import knn_impl as knn_torch
+from ._warp_impl import knn_impl as knn_warp
 
 
 class KNN(FunctionSpec):
     """
     Perform a k-nearest neighbor search on torch tensors.  Can be done with
-    torch directly, or leverage RAPIDS cuML algorithm.
+    torch directly, or leverage RAPIDS cuML, SciPy, or an exact Warp BVH search.
 
     Auto-dispatch selects the optimal version for the input tensor device.
 
@@ -41,10 +42,12 @@ class KNN(FunctionSpec):
         Tensor of shape (M, D) containing the points to search for.
     k : int
         Number of nearest neighbors to return for each query point.
-    implementation : {"cuml", "torch", "scipy"} or None
+    implementation : {"cuml", "torch", "scipy", "warp"} or None
         Implementation to use for the search. When ``None``, the preferred
         implementation for the input device is selected and falls back to
-        torch when unavailable.
+        torch when unavailable. ``"warp"`` runs an exact Morton-order BVH
+        search in float32 on CPU or CUDA, for points of up to three
+        dimensions.
 
     Returns
     -------
@@ -94,6 +97,17 @@ class KNN(FunctionSpec):
     ]:
         return knn_torch(points, queries, k)
 
+    @FunctionSpec.register(name="warp", required_imports=("warp>=1.17.0",), rank=3)
+    def warp_forward(
+        points: Float[torch.Tensor, "num_points dim"],
+        queries: Float[torch.Tensor, "num_queries dim"],
+        k: int,
+    ) -> tuple[
+        Int[torch.Tensor, "num_queries k"], Float[torch.Tensor, "num_queries k"]
+    ]:
+        """Exact Morton-order BVH search in Warp kernels (CPU or CUDA)."""
+        return knn_warp(points, queries, k)
+
     @classmethod
     def make_inputs_forward(cls, device: torch.device | str = "cpu"):
         device = torch.device(device)
@@ -128,7 +142,7 @@ class KNN(FunctionSpec):
         points: Float[torch.Tensor, "num_points dim"],
         queries: Float[torch.Tensor, "num_queries dim"],
         k: int,
-        implementation: Literal["cuml", "torch", "scipy"] | None = None,
+        implementation: Literal["cuml", "torch", "scipy", "warp"] | None = None,
     ) -> tuple[
         Int[torch.Tensor, "num_queries k"], Float[torch.Tensor, "num_queries k"]
     ]:

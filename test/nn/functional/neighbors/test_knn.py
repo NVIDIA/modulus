@@ -22,6 +22,7 @@ from physicsnemo.nn.functional import knn
 from physicsnemo.nn.functional.neighbors import KNN
 from physicsnemo.nn.functional.neighbors.knn._cuml_impl import knn_impl as knn_cuml
 from physicsnemo.nn.functional.neighbors.knn._scipy_impl import knn_impl as knn_scipy
+from physicsnemo.nn.functional.neighbors.knn._warp_impl import knn_impl as knn_warp
 
 
 # Build a deterministic KNN problem with predictable neighborhood structure.
@@ -135,6 +136,76 @@ def test_knn_scipy(device: str, k: int):
     points, queries = _build_problem(device, torch.float32)
     indices, distances = knn(points, queries, k=k, implementation="scipy")
     _assert_knn_outputs(points, queries, indices, distances, k)
+
+
+# Validate the Warp implementation on the structured problem.
+@pytest.mark.parametrize("k", [1, 5])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64, torch.bfloat16])
+def test_knn_warp(device: str, k: int, dtype: torch.dtype):
+    points, queries = _build_problem(device, dtype)
+    indices, distances = knn(points, queries, k=k, implementation="warp")
+    assert indices.dtype == torch.int64
+    assert distances.dtype == dtype
+    _assert_knn_outputs(points, queries, indices, distances, k)
+
+
+# The Warp search is exact: compare it with SciPy and torch on random clouds.
+@pytest.mark.parametrize("k", [1, 11])
+@pytest.mark.parametrize("dim", [2, 3])
+def test_knn_warp_matches_exact(device: str, k: int, dim: int):
+    points = torch.randn(2000, dim, device=device)
+    queries = torch.randn(300, dim, device=device)
+    indices, distances = knn(points, queries, k=k, implementation="warp")
+    _assert_knn_outputs(points, queries, indices, distances, k)
+
+    # Distances recomputed from the returned indices match the reported ones.
+    recomputed = (points[indices] - queries[:, None]).norm(dim=-1)
+    torch.testing.assert_close(distances, recomputed, atol=1e-5, rtol=1e-5)
+
+    reference = knn(points, queries, k=k, implementation="torch")
+    KNN.compare_forward((indices, distances), reference)
+    if check_version_spec("scipy", "1.7.0", hard_fail=False):
+        expected = knn_scipy(points.cpu(), queries.cpu(), k)
+        KNN.compare_forward((indices.cpu(), distances.cpu()), expected)
+
+
+# Verify the Warp kNN runs on torch's current, non-default CUDA stream.
+def test_knn_warp_non_default_cuda_stream(device: str):
+    if "cuda" not in device:
+        pytest.skip("CUDA only")
+    k = 5
+    cuda_device = torch.device(device)
+    points_baseline, queries_baseline = _build_problem(device, torch.float32)
+    baseline = knn(points_baseline, queries_baseline, k=k, implementation="warp")
+    torch.cuda.synchronize(cuda_device)
+
+    knn_stream = torch.cuda.Stream(device=cuda_device)
+    with torch.cuda.stream(knn_stream):
+        torch.cuda._sleep(int(1e8))  # ~100 ms hazard window on knn_stream
+        points, queries = _build_problem(device, torch.float32)
+        indices, distances = knn(points, queries, k=k, implementation="warp")
+        stream_out = (indices.clone(), distances.clone())
+    torch.cuda.current_stream(cuda_device).wait_stream(knn_stream)
+
+    _assert_knn_outputs(points, queries, *stream_out, k)
+    KNN.compare_forward(stream_out, baseline)
+
+
+# Validate the Warp custom-op schema with torch opcheck.
+def test_knn_warp_opcheck(device: str):
+    points = torch.randn(100, 3, device=device)
+    queries = torch.randn(10, 3, device=device)
+    torch.library.opcheck(knn_warp, args=(points, queries, 5))
+
+
+# Validate the Warp implementation's input checks.
+def test_knn_warp_error_handling(device: str):
+    points = torch.randn(20, 4, device=device)
+    with pytest.raises(ValueError, match="1 to 3 dimensions"):
+        knn(points, points, k=3, implementation="warp")
+    points = torch.randn(20, 3, device=device)
+    with pytest.raises(ValueError, match="k <= number of points"):
+        knn(points, points, k=21, implementation="warp")
 
 
 # Validate benchmark input generation contract for KNN.
