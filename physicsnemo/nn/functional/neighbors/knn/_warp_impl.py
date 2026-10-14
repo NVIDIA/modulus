@@ -175,10 +175,11 @@ def build_morton_tree(points: torch.Tensor) -> dict:
 
 _KERNELS: dict = {}
 
-# Each k up to MAX_STATIC_K gets a kernel with k compiled in, which runs about
-# 15% faster than one taking k at run time (k = 11, 1M queries, GB300). Larger
-# k share one run-time kernel per power of two, so varying k compiles few.
-MAX_STATIC_K = 32
+# Each k up to MAX_STATIC_K gets a kernel with k compiled in. On a GB300 with
+# 1M queries, a kernel taking k at run time is 18% slower at k = 11 and 37%
+# slower at k = 40. Larger k share one run-time kernel per power of two, so
+# that callers whose k varies still compile few kernels.
+MAX_STATIC_K = 64
 
 
 def _kernel_key(k: int) -> tuple[int, bool]:

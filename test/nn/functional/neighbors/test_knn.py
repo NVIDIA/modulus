@@ -150,8 +150,8 @@ def test_knn_warp(device: str, k: int, dtype: torch.dtype):
 
 
 # The Warp search is exact: compare it with SciPy and torch on random clouds.
-# k = 40 runs in the shared run-time-k kernel for up to 64 neighbors.
-@pytest.mark.parametrize("k", [1, 11, 40])
+# k = 70 runs in the shared run-time-k kernel for up to 128 neighbors.
+@pytest.mark.parametrize("k", [1, 11, 70])
 @pytest.mark.parametrize("dim", [2, 3])
 def test_knn_warp_matches_exact(device: str, k: int, dim: int):
     points = torch.randn(2000, dim, device=device)
