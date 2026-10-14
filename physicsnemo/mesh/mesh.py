@@ -2301,9 +2301,12 @@ class Mesh(
                 if point_values.is_floating_point() and point_values.element_size() < 4
                 else field_dtype
             )
-            cell_values = point_values[self.cells[:, 0]].to(accumulate_dtype)
+            # index_select rather than indexing: same values, but its backward is
+            # an index_add_ instead of CUDA's sort-based index_put_
+            cell_values = point_values.index_select(0, self.cells[:, 0])
+            cell_values = cell_values.to(accumulate_dtype)
             for j in range(1, n_vertices_per_cell):
-                cell_values += point_values[self.cells[:, j]]
+                cell_values += point_values.index_select(0, self.cells[:, j])
             return cell_values.div_(n_vertices_per_cell).to(field_dtype)
 
         converted = fields.apply(
