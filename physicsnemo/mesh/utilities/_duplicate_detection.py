@@ -65,24 +65,26 @@ def vectorized_connected_components(
 
     ### Iterative union-find: repeat union + path compression until stable
     # Invariant: parent[i] <= i, since parent starts as arange and both the
-    # "amin" scatters and path compression only lower it. Hence scattering
-    # parent[b] into parent[a] is a no-op whenever parent[b] >= parent[a], so
-    # scattering both directions merges each pair into its smaller root without
-    # splitting the pair into max/min. Merging the raw pairs as well is not
-    # needed: in the first iteration parent[pairs] == pairs, and afterwards
-    # parent[max(a, b)] <= min(a, b) already holds and stays true.
+    # "amin" scatter and path compression only lower it. Hence merging the
+    # roots of a pair needs only the scatter of the smaller root lo into the
+    # larger root hi: the reverse scatter would be a no-op, as
+    # parent[lo] <= lo <= hi. Merging the raw pairs as well
+    # is not needed: in the first iteration parent[pairs] == pairs, and
+    # afterwards parent[max(a, b)] <= min(a, b) already holds and stays true.
     first = pairs[:, 0]
     second = pairs[:, 1]
     max_iterations = 100
     for _ in range(max_iterations):
         prev = parent.clone()
 
-        # Union step: merge the roots of each pair to the smaller root
-        parent_first = parent[first]
-        parent_second = parent[second]
-        parent.scatter_reduce_(0, parent_first, parent_second, reduce="amin")
-        parent.scatter_reduce_(0, parent_second, parent_first, reduce="amin")
-        del parent_first, parent_second
+        # Union step: merge the larger root of each pair to the smaller root
+        root_first = parent[first]
+        root_second = parent[second]
+        smaller_root = torch.minimum(root_first, root_second)
+        larger_root = root_first.clamp_(min=root_second)  # the maximum, in place
+        del root_first, root_second
+        parent.scatter_reduce_(0, larger_root, smaller_root, reduce="amin")
+        del larger_root, smaller_root
 
         # Path compression
         parent = parent[parent]
