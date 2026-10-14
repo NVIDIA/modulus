@@ -29,8 +29,11 @@ def gather_rows(
     Uses ``index_select``, whose backward on CUDA is an ``index_add_`` with
     atomics, instead of advanced indexing, whose backward is a sort-based
     ``index_put_``: several times faster and with less memory for the gathers
-    of cell vertices from points. The forward values are identical. Under
-    ``torch.use_deterministic_algorithms(True)`` both cost the same.
+    of cell vertices from points. The forward values are identical. Because
+    the CUDA backward accumulates with atomics, gradients are not bitwise
+    reproducible across runs unless ``torch.use_deterministic_algorithms(True)``
+    is set, as for the ``scatter_add_`` paths of ``physicsnemo.mesh``; in that
+    mode both gathers cost the same.
 
     Parameters
     ----------
