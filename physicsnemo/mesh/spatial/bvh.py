@@ -560,19 +560,24 @@ class BVH(TensorClass):
 
         ### Iterative traversal: one iteration per tree level
         while len(current_query_indices) > 0:
-            ### Vectorized AABB containment test for all active pairs
-            batch_points = query_points[current_query_indices]  # (n_active, D)
-            batch_min = self.node_aabb_min[current_node_indices]
-            batch_max = self.node_aabb_max[current_node_indices]
+            ### Vectorized AABB containment test for all active pairs, one
+            # spatial dimension at a time so temporaries are (n_active,) only
+            inside = None
+            for d in range(query_points.shape[1]):
+                p = query_points[:, d][current_query_indices]
+                ok = (
+                    p >= self.node_aabb_min[:, d][current_node_indices] - aabb_tolerance
+                ) & (
+                    p <= self.node_aabb_max[:, d][current_node_indices] + aabb_tolerance
+                )
+                inside = ok if inside is None else inside & ok
+            del p, ok
 
-            inside = (
-                (batch_points >= batch_min - aabb_tolerance)
-                & (batch_points <= batch_max + aabb_tolerance)
-            ).all(dim=1)
-
-            ### Filter to intersecting pairs only
+            ### Filter to intersecting pairs only; free the old frontier now so
+            # it is never alive together with the next one
             hit_query = current_query_indices[inside]
             hit_node = current_node_indices[inside]
+            del current_query_indices, current_node_indices, inside
 
             if len(hit_query) == 0:
                 break
@@ -600,6 +605,7 @@ class BVH(TensorClass):
             is_internal = ~is_leaf
             int_query = hit_query[is_internal]
             int_node = hit_node[is_internal]
+            del hit_query, hit_node, hit_leaf_count, is_leaf, is_internal
 
             # Enforce max_candidates limit
             if max_candidates_per_point is not None and len(int_query) > 0:
@@ -610,26 +616,13 @@ class BVH(TensorClass):
             if len(int_query) == 0:
                 break
 
-            left_children = self.node_left_child[int_node]
-            right_children = self.node_right_child[int_node]
-
-            valid_left = left_children >= 0
-            valid_right = right_children >= 0
-
-            parts_q: list[torch.Tensor] = []
-            parts_n: list[torch.Tensor] = []
-            if valid_left.any():
-                parts_q.append(int_query[valid_left])
-                parts_n.append(left_children[valid_left])
-            if valid_right.any():
-                parts_q.append(int_query[valid_right])
-                parts_n.append(right_children[valid_right])
-
-            if parts_q:
-                current_query_indices = torch.cat(parts_q)
-                current_node_indices = torch.cat(parts_n)
-            else:
-                break
+            # Every internal node of the LBVH (build_lbvh_topology) has two
+            # valid children, so the next frontier needs no -1 filtering.
+            current_query_indices = int_query.repeat(2)
+            current_node_indices = torch.cat(
+                [self.node_left_child[int_node], self.node_right_child[int_node]]
+            )
+            del int_query, int_node
 
         if all_query_indices_list:
             return torch.cat(all_query_indices_list), torch.cat(all_cell_indices_list)
