@@ -375,7 +375,7 @@ class TestCrossBranchConsistency:
         n_general = _normals_general(vecs)
         torch.testing.assert_close(n_rot, n_general, atol=1e-12, rtol=0)
 
-    @pytest.mark.parametrize("n_spatial_dims", [2, 3, 4])
+    @pytest.mark.parametrize("n_spatial_dims", [1, 2, 3, 4])
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
     def test_from_points_matches_relative_vectors(self, n_spatial_dims, dtype):
         """The per-vertex entry point gives the same values and gradients."""

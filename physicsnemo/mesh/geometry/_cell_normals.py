@@ -100,19 +100,23 @@ def _compute_cell_normals_from_points(
     larger than the unnormalized normals is alive while they are normalized.
     The values are identical to those of :func:`compute_cell_normals`.
     """
+    if points.shape[-1] not in (2, 3):
+        # Includes points in 1D, whose cells have no edges to gather one by one
+        relative_vectors = gather_rows(points, cells[:, 1:]) - gather_rows(
+            points, cells[:, :1]
+        )
+        return _normals_general(relative_vectors)
+
     v0 = gather_rows(points, cells[:, 0])
     edges = [gather_rows(points, cells[:, k]) - v0 for k in range(1, cells.shape[1])]
     del v0
 
-    match points.shape[-1]:
-        case 2:
-            # 90-degree CCW rotation, as in _normals_2d
-            normals = torch.stack([-edges[0][:, 1], edges[0][:, 0]], dim=-1)
-        case 3:
-            # Cross product, as in _normals_3d
-            normals = torch.linalg.cross(edges[0], edges[1])
-        case _:
-            return _normals_general(torch.stack(edges, dim=1))
+    if points.shape[-1] == 2:
+        # 90-degree CCW rotation, as in _normals_2d
+        normals = torch.stack([-edges[0][:, 1], edges[0][:, 0]], dim=-1)
+    else:
+        # Cross product, as in _normals_3d
+        normals = torch.linalg.cross(edges[0], edges[1])
     del edges
     return safe_normalize(normals, dim=-1)
 
