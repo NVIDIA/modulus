@@ -64,25 +64,25 @@ def vectorized_connected_components(
         return parent
 
     ### Iterative union-find: repeat union + path compression until stable
+    # Invariant: parent[i] <= i, since parent starts as arange and both the
+    # "amin" scatters and path compression only lower it. Hence scattering
+    # parent[b] into parent[a] is a no-op whenever parent[b] >= parent[a], so
+    # scattering both directions merges each pair into its smaller root without
+    # splitting the pair into max/min. Merging the raw pairs as well is not
+    # needed: in the first iteration parent[pairs] == pairs, and afterwards
+    # parent[max(a, b)] <= min(a, b) already holds and stays true.
+    first = pairs[:, 0]
+    second = pairs[:, 1]
     max_iterations = 100
     for _ in range(max_iterations):
         prev = parent.clone()
 
-        # Union step: merge to smaller index
-        merge_from = torch.maximum(pairs[:, 0], pairs[:, 1])
-        merge_to = torch.minimum(pairs[:, 0], pairs[:, 1])
-        # Also need to merge through current parent pointers
-        parent_from = parent[pairs[:, 0]]
-        parent_to = parent[pairs[:, 1]]
-        all_merge_from = torch.cat([merge_from, torch.maximum(parent_from, parent_to)])
-        all_merge_to = torch.cat([merge_to, torch.minimum(parent_from, parent_to)])
-
-        parent.scatter_reduce_(
-            dim=0,
-            index=all_merge_from,
-            src=all_merge_to,
-            reduce="amin",
-        )
+        # Union step: merge the roots of each pair to the smaller root
+        parent_first = parent[first]
+        parent_second = parent[second]
+        parent.scatter_reduce_(0, parent_first, parent_second, reduce="amin")
+        parent.scatter_reduce_(0, parent_second, parent_first, reduce="amin")
+        del parent_first, parent_second
 
         # Path compression
         parent = parent[parent]
