@@ -353,6 +353,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   candidate search used by these functions no longer caps candidates per point.
 - Fixes `VPNoiseScheduler.sigma_inv` at extreme noise levels. In particular,
   converting `sigma=0` no longer returns a slightly negative diffusion time.
+- `radius_search` with `implementation="torch"` no longer returns point 0's
+  coordinates in unused neighbor slots when `max_points` exceeds the number of
+  points. Those slots now stay zero, as with the warp backend, so point 0 no
+  longer receives their gradient.
 
 ### Security
 
