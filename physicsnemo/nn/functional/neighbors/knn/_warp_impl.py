@@ -40,7 +40,10 @@ from .utils import validate_inputs
 wp.config.log_level = wp.LOG_WARNING
 
 LEAF_SIZE = 8
-STACK_SIZE = 64
+# The traversal stack holds at most one pending sibling per tree level, plus
+# the node being expanded. With fewer than 2**31 points (int32 indices) and
+# LEAF_SIZE = 8, the heap tree has at most 28 levels, so 32 entries suffice.
+STACK_SIZE = 32
 _MORTON_BITS = 21  # 3 x 21 bits fit in a non-negative int64
 _FLOAT_MAX = 3.0e38
 
@@ -380,6 +383,11 @@ def knn_impl(
         raise ValueError(
             f"`knn` warp implementation needs 1 <= k <= number of points, "
             f"got {k=} and {points.shape[0]} points"
+        )
+    if points.shape[0] >= 2**31:
+        raise ValueError(
+            "`knn` warp implementation supports fewer than 2**31 points, "
+            f"got {points.shape[0]}"
         )
     pts = _as_float32_xyz(points)
     qrs = _as_float32_xyz(queries)
