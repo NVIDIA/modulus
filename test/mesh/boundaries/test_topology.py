@@ -397,6 +397,25 @@ class TestManifold3D:
         ### These share edges {1,3}, {1,4}, {1,2} respectively → connected
         assert mesh.is_manifold(check_level="full") is True
 
+    def test_degenerate_tet_does_not_raise(self, device):
+        """A tet with a repeated vertex does not break the edge-link check.
+
+        Some candidate edges of the degenerate tet have fewer than two non-edge
+        vertices, which used to make the edge-link check fail to reshape them.
+        """
+        from physicsnemo.mesh.boundaries._topology import (
+            _check_3d_edge_link_connectivity,
+        )
+
+        points = torch.rand(5, 3, device=device)
+        cells = torch.tensor([[0, 0, 1, 2], [1, 2, 3, 4]], device=device)
+        mesh = Mesh(points=points, cells=cells)
+
+        assert mesh.is_manifold(check_level="facets") is True
+        # The two tets meet only at edge {1, 2}, whose link is disconnected.
+        assert _check_3d_edge_link_connectivity(mesh) is False
+        assert mesh.is_manifold() is False
+
 
 class TestManifold1D:
     """Test manifold checking for 1D meshes."""

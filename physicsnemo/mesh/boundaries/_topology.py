@@ -298,16 +298,16 @@ def _check_3d_edge_link_connectivity(mesh: "Mesh") -> bool:
     # Mask: which columns of each tet are NOT part of the edge
     not_edge = (tet_verts != edge_v0) & (tet_verts != edge_v1)  # (n_candidates, 4)
 
-    # Extract the two non-edge vertices per candidate.
-    # not_edge has exactly 2 True values per row (for non-degenerate tets).
-    # Collect them into a (n_candidates, 2) tensor.
-    # Use a scatter trick: for each row, the True columns give the third vertices.
-    third_verts = tet_verts[not_edge].reshape(n_candidates, -1)  # (n_candidates, 2)
-
-    # If a tet is degenerate (edge vertex appears >2 times), third_verts may
-    # have fewer than 2 columns.  Skip the check for such edges.
-    if third_verts.shape[1] < 2:
-        return True
+    # Extract the two non-edge vertices per candidate: the first and the last
+    # True column of not_edge. A degenerate tet (an edge vertex repeated) has
+    # fewer than 2 non-edge vertices; such candidates get placeholder third
+    # vertices, and their edges are skipped in the check below.
+    is_degenerate = not_edge.sum(dim=1) < 2  # (n_candidates,)
+    first_col = not_edge.byte().argmax(dim=1)
+    last_col = not_edge.shape[1] - 1 - not_edge.flip(1).byte().argmax(dim=1)
+    third_verts = torch.gather(
+        tet_verts, 1, torch.stack([first_col, last_col], dim=1)
+    )  # (n_candidates, 2)
 
     ### Step 4: Build adjacency between candidates that share both the same
     # unique edge AND at least one third vertex.  Two candidates (c_a, c_b)
@@ -363,7 +363,10 @@ def _check_3d_edge_link_connectivity(mesh: "Mesh") -> bool:
     # Count candidates per edge to identify edges with 2+ tets (others are
     # trivially connected since they have a single candidate).
     edge_counts = torch.bincount(edge_inverse, minlength=n_unique_edges)
-    multi = edge_counts >= 2
+    # Skip edges of degenerate tets, whose third vertices are placeholders.
+    n_degenerate = torch.zeros(n_unique_edges, dtype=torch.long, device=device)
+    n_degenerate.scatter_add_(0, edge_inverse, is_degenerate.long())
+    multi = (edge_counts >= 2) & (n_degenerate == 0)
 
     return bool(torch.all(min_labels[multi] == max_labels[multi]))
 
