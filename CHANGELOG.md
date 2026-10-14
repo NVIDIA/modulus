@@ -167,10 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cell_data._measure_weights` to `cell_data._effective_measure` and remove any
   subsequent multiplication by geometric areas.
 
-- LSQ gradients (`Mesh` and `physicsnemo.nn.functional.mesh_lsq_gradient`)
-  group neighborhoods by size with one device-to-host transfer and validate
-  their CSR inputs with another, instead of synchronizing twice per group.
-  Point gradients on 10-18M-cell surfaces are 1.7x faster.
+- LSQ point gradients on large surface meshes are about 2x faster on GPU, and
+  LSQ gradients (`Mesh` and `physicsnemo.nn.functional.mesh_lsq_gradient`)
+  synchronize the GPU much less often.
 
 - `Mesh.slice_points` picks its cell-remapping algorithm by mesh shape: the
   full-mesh lookup table as before, or a binary search over the kept ids when the
