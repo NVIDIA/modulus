@@ -428,6 +428,7 @@ def subdivide_loop(mesh: "Mesh") -> "Mesh":
     new_cell_data = propagate_cell_data_to_children(
         cell_data=mesh.cell_data,
         n_children_per_parent=subdivision_pattern.shape[0],
+        device=mesh.cells.device,
     )
 
     ### Create and return subdivided mesh

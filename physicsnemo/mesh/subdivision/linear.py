@@ -124,6 +124,7 @@ def subdivide_linear(mesh: "Mesh") -> "Mesh":
     new_cell_data = propagate_cell_data_to_children(
         cell_data=mesh.cell_data,
         n_children_per_parent=n_children_per_parent,
+        device=mesh.cells.device,
     )
 
     ### Create and return subdivided mesh

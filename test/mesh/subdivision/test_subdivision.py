@@ -22,6 +22,7 @@ manifold dimensions, spatial dimensions, and codimensions.
 
 import pytest
 import torch
+from tensordict import TensorDict
 
 from physicsnemo.mesh.mesh import Mesh
 
@@ -475,6 +476,20 @@ class TestSubdivisionValidation:
         subdivided.global_data["new"] = torch.tensor(0.0, device=device)
 
         assert "new" not in mesh.global_data.keys()
+
+    @pytest.mark.parametrize("filter", ["linear", "loop", "butterfly"])
+    def test_empty_cell_data_takes_cells_device(self, device, filter):
+        """Empty cell data without a device ends up on the cells' device."""
+        mesh = create_triangle_mesh(device)
+        mesh = Mesh(
+            points=mesh.points,
+            cells=mesh.cells,
+            cell_data=TensorDict({}, batch_size=[mesh.n_cells]),
+        )
+
+        subdivided = mesh.subdivide(levels=1, filter=filter)
+
+        assert subdivided.cell_data.device == mesh.cells.device
 
 
 ### Performance and Scaling Tests

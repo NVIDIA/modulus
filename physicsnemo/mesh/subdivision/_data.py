@@ -109,6 +109,7 @@ def interpolate_point_data_to_edges(
 def propagate_cell_data_to_children(
     cell_data: TensorDict,
     n_children_per_parent: int,
+    device: torch.device,
 ) -> TensorDict:
     """Propagate cell_data from parent cells to child cells.
 
@@ -122,6 +123,8 @@ def propagate_cell_data_to_children(
         Original cell data, batch_size=(n_parent_cells,)
     n_children_per_parent : int
         Number of children each parent cell splits into
+    device : torch.device
+        Device of the child cells, used when cell_data is empty
 
     Returns
     -------
@@ -135,7 +138,7 @@ def propagate_cell_data_to_children(
     >>> from tensordict import TensorDict
     >>> # 2 parent cells, each splits into 4 children -> 8 total
     >>> cell_data = TensorDict({"pressure": torch.tensor([100.0, 200.0])}, batch_size=[2])
-    >>> new_data = propagate_cell_data_to_children(cell_data, 4)
+    >>> new_data = propagate_cell_data_to_children(cell_data, 4, torch.device("cpu"))
     >>> # new_data["pressure"] = [100, 100, 100, 100, 200, 200, 200, 200]
     """
     n_total_children = cell_data.batch_size[0] * n_children_per_parent
@@ -144,7 +147,7 @@ def propagate_cell_data_to_children(
         return TensorDict(
             {},
             batch_size=torch.Size([n_total_children]),
-            device=cell_data.device,
+            device=device,
         )
 
     ### Propagate all fields using TensorDict.apply()
