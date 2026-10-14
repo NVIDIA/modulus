@@ -234,24 +234,27 @@ def get_tree_knn_kernel(capacity: int):
         n_points = tree_points.shape[0]
 
         # k-th distance among the 2k points around the query's Morton
-        # position: an upper bound on the true k-th distance.
+        # position: an upper bound on the true k-th distance. ``kth`` keeps
+        # the list's k-th entry in a register.
         for j in range(k):
             best_d[j] = float(_FLOAT_MAX)
+        kth = float(_FLOAT_MAX)
         width = wp.min(2 * k, n_points)
         start = wp.clamp(window_pos[qi] - k, 0, n_points - width)
         for p in range(start, start + width):
             d2 = wp.length_sq(tree_points[p] - q)
-            if d2 < best_d[last]:
+            if d2 < kth:
                 j = int(last)
                 while j > 0 and best_d[j - 1] > d2:
                     best_d[j] = best_d[j - 1]
                     j -= 1
                 best_d[j] = d2
+                kth = best_d[last]
         # Inflate so the window's own k-th point still enters the k-list.
-        bound = best_d[last] * 1.000001 + 1.0e-30
+        kth = kth * 1.000001 + 1.0e-30
 
         for j in range(k):
-            best_d[j] = bound
+            best_d[j] = kth
             best_i[j] = -1
 
         st_node = stack_i()
@@ -262,14 +265,14 @@ def get_tree_knn_kernel(capacity: int):
         while sp > 0:
             sp -= 1
             node = st_node[sp]
-            if st_dist[sp] >= best_d[last]:
+            if st_dist[sp] >= kth:
                 continue
             lc = int(left[node])
             if lc < 0:
                 s = int(leaf_start[node])
                 for p in range(s, s + int(leaf_count[node])):
                     d2 = wp.length_sq(tree_points[p] - q)
-                    if d2 < best_d[last]:
+                    if d2 < kth:
                         j = int(last)
                         while j > 0 and best_d[j - 1] > d2:
                             best_d[j] = best_d[j - 1]
@@ -277,6 +280,7 @@ def get_tree_knn_kernel(capacity: int):
                             j -= 1
                         best_d[j] = d2
                         best_i[j] = p
+                        kth = best_d[last]
             else:
                 rc = int(right[node])
                 dl = box_dist_sq(q, node_lo[lc], node_hi[lc])
@@ -291,11 +295,11 @@ def get_tree_knn_kernel(capacity: int):
                     dn = dr
                     df = dl
                 # Push the farther child first so the nearer one pops first.
-                if df < best_d[last] and sp < wp.static(STACK_SIZE):
+                if df < kth and sp < wp.static(STACK_SIZE):
                     st_node[sp] = far
                     st_dist[sp] = df
                     sp += 1
-                if dn < best_d[last] and sp < wp.static(STACK_SIZE):
+                if dn < kth and sp < wp.static(STACK_SIZE):
                     st_node[sp] = near
                     st_dist[sp] = dn
                     sp += 1
