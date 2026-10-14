@@ -23,20 +23,31 @@ import torch
 from jaxtyping import Int
 from tensordict import TensorDict
 
-from physicsnemo.core.version_check import OptionalImport, require_version_spec
+from physicsnemo.core.version_check import (
+    OptionalImport,
+    get_package_hint,
+    require_version_spec,
+)
 from physicsnemo.mesh.mesh import Mesh
 
 ### Optional dependencies. Construction does not import the package; the
 ### nicely-formatted ``ImportError`` (with the ``[mesh-extras]`` install hint)
-### fires only on first attribute access on ``pv`` / ``vtk``. The
+### fires only on first attribute access on ``pv`` / ``vtk_*``. The
 ### ``@require_version_spec`` decorators on the public entry points raise
 ### that same error proactively, before any function-body work happens.
+### Only the VTK modules in use are imported: ``import vtk`` loads every VTK
+### extension module, which takes seconds, while PyVista already loads these.
 if TYPE_CHECKING:
     import pyvista as pv
     import vtk
+    from vtkmodules import vtkCommonCore as vtk_core
+    from vtkmodules import vtkCommonDataModel as vtk_data_model
 else:
     pv = OptionalImport("pyvista")
-    vtk = OptionalImport("vtk")
+    vtk_core = OptionalImport("vtkmodules.vtkCommonCore", get_package_hint("vtk"))
+    vtk_data_model = OptionalImport(
+        "vtkmodules.vtkCommonDataModel", get_package_hint("vtk")
+    )
 
 _PARENT_CELL_ID_KEY = "__physicsnemo_parent_cell_id"
 _ORIGINAL_POINT_ID_KEY = "vtkOriginalPointIds"
@@ -937,14 +948,14 @@ def _validate_selected_polyhedra_for_tetrahedralization(
         return
 
     source_point_dtype = pyvista_mesh.points.dtype
-    vtk_version = vtk.vtkVersion()
+    vtk_version = vtk_core.vtkVersion()
     trust_vtk_result = (
         vtk_version.GetVTKMajorVersion(),
         vtk_version.GetVTKMinorVersion(),
     ) >= (9, 6)
 
     for parent_id in polyhedron_parent_ids:
-        polyhedron = vtk.vtkPolyhedron.SafeDownCast(
+        polyhedron = vtk_data_model.vtkPolyhedron.SafeDownCast(
             pyvista_mesh.GetCell(int(parent_id))
         )
         if polyhedron is None:
@@ -2152,8 +2163,8 @@ def _build_dual_graph_edges(
 
     pyvista_mesh.BuildLinks()
 
-    facet_pt_ids = vtk.vtkIdList()
-    nbr_ids = vtk.vtkIdList()
+    facet_pt_ids = vtk_core.vtkIdList()
+    nbr_ids = vtk_core.vtkIdList()
 
     # Collect upper-triangular neighbor pairs into chunked numpy buffers.
     _CHUNK = 1 << 20
