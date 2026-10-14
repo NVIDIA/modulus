@@ -140,7 +140,7 @@ def assert_predictor_covers_admitted(
     Returns the interval so callers can make further assertions.
     """
     score = predictor.score.score(prediction, target, aux=aux).double()
-    threshold = predictor.thresholds.double()
+    threshold = predictor.thresholds.to(prediction.device, torch.float64)
     lo, hi = predictor.predict_interval(prediction, aux=aux, points=points)
     inside = (target.double() >= lo.double()) & (target.double() <= hi.double())
     bad = (score <= threshold) & ~inside
