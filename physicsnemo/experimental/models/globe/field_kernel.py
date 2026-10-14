@@ -35,7 +35,7 @@ from physicsnemo.experimental.models.globe.utilities.tensordict_utils import (
     concatenated_length,
     split_by_leaf_rank,
 )
-from physicsnemo.mesh import RankSpecDict, flatten_rank_spec, rank_counts
+from physicsnemo.mesh import FieldSchema, FieldSchemaLike
 from physicsnemo.nn import Mlp, Pade
 from physicsnemo.nn.functional.equivariant_ops import (
     legendre_polynomials,
@@ -113,10 +113,50 @@ def _device_total_memory_bytes(device: torch.device) -> int:
     raise ValueError(f"Unsupported {device.type=!r}")
 
 
-@torch.compiler.disable
+@torch._dynamo.assume_constant_result
 def _device_chunk_budget_bytes(device: torch.device) -> int:
     """Static memory budget for a single chunked kernel evaluation."""
     return _device_total_memory_bytes(device) * _CHUNK_MEMORY_BUDGET_PERCENT // 100
+
+
+def _take_last(x: torch.Tensor, idx: tuple[int, ...]) -> torch.Tensor:
+    r"""``x[..., idx]`` from int views: no host-to-device index upload."""
+    return torch.stack([x[..., i] for i in idx], dim=-1) if idx else x[..., :0]
+
+
+def _require_supported(schema: FieldSchema, *, label: str) -> None:
+    """Refuse field declarations the kernels do not implement.
+
+    The kernels form invariant features from scalars and the dot products of
+    true vectors, and build vector outputs on a basis of true vectors.  A
+    field of rank 2 or more would be silently left out, and a pseudotensor
+    would transform with the wrong sign under reflections.
+
+    Parameters
+    ----------
+    schema : FieldSchema
+        Parsed field declarations to check.
+    label : str
+        Name of the schema argument, used in error messages.
+
+    Raises
+    ------
+    NotImplementedError
+        If a field has rank other than 0 or 1, or has ``parity='odd'``.
+    """
+    for name, spec in schema.items():
+        if spec.rank not in (0, 1):
+            raise NotImplementedError(
+                f"{label}[{name!r}]: rank-{spec.rank} fields are not supported; "
+                f"GLOBE implements scalars (rank 0) and vectors (rank 1)"
+            )
+        if spec.parity != "even":
+            raise NotImplementedError(
+                f"{label}[{name!r}]: pseudotensors (parity='odd') are not "
+                f"supported; GLOBE's features and vector outputs are built from "
+                f"true vectors, so a pseudotensor would transform with the wrong "
+                f"sign under reflections"
+            )
 
 
 class Kernel(Module):
@@ -138,16 +178,20 @@ class Kernel(Module):
     ----------
     n_spatial_dims : int
         Number of spatial dimensions (2 or 3).
-    output_field_ranks : TensorDict
-        Rank-spec TensorDict with integer leaves (0 = scalar, 1 = vector)
-        describing the output fields. Nesting is supported and mirrors the
-        desired output structure. Derive from data via
-        :func:`ranks_from_tensordict`.
-    source_data_ranks : TensorDict
-        Rank-spec TensorDict describing per-source features. The number of rank-0 leaves determines scalar input
-        width; rank-1 leaves determine vector input width.
-    global_data_ranks : TensorDict
-        Rank-spec TensorDict describing global conditioning features.
+    output_schema : FieldSchemaLike
+        Field schema declaring the output fields, e.g.
+        ``{"pressure": {"rank": 0}, "velocity": {"rank": 1}}`` (see
+        :class:`~physicsnemo.mesh.FieldSchema`). Nesting is supported and
+        mirrors the desired output structure. Only true scalars (rank 0) and
+        vectors (rank 1) are implemented, here and in the other schemas;
+        anything else raises :class:`NotImplementedError`. Derive from data
+        via :meth:`FieldSchema.from_tensordict`.
+    source_schema : FieldSchemaLike or None, optional
+        Field schema describing per-source features. The number of rank-0
+        fields determines scalar input width; rank-1 fields determine vector
+        input width.
+    global_schema : FieldSchemaLike or None, optional
+        Field schema describing global conditioning features.
     smoothing_radius : float, optional, default=1e-8
         Small value used to smooth power functions near zero to avoid numerical
         instabilities.
@@ -183,11 +227,11 @@ class Kernel(Module):
         Per-source features with ``batch_size=(N_sources,)``. Contains a mix
         of scalar (rank-0) and vector (rank-1) tensors; the kernel splits
         them internally via :func:`split_by_leaf_rank`. Leaf keys and ranks
-        must match ``source_data_ranks``. All values must be dimensionless.
+        must match ``source_schema``. All values must be dimensionless.
     global_data : TensorDict or None, optional, default=None
         Problem-level features with ``batch_size=()``. Contains a mix of
         scalar (rank-0) and vector (rank-1) tensors; split internally.
-        Leaf keys and ranks must match ``global_data_ranks``. All values
+        Leaf keys and ranks must match ``global_schema``. All values
         must be dimensionless.
 
     Outputs
@@ -202,9 +246,9 @@ class Kernel(Module):
         self,
         *,
         n_spatial_dims: int,
-        output_field_ranks: RankSpecDict,
-        source_data_ranks: RankSpecDict | None = None,
-        global_data_ranks: RankSpecDict | None = None,
+        output_schema: FieldSchemaLike,
+        source_schema: FieldSchemaLike | None = None,
+        global_schema: FieldSchemaLike | None = None,
         smoothing_radius: float = 1e-8,
         hidden_layer_sizes: Sequence[int] | None = None,
         n_spherical_harmonics: int = 4,
@@ -215,17 +259,23 @@ class Kernel(Module):
     ):
         if hidden_layer_sizes is None:
             hidden_layer_sizes = [64]
-        if source_data_ranks is None:
-            source_data_ranks = {}
-        if global_data_ranks is None:
-            global_data_ranks = {}
 
         super().__init__()
 
         self.n_spatial_dims = n_spatial_dims
-        self.output_field_ranks = output_field_ranks
-        self.source_data_ranks = source_data_ranks
-        self.global_data_ranks = global_data_ranks
+        self.output_schema = FieldSchema.parse(output_schema, label="output_schema")
+        self.source_schema = FieldSchema.parse(
+            {} if source_schema is None else source_schema, label="source_schema"
+        )
+        self.global_schema = FieldSchema.parse(
+            {} if global_schema is None else global_schema, label="global_schema"
+        )
+        for label, schema in (
+            ("output_schema", self.output_schema),
+            ("source_schema", self.source_schema),
+            ("global_schema", self.global_schema),
+        ):
+            _require_supported(schema, label=label)
         self.smoothing_radius = smoothing_radius
         self.hidden_layer_sizes = hidden_layer_sizes
         self.n_spherical_harmonics = n_spherical_harmonics
@@ -293,9 +343,7 @@ class Kernel(Module):
         operation.  The caller applies a runtime multiplier to account for
         this (see ``BarnesHutKernel._auto_chunk_size``).
         """
-        source_rc = rank_counts(self.source_data_ranks)
-        global_rc = rank_counts(self.global_data_ranks)
-        n_vec = 1 + source_rc[1] + global_rc[1]
+        n_vec = 1 + self.source_schema.count(1) + self.global_schema.count(1)
         n_pairs = comb(n_vec, 2)
 
         return (
@@ -328,13 +376,10 @@ class Kernel(Module):
         3. Pairwise spherical harmonic features for all :math:`\binom{n}{2}` vector
            pairs, each producing ``n_spherical_harmonics`` Legendre polynomial terms
         """
-        source_rank_counts = rank_counts(self.source_data_ranks)
-        global_rank_counts = rank_counts(self.global_data_ranks)
-
         n_vectors_in: int = (
-            1 + source_rank_counts[1] + global_rank_counts[1]
+            1 + self.source_schema.count(1) + self.global_schema.count(1)
         )  # +1 for r
-        n_scalars_in: int = source_rank_counts[0] + global_rank_counts[0]
+        n_scalars_in: int = self.source_schema.count(0) + self.global_schema.count(0)
         n_vector_pairs_in: int = comb(n_vectors_in, 2)
 
         return (
@@ -348,14 +393,11 @@ class Kernel(Module):
         One channel per scalar output field, plus vector reprojection coefficients
         for each vector output field (1 radial + 2 per non-radial input vector).
         """
-        source_rank_counts = rank_counts(self.source_data_ranks)
-        global_rank_counts = rank_counts(self.global_data_ranks)
-        output_rank_counts = rank_counts(self.output_field_ranks)
         n_vectors_in: int = (
-            1 + source_rank_counts[1] + global_rank_counts[1]
+            1 + self.source_schema.count(1) + self.global_schema.count(1)
         )  # +1 for r
 
-        return output_rank_counts[0] + output_rank_counts[1] * (
+        return self.output_schema.count(0) + self.output_schema.count(1) * (
             1  # r_hat
             + 2 * (n_vectors_in - 1)  # All non-r vectors
         )
@@ -371,7 +413,7 @@ class Kernel(Module):
         ~1 s out of 4.5 s total GPU time per training step), and packing
         cuts that cost proportional to the number of output fields.
         """
-        ranks_dict = flatten_rank_spec(self.output_field_ranks)
+        ranks_dict = self.output_schema.ranks
         keys = tuple(sorted(ranks_dict.keys()))
         features_per_key = tuple(
             1 if ranks_dict[k] == 0 else self.n_spatial_dims for k in keys
@@ -473,24 +515,22 @@ class Kernel(Module):
                     f"Expected target_points last dimension to be {self.n_spatial_dims}, "
                     f"got {target_points.shape[-1]}"
                 )
-            source_rank_counts = rank_counts(self.source_data_ranks)
-            global_rank_counts = rank_counts(self.global_data_ranks)
             for name, (actual, expected) in {
                 "source scalars": (
                     concatenated_length(source_scalars),
-                    source_rank_counts[0],
+                    self.source_schema.count(0),
                 ),
                 "source vectors": (
                     concatenated_length(source_vectors),
-                    source_rank_counts[1],
+                    self.source_schema.count(1),
                 ),
                 "global scalars": (
                     concatenated_length(global_scalars),
-                    global_rank_counts[0],
+                    self.global_schema.count(0),
                 ),
                 "global vectors": (
                     concatenated_length(global_vectors),
-                    global_rank_counts[1],
+                    self.global_schema.count(1),
                 ),
             }.items():
                 if actual != expected:
@@ -597,8 +637,9 @@ class Kernel(Module):
 
         ### Vector magnitude, direction, and log-magnitude features
         with record_function("kernel::feature_engineering"):
-            vectors_mag_squared: TensorDict = (
-                (vectors * vectors).sum(dim=-1) + self._smoothing_radius_sq
+            # Per leaf: TD + 0-dim tensor would .item() the radius (a sync).
+            vectors_mag_squared: TensorDict = (vectors * vectors).sum(dim=-1).apply(
+                lambda t: t + self._smoothing_radius_sq
             )
             vectors_mag = vectors_mag_squared.sqrt()
             vectors_hat = vectors / vectors_mag.unsqueeze(-1)
@@ -615,8 +656,8 @@ class Kernel(Module):
             vectors_hat_concatenated: torch.Tensor = concatenate_leaves(vectors_hat)
             # shape: (*interaction_dims, n_spatial_dims, n_vectors_in)
 
-            v1_hat = vectors_hat_concatenated[..., :, k1]
-            v2_hat = vectors_hat_concatenated[..., :, k2]
+            v1_hat = _take_last(vectors_hat_concatenated, k1)
+            v2_hat = _take_last(vectors_hat_concatenated, k2)
             cos_theta_pairs = torch.sum(v1_hat * v2_hat, dim=-2)
             # shape: (*interaction_dims, len(keypairs))
 
@@ -626,8 +667,8 @@ class Kernel(Module):
             )[1:]
 
             vectors_mag_concatenated: torch.Tensor = concatenate_leaves(vectors_mag)
-            v1_mag = vectors_mag_concatenated[..., k1]
-            v2_mag = vectors_mag_concatenated[..., k2]
+            v1_mag = _take_last(vectors_mag_concatenated, k1)
+            v2_mag = _take_last(vectors_mag_concatenated, k2)
 
             for i, harmonics in enumerate(spherical_harmonics):
                 scalars[f"pairwise_spherical_harmonics_{i}"] = (
@@ -670,7 +711,7 @@ class Kernel(Module):
                 )
 
             ### Local rotationally-equivariant basis (built only when needed)
-            ranks_dict = flatten_rank_spec(self.output_field_ranks)
+            ranks_dict = self.output_schema.ranks
             needs_basis = any(rank == 1 for rank in ranks_dict.values())
 
             if needs_basis:
@@ -780,7 +821,7 @@ class BarnesHutKernel(Kernel):
     -------
     Same parameters as :class:`Kernel`, with additions:
 
-    theta : float, optional, default=1.0
+    theta : float, optional, default=1.5
         Barnes-Hut opening angle.  A node is approximated when
         ``D/r < theta``.  Larger values are more aggressive (more
         approximation, faster).  At ``theta = 0``, all interactions
@@ -808,9 +849,9 @@ class BarnesHutKernel(Kernel):
         self,
         *,
         n_spatial_dims: int,
-        output_field_ranks: RankSpecDict,
-        source_data_ranks: RankSpecDict | None = None,
-        global_data_ranks: RankSpecDict | None = None,
+        output_schema: FieldSchemaLike,
+        source_schema: FieldSchemaLike | None = None,
+        global_schema: FieldSchemaLike | None = None,
         smoothing_radius: float = 1e-8,
         hidden_layer_sizes: Sequence[int] | None = None,
         n_spherical_harmonics: int = 4,
@@ -822,9 +863,9 @@ class BarnesHutKernel(Kernel):
     ):
         super().__init__(
             n_spatial_dims=n_spatial_dims,
-            output_field_ranks=output_field_ranks,
-            source_data_ranks=source_data_ranks,
-            global_data_ranks=global_data_ranks,
+            output_schema=output_schema,
+            source_schema=source_schema,
+            global_schema=global_schema,
             smoothing_radius=smoothing_radius,
             hidden_layer_sizes=hidden_layer_sizes,
             n_spherical_harmonics=n_spherical_harmonics,
@@ -844,7 +885,7 @@ class BarnesHutKernel(Kernel):
         source_strengths: Float[torch.Tensor, " n_sources"] | None = None,
         source_data: TensorDict | None = None,
         global_data: TensorDict | None = None,
-        theta: float = 1.0,
+        theta: float = 1.5,
         cluster_tree: "ClusterTree | None" = None,
         target_tree: "ClusterTree | None" = None,
         dual_plan: "DualInteractionPlan | None" = None,
@@ -915,7 +956,6 @@ class BarnesHutKernel(Kernel):
         TensorDict[str, Float[torch.Tensor, "n_targets ..."]]
             Kernel output fields at target points.
         """
-        from physicsnemo.mesh.spatial._ragged import _ragged_arange
         from physicsnemo.mesh.spatial.cluster_tree import (
             ClusterTree,
             DualInteractionPlan,
@@ -950,7 +990,7 @@ class BarnesHutKernel(Kernel):
         if dual_plan is None:
             dual_plan = cluster_tree.find_dual_interaction_pairs(
                 target_tree=target_tree, theta=theta,
-                expand_far_targets=expand_far_targets,
+                expand_far_targets=expand_far_targets, validate=False,
             )
 
         ### Compute source aggregates for far-field clusters.
@@ -1063,7 +1103,11 @@ class BarnesHutKernel(Kernel):
                 else self._auto_chunk_size(n_near, device)
             )
 
-            for start in range(0, n_near, chunk_size):
+            ### Loop over the chunk count, not ``range(0, n_near, chunk_size)``:
+            ### torch.compile specializes ``range`` arguments, so that form would
+            ### recompile for every new pair count (each new geometry).
+            for i_chunk in range(_ceil_div(n_near, chunk_size)):
+                start = i_chunk * chunk_size
                 end = min(start + chunk_size, n_near)
 
                 chunk_tgt_ids = near_tgt_ids[start:end]
@@ -1085,7 +1129,7 @@ class BarnesHutKernel(Kernel):
                     )
 
                 with record_function("bh_kernel::near_scatter"):
-                    chunk_strengths = source_strengths[chunk_src_ids]
+                    chunk_strengths = torch.index_select(source_strengths, 0, chunk_src_ids)
                     self._pack_and_scatter(
                         chunk_result, chunk_strengths, chunk_tgt_ids, packed_buf
                     )
@@ -1111,12 +1155,10 @@ class BarnesHutKernel(Kernel):
 
             ### Broadcast node-level results to individual targets.
             with record_function("bh_kernel::far_node_broadcast"):
-                far_strengths = node_total_strength[far_src_nids]
+                far_strengths = torch.index_select(node_total_strength, 0, far_src_nids)
 
-                node_starts = target_tree.node_range_start[far_tgt_nids]
-                node_counts = target_tree.node_range_count[far_tgt_nids]
-                positions, pair_ids = _ragged_arange(node_starts, node_counts)
-                expanded_tgt_ids = target_tree.sorted_source_order[positions]
+                expanded_tgt_ids = dual_plan.far_broadcast_target_ids
+                pair_ids = dual_plan.far_broadcast_pair_ids
 
                 ### Broadcast node-level outputs to individual targets via
                 ### ``pair_ids`` (which point back into the per-node result
@@ -1131,25 +1173,32 @@ class BarnesHutKernel(Kernel):
         # Phase C: (near,far) - individual targets × source node centroids
         # ==================================================================
         if n_nf > 0:
-            nf_tgt_ids = dual_plan.nf_target_ids
-            nf_src_nids = dual_plan.nf_source_node_ids
+            ### Chunked like Phase A: with ``expand_far_targets`` this stream
+            ### carries almost every interaction, and evaluating it in one
+            ### call materializes every hidden activation for all of it.
+            ### It loops over the chunk count for the same reason as Phase A.
+            nf_chunk = self._auto_chunk_size(n_nf, device)
+            for i_chunk in range(_ceil_div(n_nf, nf_chunk)):
+                start = i_chunk * nf_chunk
+                nf_tgt_ids = dual_plan.nf_target_ids[start : start + nf_chunk]
+                nf_src_nids = dual_plan.nf_source_node_ids[start : start + nf_chunk]
 
-            ### Same evaluation as Phase B (source centroids + aggregates),
-            # but same scatter as Phase A (per-target, no broadcast).
-            with record_function("bh_kernel::nf_evaluate"):
-                nf_result = self._maybe_checkpointed_evaluate(
-                    nf_tgt_ids, nf_src_nids,
-                    target_points, aggregates.node_centroid,
-                    agg_scalars, agg_vectors,
-                    global_scalars, global_vectors,
-                    reference_length, device,
-                )
+                ### Same evaluation as Phase B (source centroids + aggregates),
+                # but same scatter as Phase A (per-target, no broadcast).
+                with record_function("bh_kernel::nf_evaluate"):
+                    nf_result = self._maybe_checkpointed_evaluate(
+                        nf_tgt_ids, nf_src_nids,
+                        target_points, aggregates.node_centroid,
+                        agg_scalars, agg_vectors,
+                        global_scalars, global_vectors,
+                        reference_length, device,
+                    )
 
-            with record_function("bh_kernel::nf_scatter"):
-                nf_strengths = node_total_strength[nf_src_nids]
-                self._pack_and_scatter(
-                    nf_result, nf_strengths, nf_tgt_ids, packed_buf
-                )
+                with record_function("bh_kernel::nf_scatter"):
+                    nf_strengths = torch.index_select(node_total_strength, 0, nf_src_nids)
+                    self._pack_and_scatter(
+                        nf_result, nf_strengths, nf_tgt_ids, packed_buf
+                    )
 
         # ==================================================================
         # Phase D: (far,near) - target node centroid × individual sources,
@@ -1173,13 +1222,10 @@ class BarnesHutKernel(Kernel):
 
             ### Broadcast to stage-1 survivors via the ragged mapping.
             with record_function("bh_kernel::fn_broadcast"):
-                fn_strengths = source_strengths[fn_src_ids]
+                fn_strengths = torch.index_select(source_strengths, 0, fn_src_ids)
 
-                positions, pair_ids = _ragged_arange(
-                    dual_plan.fn_broadcast_starts,
-                    dual_plan.fn_broadcast_counts,
-                )
-                expanded_tgt_ids = dual_plan.fn_broadcast_targets[positions]
+                expanded_tgt_ids = dual_plan.fn_expanded_target_ids
+                pair_ids = dual_plan.fn_expanded_pair_ids
 
                 self._pack_and_scatter(
                     fn_result, fn_strengths, expanded_tgt_ids,
@@ -1246,7 +1292,7 @@ class BarnesHutKernel(Kernel):
         ----------
         chunk_result : TensorDict
             Output of one ``_evaluate_interactions`` call.  Contains the
-            keys declared in ``self.output_field_ranks``; values have
+            keys declared in ``self.output_schema``; values have
             ``batch_size=(n_pairs,)``.
         weights : Float[torch.Tensor, "n_pairs"]
             Per-pair scalar multipliers (e.g. source strengths).
@@ -1274,7 +1320,7 @@ class BarnesHutKernel(Kernel):
 
         weighted = packed * weights.unsqueeze(-1)
         if broadcast_pair_ids is not None:
-            weighted = weighted[broadcast_pair_ids]
+            weighted = torch.index_select(weighted, 0, broadcast_pair_ids)
 
         ### ``index_add_`` rather than ``scatter_add_`` with broadcasted
         ### indices: equivalent semantics, but ``index_add_`` takes a 1-D
@@ -1301,7 +1347,7 @@ class BarnesHutKernel(Kernel):
         does not need a separate degenerate-case branch.
         """
         keys, features_per_key, _ = self._output_packing
-        ranks_dict = flatten_rank_spec(self.output_field_ranks)
+        ranks_dict = self.output_schema.ranks
         fields: dict[str, torch.Tensor] = {}
         offset = 0
         for key, n_features in zip(keys, features_per_key):
@@ -1394,8 +1440,13 @@ class BarnesHutKernel(Kernel):
         separately (magnitudes, dot products, basis construction).
         """
         n_pairs = tgt_ids.shape[0]
+        ### ``index_select`` rather than ``x[idx]``: same forward, but its
+        ### backward is an ``index_add_`` instead of the sort-based
+        ### ``index_put_(accumulate=True)`` (``indexing_backward``), which was
+        ### the largest GPU kernel of a DrivAerML training step on GB300.
         chunk_r = (
-            target_positions[tgt_ids] - source_positions[src_ids]
+            torch.index_select(target_positions, 0, tgt_ids)
+            - torch.index_select(source_positions, 0, src_ids)
         ) / reference_length
 
         ### Flatten source scalars into one tensor, gather once, split back.
@@ -1408,7 +1459,9 @@ class BarnesHutKernel(Kernel):
             source_scalars.keys(include_nested=True, leaves_only=True),
             key=str,
         )
-        gathered_src_scalars = concatenate_leaves(source_scalars)[src_ids]
+        gathered_src_scalars = torch.index_select(
+            concatenate_leaves(source_scalars), 0, src_ids
+        )
         scalars = TensorDict(
             {
                 "source_scalars": TensorDict(
@@ -1434,7 +1487,9 @@ class BarnesHutKernel(Kernel):
             source_vectors.keys(include_nested=True, leaves_only=True),
             key=str,
         )
-        gathered_src_vectors = concatenate_leaves(source_vectors)[src_ids]
+        gathered_src_vectors = torch.index_select(
+            concatenate_leaves(source_vectors), 0, src_ids
+        )
         vectors = TensorDict(
             {
                 "source_vectors": TensorDict(
@@ -1453,7 +1508,6 @@ class BarnesHutKernel(Kernel):
 
         return self._evaluate_interactions(scalars=scalars, vectors=vectors, device=device)
 
-    @torch.compiler.disable
     def _auto_chunk_size(self, n_total_pairs: int, device: torch.device) -> int:
         """Determine chunk size for pair-batched kernel evaluation.
 
@@ -1540,15 +1594,15 @@ class MultiscaleKernel(Module):
     ----------
     n_spatial_dims : int
         Number of spatial dimensions (2 or 3).
-    output_field_ranks : TensorDict
-        Rank-spec TensorDict (see :class:`Kernel`).
+    output_schema : FieldSchemaLike
+        Field schema declaring the output fields (see :class:`Kernel`).
     reference_length_names : Sequence[str]
         Sequence of identifiers for reference length scales. Each creates an
         independent kernel branch. Examples: ``["viscous", "geometric"]``.
-    source_data_ranks : TensorDict or None, optional
-        Rank-spec TensorDict for per-source features (see :class:`Kernel`).
-    global_data_ranks : TensorDict or None, optional
-        Rank-spec TensorDict for global features (see :class:`Kernel`).
+    source_schema : FieldSchemaLike or None, optional
+        Field schema for per-source features (see :class:`Kernel`).
+    global_schema : FieldSchemaLike or None, optional
+        Field schema for global features (see :class:`Kernel`).
         Log-ratios of reference lengths are automatically added as scalar
         entries before passing to each kernel branch.
     smoothing_radius : float, optional, default=1e-8
@@ -1583,7 +1637,7 @@ class MultiscaleKernel(Module):
         Problem-level features with ``batch_size=()``. Automatically
         augmented with log-ratios of reference lengths before being passed
         to each kernel branch.
-    theta : float, optional, default=1.0
+    theta : float, optional, default=1.5
         Barnes-Hut opening angle (larger = more aggressive).
     cluster_tree : ClusterTree or None, optional, default=None
         Pre-built cluster tree for source points.  If ``None``, one is
@@ -1607,9 +1661,9 @@ class MultiscaleKernel(Module):
     --------
     >>> kernel = MultiscaleKernel(
     ...     n_spatial_dims=2,
-    ...     output_field_ranks=TensorDict({"phi": 0, "u": 1}),
+    ...     output_schema={"phi": {"rank": 0}, "u": {"rank": 1}},
     ...     reference_length_names=["viscous_length", "chord_length"],
-    ...     source_data_ranks=TensorDict({"normal": 1}),
+    ...     source_schema={"normal": {"rank": 1}},
     ...     hidden_layer_sizes=[64, 64],
     ... )
     >>> result = kernel(
@@ -1627,10 +1681,10 @@ class MultiscaleKernel(Module):
         self,
         *,
         n_spatial_dims: int,
-        output_field_ranks: RankSpecDict,
+        output_schema: FieldSchemaLike,
         reference_length_names: Sequence[str],
-        source_data_ranks: RankSpecDict | None = None,
-        global_data_ranks: RankSpecDict | None = None,
+        source_schema: FieldSchemaLike | None = None,
+        global_schema: FieldSchemaLike | None = None,
         smoothing_radius: float = 1e-8,
         hidden_layer_sizes: Sequence[int] | None = None,
         n_spherical_harmonics: int = 4,
@@ -1642,16 +1696,8 @@ class MultiscaleKernel(Module):
     ):
         super().__init__()
 
-        if source_data_ranks is None:
-            source_data_ranks = {}
-        if global_data_ranks is None:
-            global_data_ranks = {}
-
         self.n_spatial_dims = n_spatial_dims
-        self.output_field_ranks = output_field_ranks
         self.reference_length_names = reference_length_names
-        self.source_data_ranks = source_data_ranks
-        self.global_data_ranks = global_data_ranks
         self.smoothing_radius = smoothing_radius
         self.hidden_layer_sizes = hidden_layer_sizes
         self.n_spherical_harmonics = n_spherical_harmonics
@@ -1659,13 +1705,22 @@ class MultiscaleKernel(Module):
         self.spectral_norm = spectral_norm
         self.use_gradient_checkpointing = use_gradient_checkpointing
         self.leaf_size = leaf_size
+        ### Parsed schemas; ``GLOBE`` reads ``source_schema`` to select the
+        ### cell_data leaves each kernel consumes.
+        self.output_schema = FieldSchema.parse(output_schema, label="output_schema")
+        self.source_schema = FieldSchema.parse(
+            {} if source_schema is None else source_schema, label="source_schema"
+        )
+        self.global_schema = FieldSchema.parse(
+            {} if global_schema is None else global_schema, label="global_schema"
+        )
 
-        ### Augment global_data_ranks with log-ratio entries for each
+        ### Augment global_schema with log-ratio entries for each
         # pair of reference lengths. These are rank-0 (scalar) features.
         augmented_global = {
-            **global_data_ranks,
+            **self.global_schema,
             "log_reference_length_ratios": {
-                f"{k1}_{k2}": 0
+                f"{k1}_{k2}": {"rank": 0}
                 for k1, k2 in itertools.combinations(reference_length_names, 2)
             },
         }
@@ -1674,9 +1729,9 @@ class MultiscaleKernel(Module):
             {
                 name: BarnesHutKernel(
                     n_spatial_dims=n_spatial_dims,
-                    output_field_ranks=output_field_ranks,
-                    source_data_ranks=source_data_ranks,
-                    global_data_ranks=augmented_global,
+                    output_schema=self.output_schema,
+                    source_schema=self.source_schema,
+                    global_schema=augmented_global,
                     smoothing_radius=smoothing_radius,
                     hidden_layer_sizes=hidden_layer_sizes,
                     n_spherical_harmonics=n_spherical_harmonics,
@@ -1705,7 +1760,7 @@ class MultiscaleKernel(Module):
         source_data: TensorDict[str, Float[torch.Tensor, "n_sources ..."]]
         | None = None,
         global_data: TensorDict[str, Float[torch.Tensor, "..."]] | None = None,
-        theta: float = 1.0,
+        theta: float = 1.5,
         cluster_tree: "ClusterTree | None" = None,
         target_tree: "ClusterTree | None" = None,
         dual_plan: "DualInteractionPlan | None" = None,
@@ -1806,7 +1861,7 @@ class MultiscaleKernel(Module):
             if dual_plan is None:
                 dual_plan = cluster_tree.find_dual_interaction_pairs(
                     target_tree=target_tree, theta=theta,
-                    expand_far_targets=expand_far_targets,
+                    expand_far_targets=expand_far_targets, validate=False,
                 )
         with record_function("multiscale_kernel::compute_aggregates"):
             source_aggregates = cluster_tree.compute_source_aggregates(
