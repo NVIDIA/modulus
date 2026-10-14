@@ -144,6 +144,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   count. Laplacian smoothing synchronizes at most 4 times instead of about 30,
   independent of the number of iterations, and `remove_degenerate_cells` is
   about 5x faster. Results are unchanged.
+- Loop and butterfly subdivision evaluate their edge rules for every edge and
+  select with `torch.where`, instead of compacting boundary and interior edges
+  with boolean masks. Butterfly subdivision synchronizes CUDA 3 times instead
+  of 13, Loop subdivision 9 instead of 13, and both are 10-15% faster.
 - Mesh subdivision, `cell_data_to_point_data`, `point_data_to_cell_data` and
   `Mesh.merge` need up to 2.9x less peak memory, with unchanged results.
 - Mesh integration uses a shared `_effective_measure` field for complete cell
