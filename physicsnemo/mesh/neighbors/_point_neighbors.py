@@ -120,7 +120,9 @@ def get_point_to_points_adjacency(mesh: "Mesh") -> Adjacency:
     >>> adj.to_list()
     [[1, 2], [0, 2], [0, 1]]
     """
+    from physicsnemo.mesh.boundaries import extract_candidate_facets
     from physicsnemo.mesh.utilities._topology import extract_unique_edges
+    from physicsnemo.utils._index_tuple_ops import sort_index_tuples
 
     ### Handle empty mesh
     if mesh.n_cells == 0 or mesh.n_points == 0:
@@ -132,26 +134,43 @@ def get_point_to_points_adjacency(mesh: "Mesh") -> Adjacency:
             device=mesh.points.device,
         )
 
-    ### Extract all unique edges (handles 1D and n-D meshes uniformly)
-    unique_edges, _ = extract_unique_edges(mesh)
-
-    from physicsnemo.mesh.neighbors._adjacency import build_adjacency_from_pairs
-
-    ### Create bidirectional edges
-    # For each edge [a, b], create both [a, b] and [b, a]
-    # Shape: (2 * n_unique_edges, 2)
-    bidirectional_edges = torch.cat(
-        [
-            unique_edges,
-            unique_edges.flip(dims=[1]),  # Reverse the edge direction
-        ],
-        dim=0,
+    from physicsnemo.mesh.neighbors._adjacency import (
+        _PACKED_PAIR_KEY_LIMIT,
+        adjacency_from_sorted_keys,
+        build_adjacency_from_pairs,
     )
 
-    ### Build adjacency from bidirectional edge pairs
-    return build_adjacency_from_pairs(
-        source_indices=bidirectional_edges[:, 0],
-        target_indices=bidirectional_edges[:, 1],
-        n_sources=mesh.n_points,
-        n_targets=mesh.n_points,
+    n_points = mesh.n_points
+    if n_points * n_points >= _PACKED_PAIR_KEY_LIMIT:
+        ### The packed edge keys below could overflow: build from edge rows
+        unique_edges, _ = extract_unique_edges(mesh)
+        # For each edge [a, b], create both [a, b] and [b, a]
+        bidirectional_edges = torch.cat([unique_edges, unique_edges.flip(dims=[1])])
+        return build_adjacency_from_pairs(
+            source_indices=bidirectional_edges[:, 0],
+            target_indices=bidirectional_edges[:, 1],
+            n_sources=n_points,
+            n_targets=n_points,
+        )
+
+    ### Pack each canonical candidate edge (a <= b) into one key, a * n + b
+    if mesh.n_manifold_dims == 1:
+        candidate_edges = sort_index_tuples(mesh.cells)
+    else:
+        candidate_edges, _ = extract_candidate_facets(
+            mesh.cells, manifold_codimension=mesh.n_manifold_dims - 1
+        )
+        del _
+    edge_keys = candidate_edges[:, 0].long() * n_points + candidate_edges[:, 1]
+    del candidate_edges
+
+    ### Deduplicate the edges, then add the reverse direction (b, a) of each
+    # A degenerate self-edge (a, a) is listed twice, as with the edge rows.
+    forward_keys = torch.unique(edge_keys)
+    del edge_keys
+    reverse_keys = (forward_keys % n_points) * n_points + forward_keys // n_points
+    sorted_keys = torch.sort(torch.cat([forward_keys, reverse_keys])).values
+    del forward_keys, reverse_keys
+    return adjacency_from_sorted_keys(
+        sorted_keys, n_points, n_points, dtype=mesh.cells.dtype
     )
