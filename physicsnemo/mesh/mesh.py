@@ -14,10 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dataclasses
+import inspect
 import itertools
 import math
 import types
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import (
@@ -127,6 +129,40 @@ def _check_geometry_values(valid: torch.Tensor, message: str) -> None:
         torch._assert_async(valid, message)
     elif not bool(valid):
         raise ValueError(message)
+
+
+def _hide_var_keyword(init: Callable) -> Callable:
+    """Drop the ``**kwargs`` parameter from the signature that ``init`` reports.
+
+    tensordict 0.14.x appends keyword-only parameters to the signature of the
+    ``__init__`` it wraps, which fails if that signature ends with ``**kwargs``.
+    This decorator can go once PhysicsNeMo requires tensordict 0.15 or later.
+    """
+    signature = inspect.signature(init)
+    init.__signature__ = signature.replace(
+        parameters=[
+            p for p in signature.parameters.values() if p.kind is not p.VAR_KEYWORD
+        ]
+    )
+    return init
+
+
+def _set_subclass_fields(obj: Any, base: type, fields: dict[str, Any]) -> None:
+    """Set the fields that ``type(obj)`` declares beyond those of ``base``.
+
+    Lets the ``__init__`` of ``base`` construct subclasses that add fields,
+    which inherit that ``__init__`` from tensordict 0.15 onwards.
+    """
+    subclass_fields = {f.name for f in dataclasses.fields(type(obj))} - {
+        f.name for f in dataclasses.fields(base)
+    }
+    for name, value in fields.items():
+        if name not in subclass_fields:
+            raise TypeError(
+                f"{type(obj).__name__}.__init__() got an unexpected keyword "
+                f"argument {name!r}"
+            )
+        setattr(obj, name, value)
 
 
 class _MeshTensorClassMeta(type(TensorClass)):
@@ -253,6 +289,9 @@ class Mesh(
         Per-cell data. Dicts are automatically converted to TensorDict.
     global_data : TensorDict or dict[str, torch.Tensor], optional
         Mesh-level data. Dicts are automatically converted to TensorDict.
+    **fields
+        Values for the fields that a subclass of ``Mesh`` declares, so that
+        such a subclass needs no ``__init__`` of its own.
 
     Raises
     ------
@@ -263,7 +302,8 @@ class Mesh(
         represented exactly in ``float64``, or ``uint64`` connectivity overflows
         ``int64``. Compiled value checks raise a backend assertion instead.
     TypeError
-        If cell indices are not an integer dtype.
+        If cell indices are not an integer dtype, or if a keyword argument
+        names no field of the class.
 
     Examples
     --------
@@ -396,6 +436,7 @@ class Mesh(
     global_data: TensorDict = None  # type: ignore[assignment]
     _cache: TensorDict = None  # type: ignore[assignment]
 
+    @_hide_var_keyword
     def __init__(
         self,
         points: torch.Tensor,
@@ -405,6 +446,7 @@ class Mesh(
         global_data: TensorDict | dict[str, torch.Tensor] | None = None,
         *,
         _cache: TensorDict | None = None,
+        **fields: Any,
     ) -> None:
         self.points = points
         self.cells = cells  # type: ignore[assignment]  # normalized by __post_init__
@@ -427,6 +469,8 @@ class Mesh(
             else global_data
         )
         self._cache = _cache  # type: ignore[assignment]  # normalized by __post_init__
+        if fields:
+            _set_subclass_fields(self, Mesh, fields)
         # tensorclass only auto-calls __post_init__ from the *generated* __init__
         # (same semantics as dataclasses). Since we define a custom __init__,
         # we must call it explicitly. During load(), tensorclass calls it

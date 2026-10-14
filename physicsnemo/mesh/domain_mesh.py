@@ -23,7 +23,12 @@ import torch
 from jaxtyping import Bool, Float
 from tensordict import TensorClass, TensorDict
 
-from physicsnemo.mesh.mesh import Mesh, _requested_dtype
+from physicsnemo.mesh.mesh import (
+    Mesh,
+    _hide_var_keyword,
+    _requested_dtype,
+    _set_subclass_fields,
+)
 from physicsnemo.mesh.transformations.deform.ffd import _FFDBasis
 from physicsnemo.mesh.utilities.mesh_repr import format_mesh_repr
 
@@ -84,12 +89,16 @@ class DomainMesh(TensorClass, metaclass=_DomainMeshTensorClassMeta):
         Reynolds number, angle of attack, Mach number). If a ``dict`` is
         provided, it is automatically converted to a :class:`TensorDict`.
         Defaults to an empty collection.
+    **fields
+        Values for the fields that a subclass of ``DomainMesh`` declares, so
+        that such a subclass needs no ``__init__`` of its own.
 
     Raises
     ------
     TypeError
-        If ``interior`` is not a :class:`Mesh`, or if any value in
-        ``boundaries`` is not a :class:`Mesh`.
+        If ``interior`` is not a :class:`Mesh`, if any value in
+        ``boundaries`` is not a :class:`Mesh`, or if a keyword argument names
+        no field of the class.
     ValueError
         If any boundary mesh has a different ``n_spatial_dims`` than
         ``interior``.
@@ -134,15 +143,19 @@ class DomainMesh(TensorClass, metaclass=_DomainMeshTensorClassMeta):
     boundaries: TensorDict[str, Mesh] = None  # type: ignore[assignment]
     global_data: TensorDict = None  # type: ignore[assignment]
 
+    @_hide_var_keyword
     def __init__(
         self,
         interior: Mesh,
         boundaries: dict[str, Mesh] | TensorDict | None = None,
         global_data: dict[str, torch.Tensor] | TensorDict | None = None,
+        **fields: Any,
     ) -> None:
         self.interior = interior
         self.boundaries = boundaries  # normalized by __post_init__
         self.global_data = global_data  # normalized by __post_init__
+        if fields:
+            _set_subclass_fields(self, DomainMesh, fields)
         # tensorclass only auto-calls __post_init__ from the *generated* __init__
         # (same semantics as dataclasses). Since we define a custom __init__,
         # we must call it explicitly. During load(), tensorclass calls it
