@@ -32,7 +32,10 @@ class KNN(FunctionSpec):
     Perform a k-nearest neighbor search on torch tensors.  Can be done with
     torch directly, or leverage RAPIDS cuML, SciPy, or an exact Warp BVH search.
 
-    Auto-dispatch selects the optimal version for the input tensor device.
+    Auto-dispatch selects the implementation from the inputs: Warp for CUDA
+    points of one to three dimensions in float32 or lower precision, cuML for
+    other CUDA points, and SciPy for CPU points. When the selected
+    implementation is not installed, it falls back to torch.
 
     Parameters
     ----------
@@ -43,11 +46,9 @@ class KNN(FunctionSpec):
     k : int
         Number of nearest neighbors to return for each query point.
     implementation : {"cuml", "torch", "scipy", "warp"} or None
-        Implementation to use for the search. When ``None``, the preferred
-        implementation for the input device is selected and falls back to
-        torch when unavailable. ``"warp"`` runs an exact Morton-order BVH
-        search in float32 on CPU or CUDA, for points of up to three
-        dimensions.
+        Implementation to use for the search. When ``None``, it is selected
+        as described above. ``"warp"`` runs an exact Morton-order BVH search
+        in float32 on CPU or CUDA, for points of up to three dimensions.
 
     Returns
     -------
@@ -166,12 +167,8 @@ class KNN(FunctionSpec):
             # Execute the implementation.
             return impl.func(points, queries, k)
 
-        # Otherwise, auto-select an implementation based on device and availability.
-        # Prefer cuML on CUDA and SciPy on CPU when auto-selecting.
-        preferred_name = "cuml" if points.is_cuda else "scipy"
-
-        # Fetch the preferred implementation (if registered).
-        preferred = impls.get(preferred_name)
+        # Otherwise, auto-select an implementation from the inputs.
+        preferred = impls.get(cls._preferred_name(points))
 
         # Use the preferred implementation when it is available.
         impl = preferred if preferred is not None and preferred.available else None
@@ -186,6 +183,18 @@ class KNN(FunctionSpec):
 
         # Execute the selected implementation.
         return impl.func(points, queries, k)
+
+    @staticmethod
+    def _preferred_name(points: torch.Tensor) -> str:
+        """Return the implementation auto-dispatch prefers for ``points``.
+
+        Warp computes in float32, so float64 CUDA points keep cuML.
+        """
+        if not points.is_cuda:
+            return "scipy"
+        if 1 <= points.shape[-1] <= 3 and points.dtype != torch.float64:
+            return "warp"
+        return "cuml"
 
 
 knn = KNN.make_function("knn")

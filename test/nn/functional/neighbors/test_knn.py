@@ -223,6 +223,37 @@ def test_knn_warp_error_handling(device: str):
         knn(points, points, k=21, implementation="warp")
 
 
+# Auto-dispatch prefers Warp for CUDA points of up to three dimensions below
+# float64, cuML for other CUDA points, and SciPy on CPU.
+@pytest.mark.parametrize(
+    "dim, dtype, expected_cuda",
+    [
+        (3, torch.float32, "warp"),
+        (2, torch.bfloat16, "warp"),
+        (3, torch.float64, "cuml"),
+        (4, torch.float32, "cuml"),
+    ],
+)
+def test_knn_preferred_implementation(
+    device: str, dim: int, dtype: torch.dtype, expected_cuda: str
+):
+    points = torch.zeros(8, dim, device=device, dtype=dtype)
+    expected = expected_cuda if "cuda" in device else "scipy"
+    assert KNN._preferred_name(points) == expected
+
+
+# On CUDA the default path returns exactly what the Warp backend returns.
+def test_knn_auto_dispatch_uses_warp_on_cuda(device: str):
+    if "cuda" not in device:
+        pytest.skip("CUDA only")
+    points = torch.rand(5000, 3, device=device)
+    queries = torch.rand(500, 3, device=device)
+    auto_indices, auto_distances = knn(points, queries, k=7)
+    warp_indices, warp_distances = knn(points, queries, k=7, implementation="warp")
+    assert torch.equal(auto_indices, warp_indices)
+    assert torch.equal(auto_distances, warp_distances)
+
+
 # Validate benchmark input generation contract for KNN.
 def test_knn_make_inputs_forward(device: str):
     label, args, kwargs = next(iter(KNN.make_inputs_forward(device=device)))
