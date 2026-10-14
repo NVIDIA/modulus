@@ -1813,8 +1813,10 @@ def to_pyvista(
         if mesh.n_cells == 0:
             pv_mesh = pv.PolyData(points_np)
         else:
-            # _to_vtk_cell_array returns independent VTK-format connectivity.
-            pv_mesh = pv.PolyData(points_np, lines=_to_vtk_cell_array(cells_np))
+            # Offsets-free connectivity; it shares storage with mesh.cells
+            # (kept alive by VTK) unless force_copy requests a deep copy.
+            lines = pv.CellArray.from_regular_cells(cells_np, deep=force_copy)
+            pv_mesh = pv.PolyData(points_np, lines=lines)
 
     elif mesh.n_manifold_dims == 2:
         cells_np = mesh.cells.cpu().numpy()
@@ -1834,11 +1836,12 @@ def to_pyvista(
                 points_np,
             )
         else:
-            celltypes = np.full(mesh.n_cells, pv.CellType.TETRA, dtype=np.uint8)
-            # _to_vtk_cell_array returns independent VTK-format connectivity.
-            pv_mesh = pv.UnstructuredGrid(
-                _to_vtk_cell_array(cells_np), celltypes, points_np
-            )
+            # Offsets-free connectivity; it shares storage with mesh.cells
+            # (kept alive by VTK) unless force_copy requests a deep copy.
+            cell_array = pv.CellArray.from_regular_cells(cells_np, deep=force_copy)
+            pv_mesh = pv.UnstructuredGrid()
+            pv_mesh.points = points_np
+            pv_mesh.SetCells(pv.CellType.TETRA, cell_array)
 
     else:
         raise ValueError(f"Unsupported {mesh.n_manifold_dims=}. Must be 0, 1, 2, or 3.")
@@ -1933,28 +1936,6 @@ def _from_pyvista_cell_centroids(
             pyvista_mesh.field_data, force_copy, nested_names=nested_names
         ),
     )
-
-
-def _to_vtk_cell_array(cells_np: np.ndarray) -> np.ndarray:
-    """Prepend per-cell vertex counts to a regular connectivity array.
-
-    Converts an ``(n_cells, n_verts_per_cell)`` array into the flat
-    VTK cell-array format ``[n_verts, v0, v1, ..., n_verts, v0, ...]``.
-
-    Parameters
-    ----------
-    cells_np : np.ndarray
-        Shape ``(n_cells, n_verts_per_cell)``.
-
-    Returns
-    -------
-    np.ndarray
-        Flattened 1-D array of dtype ``int64``.
-    """
-    n_verts = cells_np.shape[1]
-    return np.column_stack(
-        [np.full(len(cells_np), n_verts, dtype=np.int64), cells_np]
-    ).ravel()
 
 
 def _cell_facet_point_ids(cell: "vtk.vtkCell") -> Iterator[list[int]]:
