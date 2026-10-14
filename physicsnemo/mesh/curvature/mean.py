@@ -30,7 +30,7 @@ import torch
 from jaxtyping import Float
 
 from physicsnemo.mesh.curvature._laplacian import compute_laplacian_at_points
-from physicsnemo.mesh.geometry.dual_meshes import compute_dual_volumes_0
+from physicsnemo.mesh.geometry.dual_meshes import get_or_compute_dual_volumes_0
 from physicsnemo.mesh.utilities._tolerances import safe_eps
 
 if TYPE_CHECKING:
@@ -110,7 +110,7 @@ def mean_curvature_vertices(
     laplacian_magnitude = torch.norm(laplacian_coords, dim=-1)  # (n_points,)
 
     ### Compute dual volumes (Voronoi areas)
-    dual_volumes = compute_dual_volumes_0(mesh)  # (n_points,)
+    dual_volumes = get_or_compute_dual_volumes_0(mesh)  # (n_points,)
 
     ### Compute mean curvature
     # H = ||L @ points|| / (2 * dual_volume)
