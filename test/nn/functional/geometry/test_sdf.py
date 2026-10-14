@@ -166,6 +166,192 @@ def test_signed_distance_field_make_inputs_forward(device: str):
     assert hit_faces.dtype == torch.int64
 
 
+# Validate backward benchmark input generation contract for SDF.
+@requires_module("warp")
+def test_signed_distance_field_make_inputs_backward(device: str):
+    label, args, kwargs = next(
+        iter(SignedDistanceField.make_inputs_backward(device=device))
+    )
+    assert isinstance(label, str)
+    assert isinstance(args, tuple)
+    assert isinstance(kwargs, dict)
+    mesh_vertices, _, input_points = args
+    assert mesh_vertices.requires_grad
+    assert input_points.requires_grad
+
+    sdf_out, _, _ = SignedDistanceField.dispatch(
+        *args,
+        implementation="warp",
+        **kwargs,
+    )
+    sdf_out.square().mean().backward()
+    assert torch.isfinite(mesh_vertices.grad).all()
+    assert torch.isfinite(input_points.grad).all()
+
+
+# On one triangle, the gradient has a closed form: a query gets the unit
+# vector from its closest point, times the sign, and each vertex gets minus
+# its barycentric weight in the closest point times that vector.
+@requires_module("warp")
+def test_signed_distance_field_backward_closed_form(device: str):
+    device = torch.device(device)
+    mesh_vertices = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        device=device,
+        dtype=torch.float64,
+        requires_grad=True,
+    )
+    mesh_indices = torch.tensor([[0, 1, 2]], device=device, dtype=torch.int32)
+    # Above the face, below it, beside an edge, beyond a vertex, and on the
+    # face itself, where the face normal is the gradient.
+    query_points = torch.tensor(
+        [
+            [0.2, 0.3, 0.5],
+            [0.2, 0.3, -0.5],
+            [0.5, -0.5, 0.5],
+            [-1.0, -1.0, 1.0],
+            [0.2, 0.3, 0.0],
+        ],
+        device=device,
+        dtype=torch.float64,
+        requires_grad=True,
+    )
+
+    sdf_out, _, _ = signed_distance_field(mesh_vertices, mesh_indices, query_points)
+    grad_vertices, grad_points = torch.autograd.grad(
+        sdf_out.sum(), (mesh_vertices, query_points)
+    )
+
+    r2, r3 = 2.0**-0.5, 3.0**-0.5
+    expected_points = torch.tensor(
+        [
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0],
+            [0.0, -r2, r2],
+            [-r3, -r3, r3],
+            [0.0, 0.0, 1.0],
+        ],
+        device=device,
+        dtype=torch.float64,
+    )
+    # Barycentric weights of each query's closest point.
+    weights = torch.tensor(
+        [
+            [0.5, 0.2, 0.3],
+            [0.5, 0.2, 0.3],
+            [0.5, 0.5, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.5, 0.2, 0.3],
+        ],
+        device=device,
+        dtype=torch.float64,
+    )
+    expected_vertices = -weights.T @ expected_points
+    torch.testing.assert_close(grad_points, expected_points, atol=1e-6, rtol=0.0)
+    torch.testing.assert_close(grad_vertices, expected_vertices, atol=1e-6, rtol=0.0)
+
+
+def _central_difference(fn, x: torch.Tensor, step: float) -> torch.Tensor:
+    """Central finite-difference gradient of a scalar function of ``x``."""
+    grad = torch.zeros_like(x)
+    for i in range(x.numel()):
+        offset = torch.zeros_like(x)
+        offset.view(-1)[i] = step
+        grad.view(-1)[i] = (fn(x + offset) - fn(x - offset)) / (2.0 * step)
+    return grad
+
+
+# The gradient matches finite differences on a closed surface, with either
+# sign method.
+@requires_module("warp")
+@pytest.mark.parametrize("use_winding", [False, True])
+def test_signed_distance_field_backward_finite_differences(
+    use_winding: bool, device: str
+):
+    device = torch.device(device)
+    mesh_vertices = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        device=device,
+        dtype=torch.float64,
+    )
+    mesh_indices = torch.tensor(
+        [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]], device=device, dtype=torch.int32
+    )
+    # Inside and outside, nearest to faces, edges, and vertices, and away from
+    # the medial axis, where the gradient jumps.
+    query_points = torch.tensor(
+        [
+            [1.0, 1.0, 1.0],
+            [0.1, 0.15, 0.2],
+            [0.3, 0.3, -0.4],
+            [-0.3, 0.2, 0.4],
+            [1.2, -0.3, 0.1],
+            [0.05, 0.6, 0.1],
+        ],
+        device=device,
+        dtype=torch.float64,
+    )
+    weights = torch.linspace(0.5, 1.5, len(query_points), device=device)
+
+    def weighted_sdf(vertices: torch.Tensor, points: torch.Tensor) -> torch.Tensor:
+        sdf_out, _, _ = signed_distance_field(
+            vertices, mesh_indices, points, use_sign_winding_number=use_winding
+        )
+        return (sdf_out * weights).sum()
+
+    vertices = mesh_vertices.clone().requires_grad_(True)
+    points = query_points.clone().requires_grad_(True)
+    grad_vertices, grad_points = torch.autograd.grad(
+        weighted_sdf(vertices, points), (vertices, points)
+    )
+
+    # The op computes in float32, so the step is large against its rounding.
+    step = 1e-3
+    fd_vertices = _central_difference(
+        lambda v: weighted_sdf(v, query_points), mesh_vertices, step
+    )
+    fd_points = _central_difference(
+        lambda q: weighted_sdf(mesh_vertices, q), query_points, step
+    )
+    torch.testing.assert_close(grad_vertices, fd_vertices, atol=1e-3, rtol=0.0)
+    torch.testing.assert_close(grad_points, fd_points, atol=1e-3, rtol=0.0)
+
+
+# Only the distance carries gradients; queries beyond max_dist contribute
+# none, and their NaN distance does not leak into the vertex gradient.
+@requires_module("warp")
+def test_signed_distance_field_backward_outputs_and_misses(device: str):
+    device = torch.device(device)
+    mesh_vertices = _tetrahedron_vertices().to(device=device, dtype=torch.float32)
+    mesh_vertices.requires_grad_(True)
+    mesh_indices = torch.arange(12, device=device, dtype=torch.int32)
+    query_points = torch.tensor(
+        [[0.05, 0.1, 0.1], [100.0, 100.0, 100.0]],
+        device=device,
+        dtype=torch.float32,
+        requires_grad=True,
+    )
+
+    sdf_out, hit_points, hit_faces = signed_distance_field(
+        mesh_vertices, mesh_indices, query_points, max_dist=1.0
+    )
+    assert sdf_out.requires_grad
+    assert not hit_points.requires_grad
+    assert not hit_faces.requires_grad
+
+    grad_vertices, grad_points = torch.autograd.grad(
+        sdf_out.sum(), (mesh_vertices, query_points)
+    )
+    # The in-band query sits inside, nearest the x = 0 face.
+    torch.testing.assert_close(
+        grad_points,
+        torch.tensor([[-1.0, 0.0, 0.0], [0.0, 0.0, 0.0]], device=device),
+        atol=1e-5,
+        rtol=0.0,
+    )
+    assert torch.isfinite(grad_vertices).all()
+
+
 # Validate SDF input and shape error handling paths.
 @requires_module("warp")
 def test_signed_distance_field_error_handling(device: str):
