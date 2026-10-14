@@ -286,8 +286,8 @@ def _compute_leaf_aabbs(
 # BVH tensorclass
 # ---------------------------------------------------------------------------
 
-# Queries per BVH traversal in eager mode: bounds the traversal frontier's
-# memory, which otherwise grows with the number of queries.
+# Queries per BVH traversal for eager CPU queries: bounds the traversal
+# frontier's memory, which otherwise grows with the number of queries.
 _QUERY_CHUNK_SIZE = 32768
 
 
@@ -642,8 +642,9 @@ class BVH(TensorClass):
         r"""Find candidate cells that might contain each query point.
 
         Uses batched iterative BVH traversal where all queries are processed
-        simultaneously in a vectorized manner. Outside ``torch.compile``,
-        queries are traversed in slices of at most 32768 to bound memory.
+        simultaneously in a vectorized manner. CPU queries outside
+        ``torch.compile`` are traversed in slices of at most 32768 to bound
+        memory.
 
         Parameters
         ----------
@@ -674,7 +675,14 @@ class BVH(TensorClass):
         """
         self._validate_query_points(query_points)
         n_queries = query_points.shape[0]
-        if not torch.compiler.is_compiling() and n_queries > _QUERY_CHUNK_SIZE:
+        # CUDA does not slice: each traversal level synchronizes with the host
+        # several times, so slicing multiplies those syncs and kernel launches
+        # by the number of slices (about 30x slower validate at 10M cells).
+        if (
+            not torch.compiler.is_compiling()
+            and query_points.device.type == "cpu"
+            and n_queries > _QUERY_CHUNK_SIZE
+        ):
             ### Traverse fixed-size query slices. Each query's candidates (and its
             # max_candidates cutoff) are independent of the other queries, and
             # the adjacency sorts pairs by (query, cell), so the result is the same.
