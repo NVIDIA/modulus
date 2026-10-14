@@ -1436,7 +1436,11 @@ class Mesh(
         return cls(
             points=torch.cat([m.points for m in meshes], dim=0),
             cells=torch.cat(
-                [m.cells + offset for m, offset in zip(meshes, cell_index_offsets)],
+                [
+                    # The first mesh's offset is 0: cat its cells without a copy
+                    m.cells if i == 0 else m.cells + offset
+                    for i, (m, offset) in enumerate(zip(meshes, cell_index_offsets))
+                ],
                 dim=0,
             ),
             point_data=TensorDict.cat([m.point_data for m in meshes], dim=0),
