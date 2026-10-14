@@ -163,8 +163,9 @@ def unique_index_tuples(
             return_counts=return_counts,
         )
 
-    # Accumulate the keys in place in a copy, which never aliases ``rows``.
-    packed = rows[:, 0].to(dtype=torch.int64, copy=True)
+    # Accumulate the keys in place in a copy, which never aliases ``rows``. A
+    # single column is never written to, so it needs no copy.
+    packed = rows[:, 0].to(dtype=torch.int64, copy=n_columns > 1)
     for column_idx in range(1, n_columns):
         packed *= index_bound
         packed += rows[:, column_idx]
