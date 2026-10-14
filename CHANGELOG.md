@@ -204,6 +204,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `repair_mesh(fix_orientation=True)` orients every mesh except point clouds,
   instead of only surfaces in 3D.
 
+- `compute_mesh_statistics` reads all statistics in one device-to-host
+  transfer instead of about 20 `.item()` calls.
+
 ### Deprecated
 
 - Unified external aerodynamics recipe: `training.loss_type: rmse` is
