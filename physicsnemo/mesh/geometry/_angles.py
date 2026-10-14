@@ -55,6 +55,7 @@ import torch
 from jaxtyping import Float
 
 from physicsnemo.mesh.geometry._cell_areas import compute_cell_areas
+from physicsnemo.mesh.utilities._gather import gather_rows
 from physicsnemo.mesh.utilities._tolerances import safe_eps
 
 if TYPE_CHECKING:
@@ -229,7 +230,7 @@ def compute_vertex_angles(
         if points.numel() > 0:  # an empty tensor has no largest entry
             scale = points.detach().abs().amax()
             points = points / torch.where(scale > 0, scale, 1.0)
-        cell_vertices = points[mesh.cells]
+        cell_vertices = gather_rows(points, mesh.cells)
         v0 = cell_vertices[:, 0, :]
         v1 = cell_vertices[:, 1, :]
         v2 = cell_vertices[:, 2, :]
@@ -249,7 +250,7 @@ def compute_vertex_angles(
     # Computing in float64 avoids this with negligible overhead.
     points = mesh.points.double()
     n_verts = n_edges + 1
-    vertices = [points[mesh.cells[:, k]] for k in range(n_verts)]
+    vertices = [gather_rows(points, mesh.cells[:, k]) for k in range(n_verts)]
 
     ### Unit edge vectors, one per vertex pair a < b: (n_cells, n_spatial_dims)
     # The edges from vertex k are v_{(k+i+1) mod n_verts} - v_k. The edge from b

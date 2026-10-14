@@ -61,6 +61,7 @@ from physicsnemo.mesh.transformations.geometric import (
     transform,
     translate,
 )
+from physicsnemo.mesh.utilities._gather import gather_rows
 from physicsnemo.mesh.utilities._padding import _pad_by_tiling_last, _pad_with_value
 from physicsnemo.mesh.utilities._scatter_ops import scatter_aggregate
 from physicsnemo.mesh.utilities.mesh_repr import format_mesh_repr
@@ -895,7 +896,7 @@ class Mesh(
         """
         cached = self._cache.get(("cell", "centroids"), None)
         if cached is None:
-            cached = self.points[self.cells].mean(dim=1)
+            cached = gather_rows(self.points, self.cells).mean(dim=1)
             self._cache["cell", "centroids"] = cached
         return cached
 
@@ -924,9 +925,9 @@ class Mesh(
         """
         cached = self._cache.get(("cell", "areas"), None)
         if cached is None:
-            relative_vectors = (
-                self.points[self.cells[:, 1:]] - self.points[self.cells[:, :1]]
-            )
+            cell_vertices = gather_rows(self.points, self.cells)
+            relative_vectors = cell_vertices[:, 1:] - cell_vertices[:, :1]
+            del cell_vertices
             cached = compute_cell_areas(relative_vectors)
             self._cache["cell", "areas"] = cached
 
@@ -964,9 +965,9 @@ class Mesh(
                     f"Required: n_manifold_dims = n_spatial_dims - 1 (codimension-1).\n"
                     f"Current codimension: {self.codimension}"
                 )
-            rh_index = self.cells[:, 1:]
-            lh_index = self.cells[:, 0].unsqueeze(-1)
-            relative_vectors = self.points[rh_index] - self.points[lh_index]
+            cell_vertices = gather_rows(self.points, self.cells)
+            relative_vectors = cell_vertices[:, 1:] - cell_vertices[:, :1]
+            del cell_vertices
             cached = compute_cell_normals(relative_vectors)
             self._cache["cell", "normals"] = cached
 

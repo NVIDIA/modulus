@@ -53,6 +53,7 @@ from typing import TYPE_CHECKING
 import torch
 from jaxtyping import Float, Int
 
+from physicsnemo.mesh.utilities._gather import gather_rows
 from physicsnemo.mesh.utilities._tolerances import safe_eps
 from physicsnemo.utils._small_linalg import (
     best_base_first,
@@ -335,7 +336,8 @@ def compute_dual_volumes_0(mesh: "Mesh") -> Float[torch.Tensor, " n_points"]:
 
     elif n_manifold_dims == 2:
         ### 2D: Meyer et al. (2003) mixed Voronoi area (see docstring Notes)
-        cell_vertices = mesh.points[mesh.cells]  # (n_cells, 3, n_spatial_dims)
+        # (n_cells, 3, n_spatial_dims)
+        cell_vertices = gather_rows(mesh.points, mesh.cells)
         voronoi_areas = _compute_meyer_mixed_voronoi_areas(
             cell_vertices, cell_volumes
         )  # (n_cells * 3,)
@@ -596,7 +598,9 @@ def compute_cotan_weights_fem(
     # do: from the tip of a needle, a well-shaped cell would look degenerate.
     # cell_vertices: (n_cells, n_verts_per_cell, n_spatial_dims), rotated so
     # that vertex i is vertex (i + base) % n_verts_per_cell of mesh.cells
-    cell_vertices, base = best_base_first(mesh.points[mesh.cells].to(compute_dtype))
+    cell_vertices, base = best_base_first(
+        gather_rows(mesh.points, mesh.cells).to(compute_dtype)
+    )
     # E: (n_cells, n_manifold_dims, n_spatial_dims) - rows are e_k = v_k - v_0
     E = cell_vertices[:, 1:, :] - cell_vertices[:, :1, :]
 
@@ -752,7 +756,7 @@ def get_or_compute_circumcenters(
     """
     cached = mesh._cache.get(("cell", "circumcenters"), None)
     if cached is None:
-        parent_cell_vertices = mesh.points[mesh.cells]
+        parent_cell_vertices = gather_rows(mesh.points, mesh.cells)
         cached = compute_circumcenters(parent_cell_vertices)
         mesh._cache["cell", "circumcenters"] = cached
     return cached

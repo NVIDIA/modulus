@@ -29,6 +29,7 @@ from tensordict import TensorDict
 
 from physicsnemo.mesh.geometry._angles import compute_vertex_angles
 from physicsnemo.mesh.geometry._cell_areas import compute_cell_areas
+from physicsnemo.mesh.utilities._gather import gather_rows
 from physicsnemo.mesh.utilities._tolerances import safe_eps
 
 if TYPE_CHECKING:
@@ -69,7 +70,7 @@ def compute_cell_edge_lengths(
     if mesh.n_cells == 0:
         return torch.zeros((0, 0), dtype=mesh.points.dtype, device=mesh.points.device)
 
-    cell_vertices = mesh.points[mesh.cells]  # (n_cells, n_verts, n_dims)
+    cell_vertices = gather_rows(mesh.points, mesh.cells)  # (n_cells, n_verts, n_dims)
     n_verts_per_cell = mesh.n_manifold_dims + 1
 
     # All (i, j) pairs with i < j via upper-triangular indices
@@ -108,7 +109,10 @@ def _compute_min_simplex_altitudes(
         # reverse of the column order of compute_cell_edge_lengths
         facet_measures = edge_lengths.unbind(dim=1)[::-1]
     else:
-        vertices = [mesh.points[mesh.cells[:, k]] for k in range(n_vertices_per_cell)]
+        vertices = [
+            gather_rows(mesh.points, mesh.cells[:, k])
+            for k in range(n_vertices_per_cell)
+        ]
         facet_measures = []
         for k in range(n_vertices_per_cell):
             facet = [vertices[i] for i in range(n_vertices_per_cell) if i != k]

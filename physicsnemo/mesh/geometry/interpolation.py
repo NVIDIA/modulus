@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING
 import torch
 from jaxtyping import Float
 
+from physicsnemo.mesh.utilities._gather import gather_rows
 from physicsnemo.mesh.utilities._tolerances import safe_eps
 
 if TYPE_CHECKING:
@@ -135,9 +136,8 @@ def compute_barycentric_gradients(
         return gradients
 
     ### Get cell vertices
-    cell_vertices = mesh.points[
-        mesh.cells
-    ]  # (n_cells, n_vertices_per_cell, n_spatial_dims)
+    # (n_cells, n_vertices_per_cell, n_spatial_dims)
+    cell_vertices = gather_rows(mesh.points, mesh.cells)
 
     if n_manifold_dims == 2:
         ### 2D triangles: Efficient closed-form solution
