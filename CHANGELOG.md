@@ -258,6 +258,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `signed_distance_field`, in `physicsnemo.nn.functional` and
+  `physicsnemo.mesh.spatial`, supports backpropagation: the signed distance is
+  differentiable with respect to the mesh vertices and the query points.
+  Before, `backward` raised because the Warp op had no autograd formula. The
+  hit points and hit faces carry no gradients.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only
