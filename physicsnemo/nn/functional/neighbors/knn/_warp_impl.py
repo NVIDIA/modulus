@@ -47,15 +47,41 @@ STACK_SIZE = 32
 _MORTON_BITS = 21  # 3 x 21 bits fit in a non-negative int64
 _FLOAT_MAX = 3.0e38
 
-# Bit-spreading steps for 3D Morton codes: bit ``b`` of axis ``d`` moves to
-# position ``3 * b + d``.
-_SPREAD_STEPS_3D = (
-    (32, 0x001F_0000_0000_FFFF),
-    (16, 0x001F_0000_FF00_00FF),
-    (8, 0x100F_00F0_0F00_F00F),
-    (4, 0x10C3_0C30_C30C_30C3),
-    (2, 0x1249_2492_4924_9249),
-)
+_MORTON_MAX = float((1 << _MORTON_BITS) - 1)
+
+
+@wp.func
+def _spread_bits_3d(v: wp.uint64) -> wp.uint64:
+    # Move bit ``b`` of a 21-bit integer to position ``3 * b``.
+    v = (v | (v << wp.uint64(32))) & wp.uint64(0x001F00000000FFFF)
+    v = (v | (v << wp.uint64(16))) & wp.uint64(0x001F0000FF0000FF)
+    v = (v | (v << wp.uint64(8))) & wp.uint64(0x100F00F00F00F00F)
+    v = (v | (v << wp.uint64(4))) & wp.uint64(0x10C30C30C30C30C3)
+    v = (v | (v << wp.uint64(2))) & wp.uint64(0x1249249249249249)
+    return v
+
+
+@wp.func
+def _quantize(x: float, lo: float, extent: float) -> wp.uint64:
+    return wp.uint64(wp.clamp((x - lo) / extent * _MORTON_MAX, 0.0, _MORTON_MAX))
+
+
+@wp.kernel(enable_backward=False)
+def _morton_kernel(
+    x: wp.array(dtype=wp.vec3),
+    box: wp.array(dtype=wp.vec3),
+    codes: wp.array(dtype=wp.int64),
+):
+    i = wp.tid()
+    p = x[i]
+    lo = box[0]
+    ext = box[1]
+    code = (
+        _spread_bits_3d(_quantize(p[0], lo[0], ext[0]))
+        | (_spread_bits_3d(_quantize(p[1], lo[1], ext[1])) << wp.uint64(1))
+        | (_spread_bits_3d(_quantize(p[2], lo[2], ext[2])) << wp.uint64(2))
+    )
+    codes[i] = wp.int64(code)
 
 
 def morton_codes(
@@ -63,16 +89,29 @@ def morton_codes(
 ) -> torch.Tensor:
     """Return 63-bit Morton codes of float32 ``(n, 3)`` coordinates.
 
-    Each axis is quantized over ``[lo, lo + extent]`` independently and
-    clamped, so queries outside the points' bounding box are valid inputs.
+    Each axis is quantized to 21 bits over ``[lo, lo + extent]``
+    independently and clamped, so queries outside the points' bounding box
+    are valid inputs. Bit ``b`` of axis ``d`` goes to position ``3 * b + d``.
     """
-    max_val = (1 << _MORTON_BITS) - 1
+    codes = torch.empty(x.shape[0], dtype=torch.int64, device=x.device)
+    if x.shape[0] == 0:
+        return codes
     safe_extent = torch.where(extent != 0, extent, torch.ones_like(extent))
-    coords = ((x - lo) / safe_extent * max_val).long().clamp(0, max_val)
-    for shift, mask in _SPREAD_STEPS_3D:
-        coords = (coords | (coords << shift)) & mask
-    shifts = torch.arange(3, dtype=torch.int64, device=x.device)
-    return (coords << shifts).sum(dim=1)
+    box = torch.stack([lo, safe_extent]).contiguous()
+    wp_device, wp_stream = FunctionSpec.warp_launch_context(x)
+    with FunctionSpec.warp_stream_scope(wp_stream):
+        wp.launch(
+            _morton_kernel,
+            dim=x.shape[0],
+            inputs=[
+                wp.from_torch(x, dtype=wp.vec3, return_ctype=True),
+                wp.from_torch(box, dtype=wp.vec3, return_ctype=True),
+                wp.from_torch(codes, return_ctype=True),
+            ],
+            device=wp_device,
+            stream=wp_stream,
+        )
+    return codes
 
 
 def build_morton_tree(points: torch.Tensor, leaf_size: int = LEAF_SIZE) -> dict:
