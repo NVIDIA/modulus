@@ -465,6 +465,17 @@ class TestSubdivisionValidation:
         assert "timestamp" in subdivided.global_data
         assert subdivided.global_data["timestamp"] == 42.0
 
+    @pytest.mark.parametrize("filter", ["linear", "loop", "butterfly"])
+    def test_global_data_container_is_independent(self, device, filter):
+        """Adding global data to the result must not add it to the source."""
+        mesh = create_triangle_mesh(device)
+        mesh.global_data["timestamp"] = torch.tensor(42.0, device=device)
+
+        subdivided = mesh.subdivide(levels=1, filter=filter)
+        subdivided.global_data["new"] = torch.tensor(0.0, device=device)
+
+        assert "new" not in mesh.global_data.keys()
+
 
 ### Performance and Scaling Tests
 

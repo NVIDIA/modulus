@@ -370,7 +370,7 @@ def subdivide_butterfly(mesh: "Mesh") -> "Mesh":
         cells=child_cells,
         point_data=new_point_data,
         cell_data=new_cell_data,
-        global_data=mesh.global_data,
+        global_data=mesh.global_data.copy(),  # Shared tensors, own container
     )
 
     from physicsnemo.mesh.calculus.measure import (
