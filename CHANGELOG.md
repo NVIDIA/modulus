@@ -224,9 +224,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `compute_mesh_statistics` reads all statistics in one device-to-host
   transfer instead of about 20 `.item()` calls.
 - `physicsnemo.nn.functional.knn` uses a new exact Warp backend by default for
-  CUDA points of one to three dimensions in float32 or lower precision. On
-  DoMINO's surface-neighbor search it is about 100x faster than cuML, which
-  stays the default for float64 and higher-dimensional points.
+  CUDA points of one to three dimensions in float32, float16 or bfloat16. On
+  DoMINO's surface-neighbor search it is about 60x faster than cuML, which
+  stays the default for other CUDA points.
 
 ### Deprecated
 
