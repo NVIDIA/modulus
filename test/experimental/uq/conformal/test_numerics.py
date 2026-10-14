@@ -398,6 +398,17 @@ def _adversarial_pairs(dtype: torch.dtype, generator: torch.Generator):
     return pred, target
 
 
+def _to_device(device, *values):
+    """Move tensors, and the tensors inside aux mappings, to ``device``."""
+
+    def move(value):
+        if isinstance(value, dict):
+            return {key: t.to(device) for key, t in value.items()}
+        return None if value is None else value.to(device)
+
+    return tuple(move(value) for value in values)
+
+
 def _sigma_aux(pred, generator):
     scale = 10.0 ** (4.0 * torch.rand(pred.shape, generator=generator) - 2.0)
     return {"sigma": scale.to(pred.dtype)}
@@ -417,12 +428,13 @@ SCORE_CASES = [
 
 @pytest.mark.parametrize("dtype", FLOAT_DTYPES, ids=str)
 @pytest.mark.parametrize("score,aux_factory", SCORE_CASES)
-def test_score_boundary_inversion(score, aux_factory, dtype):
+def test_score_boundary_inversion(score, aux_factory, dtype, device):
     """Worst case (every element's radius equals its own score) and the
     scalar-threshold shape both keep admitted targets inside the band."""
     generator = torch.Generator().manual_seed(11)
     pred, target = _adversarial_pairs(dtype, generator)
     aux = aux_factory(pred, generator) if aux_factory else None
+    pred, target, aux = _to_device(device, pred, target, aux)
     radius = score.score(pred, target, aux=aux)
     assert_admitted_covered(score, pred, target, radius, aux)
     finite = radius[torch.isfinite(radius)]
@@ -450,8 +462,11 @@ KNOWN_COUNTEREXAMPLES = {
 
 
 @pytest.mark.parametrize("case", sorted(KNOWN_COUNTEREXAMPLES))
-def test_known_counterexamples_are_contained(case):
-    score, pred, interval_pred, target, aux, threshold = KNOWN_COUNTEREXAMPLES[case]
+def test_known_counterexamples_are_contained(case, device):
+    score, *tensors, threshold = KNOWN_COUNTEREXAMPLES[case]
+    pred, interval_pred, target, aux = _to_device(device, *tensors)
+    if threshold is not None:
+        threshold = threshold.to(device)
     s = score.score(pred, target, aux=aux)
     assert bool(torch.isfinite(s).all())
     threshold = s.amax() if threshold is None else threshold
@@ -462,12 +477,12 @@ def test_known_counterexamples_are_contained(case):
 
 
 @pytest.mark.parametrize("dtype", [_F32, _F64], ids=str)
-def test_interval_width_stays_tight(dtype):
+def test_interval_width_stays_tight(dtype, device):
     """Conservatism is a few ulps, not a blow-up: the excess over the exact
     width ``2r`` is the radius inflation (``~4 eps |r|``) plus one
     outward-rounded ulp per endpoint (``~2 eps |endpoint|`` each)."""
     generator = torch.Generator().manual_seed(19)
-    pred, target = _adversarial_pairs(dtype, generator)
+    pred, target = _to_device(device, *_adversarial_pairs(dtype, generator))
     score = AbsoluteErrorScore()
     radius = score.score(pred, target)
     finite = torch.isfinite(radius) & (radius > 0)
@@ -481,14 +496,15 @@ def test_interval_width_stays_tight(dtype):
     assert (width[finite] <= bound[finite]).all()
 
 
-def test_normalized_interval_stays_tight_for_large_sigma_in_low_precision():
+def test_normalized_interval_stays_tight_for_large_sigma_in_low_precision(device):
     """The absolute rounding floor is not multiplied by sigma (float16, sigma 6e4)."""
     score = NormalizedErrorScore()
-    pred = torch.zeros(3, dtype=_H)
-    aux = {"sigma": torch.full((3,), 60000.0, dtype=_H)}
-    lo, hi = score.interval(pred, torch.tensor(0.0, dtype=_F64), aux=aux)
+    pred = torch.zeros(3, dtype=_H, device=device)
+    aux = {"sigma": torch.full((3,), 60000.0, dtype=_H, device=device)}
+    zero = torch.tensor(0.0, dtype=_F64, device=device)
+    lo, hi = score.interval(pred, zero, aux=aux)
     assert float(hi.abs().max()) < 1e-3 and float(lo.abs().max()) < 1e-3
-    lo, hi = score.interval(pred, torch.tensor(1e-3, dtype=_F64), aux=aux)
+    lo, hi = score.interval(pred, zero + 1e-3, aux=aux)
     assert float(hi.max()) <= 60.0 * (1 + 8 * torch.finfo(_H).eps) + 0.0625
 
 

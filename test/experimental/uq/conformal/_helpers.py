@@ -158,7 +158,7 @@ def assert_predictor_covers_admitted(
     Returns the interval so callers can make further assertions.
     """
     score = predictor.score.score(prediction, target, aux=aux).double()
-    threshold = predictor.thresholds.double()
+    threshold = predictor.thresholds.to(prediction.device, torch.float64)
     if predictor.difficulty is not None:
         difficulty = predictor.difficulty(aux).double()
         threshold = threshold * broadcast_difficulty(difficulty, prediction, "field")
