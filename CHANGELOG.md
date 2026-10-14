@@ -169,7 +169,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - LSQ point gradients on large surface meshes are about 2x faster on GPU, and
   LSQ gradients (`Mesh` and `physicsnemo.nn.functional.mesh_lsq_gradient`)
-  synchronize the GPU much less often.
+  synchronize the GPU much less often. LSQ and DEC derivatives also need less
+  peak memory.
 
 - `Mesh.slice_points` picks its cell-remapping algorithm by mesh shape: the
   full-mesh lookup table as before, or a binary search over the kept ids when the
