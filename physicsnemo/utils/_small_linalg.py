@@ -497,6 +497,7 @@ def _normal_equations_lstsq(
     B = B.double()
     m = {(i, j): (a[i] * a[j]).sum(-1) for i in range(d) for j in range(i, d)}
     rhs = [(a[i].unsqueeze(-1) * B).sum(-2) for i in range(d)]  # each (..., n_rhs)
+    del a, B  # the float64 copies
 
     ### Divide M by its trace, the sum of its eigenvalues
     trace = sum(m[i, i] for i in range(d))  # (...)
@@ -517,98 +518,111 @@ def _normal_equations_lstsq(
 
         return [sum(entry(i, j) * v[j] for j in range(d)) for i in range(d)]
 
-    ### Pseudo-inverse of M in closed form, by its upper entries
-    # Written so that NaN counts as full rank and propagates.
-    if d == 1:
-        pseudo_inverse = m
-    elif d == 2:
-        det = m[0, 0] * m[1, 1] - m[0, 1].square()
-        # det is the product of the eigenvalues, the larger in [1/2, 1]
-        full_rank = ~(det <= eigenvalue_tolerance)
-        det = torch.where(full_rank, det, 1.0)
-        pseudo_inverse = {
-            (0, 0): torch.where(full_rank, m[1, 1] / det, m[0, 0]),
-            (0, 1): torch.where(full_rank, -m[0, 1] / det, m[0, 1]),
-            (1, 1): torch.where(full_rank, m[0, 0] / det, m[1, 1]),
-        }
-    else:
-        # Symmetric elimination of the largest diagonal entry, as in pivoted
-        # Cholesky: the 2x2 Schur complement S holds the two smallest
-        # eigenvalues at their own scale, so that its determinant resolves
-        # them (the 3x3 determinant cannot, when both are small).
-        p0 = (m[0, 0] >= m[1, 1]) & (m[0, 0] >= m[2, 2])
-        p1 = ~p0 & (m[1, 1] >= m[2, 2])
+    def _pseudo_inverse(
+        m: dict[tuple[int, int], torch.Tensor],
+    ) -> dict[tuple[int, int], torch.Tensor]:
+        """Closed-form pseudo-inverse; its intermediates are freed on return."""
+        ### Pseudo-inverse of M in closed form, by its upper entries
+        # Written so that NaN counts as full rank and propagates.
+        if d == 1:
+            pseudo_inverse = m
+        elif d == 2:
+            det = m[0, 0] * m[1, 1] - m[0, 1].square()
+            # det is the product of the eigenvalues, the larger in [1/2, 1]
+            full_rank = ~(det <= eigenvalue_tolerance)
+            det = torch.where(full_rank, det, 1.0)
+            pseudo_inverse = {
+                (0, 0): torch.where(full_rank, m[1, 1] / det, m[0, 0]),
+                (0, 1): torch.where(full_rank, -m[0, 1] / det, m[0, 1]),
+                (1, 1): torch.where(full_rank, m[0, 0] / det, m[1, 1]),
+            }
+        else:
+            # Symmetric elimination of the largest diagonal entry, as in pivoted
+            # Cholesky: the 2x2 Schur complement S holds the two smallest
+            # eigenvalues at their own scale, so that its determinant resolves
+            # them (the 3x3 determinant cannot, when both are small).
+            p0 = (m[0, 0] >= m[1, 1]) & (m[0, 0] >= m[2, 2])
+            p1 = ~p0 & (m[1, 1] >= m[2, 2])
 
-        def pick(x0: torch.Tensor, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
-            """x_p for the pivot p."""
-            return torch.where(p0, x0, torch.where(p1, x1, x2))
+            def pick(
+                x0: torch.Tensor, x1: torch.Tensor, x2: torch.Tensor
+            ) -> torch.Tensor:
+                """x_p for the pivot p."""
+                return torch.where(p0, x0, torch.where(p1, x1, x2))
 
-        # Rows and columns in the order (p, q, r), with (q, r) cyclic after p
-        pivot = pick(m[0, 0], m[1, 1], m[2, 2])  # at least 1/3, or 0 for A = 0
-        pivot = torch.where(pivot > 0, pivot, 1.0)
-        b_q, b_r = pick(m[0, 1], m[1, 2], m[0, 2]), pick(m[0, 2], m[0, 1], m[1, 2])
-        S_qq = pick(m[1, 1], m[2, 2], m[0, 0]) - b_q.square() / pivot
-        S_rr = pick(m[2, 2], m[0, 0], m[1, 1]) - b_r.square() / pivot
-        S_qr = pick(m[1, 2], m[0, 2], m[0, 1]) - b_q * b_r / pivot
-        trace_S = S_qq + S_rr  # within a factor 3 of the two smallest eigenvalues
-        det_S = S_qq * S_rr - S_qr.square()
-        rank_2 = ~(trace_S <= eigenvalue_tolerance)
-        full_rank = rank_2 & ~(det_S <= eigenvalue_tolerance * trace_S)
+            # Rows and columns in the order (p, q, r), with (q, r) cyclic after p
+            pivot = pick(m[0, 0], m[1, 1], m[2, 2])  # at least 1/3, or 0 for A = 0
+            pivot = torch.where(pivot > 0, pivot, 1.0)
+            b_q, b_r = pick(m[0, 1], m[1, 2], m[0, 2]), pick(m[0, 2], m[0, 1], m[1, 2])
+            S_qq = pick(m[1, 1], m[2, 2], m[0, 0]) - b_q.square() / pivot
+            S_rr = pick(m[2, 2], m[0, 0], m[1, 1]) - b_r.square() / pivot
+            S_qr = pick(m[1, 2], m[0, 2], m[0, 1]) - b_q * b_r / pivot
+            trace_S = S_qq + S_rr  # within a factor 3 of the two smallest eigenvalues
+            det_S = S_qq * S_rr - S_qr.square()
+            rank_2 = ~(trace_S <= eigenvalue_tolerance)
+            full_rank = rank_2 & ~(det_S <= eigenvalue_tolerance * trace_S)
 
-        # Inverse of S at full rank, else its pseudo-inverse S / tr(S)^2 (rank 1)
-        det_S = torch.where(full_rank, det_S, 1.0)
-        trace_S2 = torch.where(rank_2, trace_S, 1.0).square()
-        Sg_qq = torch.where(full_rank, S_rr / det_S, S_qq / trace_S2)
-        Sg_rr = torch.where(full_rank, S_qq / det_S, S_rr / trace_S2)
-        Sg_qr = torch.where(full_rank, -S_qr / det_S, S_qr / trace_S2)
-        # A generalized inverse G of M by block elimination: M G M = M
-        h_q = (Sg_qq * b_q + Sg_qr * b_r) / pivot
-        h_r = (Sg_qr * b_q + Sg_rr * b_r) / pivot
-        G = {
-            (0, 0): (1 + b_q * h_q + b_r * h_r) / pivot,
-            (0, 1): -h_q,
-            (0, 2): -h_r,
-            (1, 1): Sg_qq,
-            (1, 2): Sg_qr,
-            (2, 2): Sg_rr,
-        }
+            # Inverse of S at full rank, else its pseudo-inverse S / tr(S)^2 (rank 1)
+            det_S = torch.where(full_rank, det_S, 1.0)
+            trace_S2 = torch.where(rank_2, trace_S, 1.0).square()
+            Sg_qq = torch.where(full_rank, S_rr / det_S, S_qq / trace_S2)
+            Sg_rr = torch.where(full_rank, S_qq / det_S, S_rr / trace_S2)
+            Sg_qr = torch.where(full_rank, -S_qr / det_S, S_qr / trace_S2)
+            # A generalized inverse G of M by block elimination: M G M = M
+            h_q = (Sg_qq * b_q + Sg_qr * b_r) / pivot
+            h_r = (Sg_qr * b_q + Sg_rr * b_r) / pivot
+            G = {
+                (0, 0): (1 + b_q * h_q + b_r * h_r) / pivot,
+                (0, 1): -h_q,
+                (0, 2): -h_r,
+                (1, 1): Sg_qq,
+                (1, 2): Sg_qr,
+                (2, 2): Sg_rr,
+            }
 
-        # At rank 2 the pseudo-inverse is P G P, with P = I - n n^T the
-        # projector onto the range of M. Its null vector n solves S (s_q, s_r)
-        # = 0; take the column of adj(S) with the larger diagonal entry.
-        larger_rr = S_rr >= S_qq
-        s_q = torch.where(larger_rr, S_rr, -S_qr)
-        s_r = torch.where(larger_rr, -S_qr, S_qq)
-        s_p = -(b_q * s_q + b_r * s_r) / pivot
-        # Guarded before the square root, whose gradient at 0 is infinite
-        null_norm2 = s_p.square() + s_q.square() + s_r.square()
-        null_norm = torch.where(null_norm2 > 0, null_norm2, 1.0).sqrt()
-        # n = 0 at full rank, where P G P = G
-        n = [torch.where(full_rank, 0.0, x / null_norm) for x in (s_p, s_q, s_r)]
-        Gn = times(G, n)
-        nGn = sum(n_i * g_i for n_i, g_i in zip(n, Gn))
-        PGP = {
-            (i, j): G[i, j] - n[i] * Gn[j] - Gn[i] * n[j] + nGn * n[i] * n[j]
-            for i in range(3)
-            for j in range(i, 3)
-        }
+            # At rank 2 the pseudo-inverse is P G P, with P = I - n n^T the
+            # projector onto the range of M. Its null vector n solves S (s_q, s_r)
+            # = 0; take the column of adj(S) with the larger diagonal entry.
+            larger_rr = S_rr >= S_qq
+            s_q = torch.where(larger_rr, S_rr, -S_qr)
+            s_r = torch.where(larger_rr, -S_qr, S_qq)
+            s_p = -(b_q * s_q + b_r * s_r) / pivot
+            # Guarded before the square root, whose gradient at 0 is infinite
+            null_norm2 = s_p.square() + s_q.square() + s_r.square()
+            null_norm = torch.where(null_norm2 > 0, null_norm2, 1.0).sqrt()
+            # n = 0 at full rank, where P G P = G
+            n = [torch.where(full_rank, 0.0, x / null_norm) for x in (s_p, s_q, s_r)]
+            Gn = times(G, n)
+            nGn = sum(n_i * g_i for n_i, g_i in zip(n, Gn))
+            PGP = {
+                (i, j): G[i, j] - n[i] * Gn[j] - Gn[i] * n[j] + nGn * n[i] * n[j]
+                for i in range(3)
+                for j in range(i, 3)
+            }
 
-        # Back to the original order (p, q, r = 0, 1, 2 / 1, 2, 0 / 2, 0, 1),
-        # and M itself at rank 1
-        unpermuted = {
-            (0, 0): pick(PGP[0, 0], PGP[2, 2], PGP[1, 1]),
-            (0, 1): pick(PGP[0, 1], PGP[0, 2], PGP[1, 2]),
-            (0, 2): pick(PGP[0, 2], PGP[1, 2], PGP[0, 1]),
-            (1, 1): pick(PGP[1, 1], PGP[0, 0], PGP[2, 2]),
-            (1, 2): pick(PGP[1, 2], PGP[0, 1], PGP[0, 2]),
-            (2, 2): pick(PGP[2, 2], PGP[1, 1], PGP[0, 0]),
-        }
-        pseudo_inverse = {
-            key: torch.where(rank_2, value, m[key]) for key, value in unpermuted.items()
-        }
+            # Back to the original order (p, q, r = 0, 1, 2 / 1, 2, 0 / 2, 0, 1),
+            # and M itself at rank 1
+            unpermuted = {
+                (0, 0): pick(PGP[0, 0], PGP[2, 2], PGP[1, 1]),
+                (0, 1): pick(PGP[0, 1], PGP[0, 2], PGP[1, 2]),
+                (0, 2): pick(PGP[0, 2], PGP[1, 2], PGP[0, 1]),
+                (1, 1): pick(PGP[1, 1], PGP[0, 0], PGP[2, 2]),
+                (1, 2): pick(PGP[1, 2], PGP[0, 1], PGP[0, 2]),
+                (2, 2): pick(PGP[2, 2], PGP[1, 1], PGP[0, 0]),
+            }
+            pseudo_inverse = {
+                key: torch.where(rank_2, value, m[key])
+                for key, value in unpermuted.items()
+            }
+        return pseudo_inverse
 
+    pseudo_inverse = _pseudo_inverse(m)
     X = times(pseudo_inverse, rhs)
-    return (torch.stack(X, dim=-2) / trace[..., None, None]).to(A.dtype)
+    del pseudo_inverse, rhs
+    # Divided and cast one row at a time, so that no float64 (..., d, n_rhs)
+    # quotient is ever alive
+    trace = trace[..., None]
+    return torch.stack([(x / trace).to(A.dtype) for x in X], dim=-2)
 
 
 def _solve_upper_triangular(
