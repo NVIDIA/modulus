@@ -45,7 +45,7 @@ from physicsnemo.mesh.calculus import (
     integrate_samples,
 )
 from physicsnemo.mesh.geometry._cell_areas import compute_cell_areas
-from physicsnemo.mesh.geometry._cell_normals import compute_cell_normals
+from physicsnemo.mesh.geometry._cell_normals import _compute_cell_normals_from_points
 from physicsnemo.mesh.remeshing import remesh
 from physicsnemo.mesh.transformations.deform import (
     displace,
@@ -965,10 +965,7 @@ class Mesh(
                     f"Required: n_manifold_dims = n_spatial_dims - 1 (codimension-1).\n"
                     f"Current codimension: {self.codimension}"
                 )
-            cell_vertices = gather_rows(self.points, self.cells)
-            relative_vectors = cell_vertices[:, 1:] - cell_vertices[:, :1]
-            del cell_vertices
-            cached = compute_cell_normals(relative_vectors)
+            cached = _compute_cell_normals_from_points(self.points, self.cells)
             self._cache["cell", "normals"] = cached
 
         return cached

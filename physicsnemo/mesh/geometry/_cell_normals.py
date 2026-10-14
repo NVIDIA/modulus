@@ -32,8 +32,9 @@ factorization which does not support reduced-precision dtypes.
 """
 
 import torch
-from jaxtyping import Float
+from jaxtyping import Float, Int
 
+from physicsnemo.mesh.utilities._gather import gather_rows
 from physicsnemo.nn.functional import safe_normalize
 from physicsnemo.utils._small_linalg import small_det
 
@@ -87,6 +88,33 @@ def compute_cell_normals(
 # ---------------------------------------------------------------------------
 # Specialized branches
 # ---------------------------------------------------------------------------
+
+
+def _compute_cell_normals_from_points(
+    points: Float[torch.Tensor, "n_points n_spatial_dims"],
+    cells: Int[torch.Tensor, "n_cells n_vertices_per_cell"],
+) -> Float[torch.Tensor, "n_cells n_spatial_dims"]:
+    """:func:`compute_cell_normals` of the cells' edge vectors, from the points.
+
+    Gathers the cell vertices one at a time, so that in 2D and 3D nothing
+    larger than the unnormalized normals is alive while they are normalized.
+    The values are identical to those of :func:`compute_cell_normals`.
+    """
+    v0 = gather_rows(points, cells[:, 0])
+    edges = [gather_rows(points, cells[:, k]) - v0 for k in range(1, cells.shape[1])]
+    del v0
+
+    match points.shape[-1]:
+        case 2:
+            # 90-degree CCW rotation, as in _normals_2d
+            normals = torch.stack([-edges[0][:, 1], edges[0][:, 0]], dim=-1)
+        case 3:
+            # Cross product, as in _normals_3d
+            normals = torch.linalg.cross(edges[0], edges[1])
+        case _:
+            return _normals_general(torch.stack(edges, dim=1))
+    del edges
+    return safe_normalize(normals, dim=-1)
 
 
 def _normals_2d(
