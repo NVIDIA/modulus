@@ -44,6 +44,18 @@ from utils.nn import build_condition, get_dit, sample_flow
 from utils.plots import comparison_plot
 
 
+class ResumableSampler(DistributedSampler):
+    r"""Distributed sampler that skips the first ``start`` indices of the next
+    epoch, so that a resumed run continues where it stopped."""
+
+    start = 0
+
+    def __iter__(self):
+        indices = list(super().__iter__())[self.start :]
+        self.start = 0
+        return iter(indices)
+
+
 class Trainer:
     r"""
     Trainer for x-prediction rectified flow matching.
@@ -182,7 +194,7 @@ class Trainer:
 
         (rank, world_size) = (self.dist.rank, self.dist.world_size)
         num_workers = self.cfg.training.num_data_workers
-        self.train_sampler = DistributedSampler(
+        self.train_sampler = ResumableSampler(
             self.dataset_train,
             num_replicas=world_size,
             rank=rank,
@@ -219,12 +231,10 @@ class Trainer:
 
     def _train_batches(self):
         r"""Iterate over the training data indefinitely, reshuffling every epoch.
-        A resumed run starts from the epoch reached before the restart."""
-        epoch = (
-            self.total_steps
-            * self.num_accumulation_rounds
-            // len(self.train_dataloader)
-        )
+        A resumed run continues with the epoch and the batch where it stopped."""
+        batches_done = self.total_steps * self.num_accumulation_rounds
+        (epoch, batches_in_epoch) = divmod(batches_done, len(self.train_dataloader))
+        self.train_sampler.start = batches_in_epoch * self.local_batch_size
         while True:
             self.train_sampler.set_epoch(epoch)
             yield from self.train_dataloader
@@ -539,8 +549,27 @@ class Trainer:
                 epoch=self.total_steps,
                 metadata={"val_loss": self.val_loss},
             )
+            self._remove_old_checkpoints()
         if self.dist.world_size > 1:
             torch.distributed.barrier()
+
+    def _remove_old_checkpoints(self):
+        r"""Keep only the ``training.checkpoints_to_keep`` most recent pairs of
+        model and training state files; ``None`` keeps every checkpoint."""
+        keep = self.cfg.training.checkpoints_to_keep
+        if keep is None:
+            return
+        steps = sorted(
+            int(name.split(".")[-2])
+            for name in os.listdir(self.ckpt_path)
+            if name.startswith("checkpoint.0.") and name.endswith(".pt")
+        )
+        model_name = type(self.net).__name__
+        for step in steps[: max(len(steps) - keep, 0)]:
+            for name in (f"checkpoint.0.{step}.pt", f"{model_name}.0.{step}.mdlus"):
+                path = os.path.join(self.ckpt_path, name)
+                if os.path.exists(path):
+                    os.remove(path)
 
     # =========================================================================
     # Main training loop

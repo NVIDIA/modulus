@@ -28,6 +28,7 @@ initial_weights: null # if not null, a .mdlus checkpoint to load weights at the 
 # Logging frequency
 print_progress_freq: 100 # How often to print progress, measured in number of training steps
 checkpoint_freq: 1562 # How often to save the checkpoints, measured in number of training steps (1562 steps = 100k samples)
+checkpoints_to_keep: 5 # Number of most recent checkpoints to keep, older ones are deleted; null keeps all (8 GB each)
 validation_freq: 1562 # How often to record the validation loss, measured in number of training steps
 
 # Optimization hyperparameters

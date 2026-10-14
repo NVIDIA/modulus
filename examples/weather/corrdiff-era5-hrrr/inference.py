@@ -82,23 +82,30 @@ def main(cfg: DictConfig):
     condition = build_condition(
         torch.from_numpy(item["background"])[None].to(device), scalar_conditions
     )
+    # Keep only the channels to save or plot, in physical units
+    output_variables = list(cfg.inference.output_variables) or state_channels
+    variables = list(
+        dict.fromkeys(output_variables + list(cfg.inference.plot_variables))
+    )
+    kept_channels = [state_channels.index(v) for v in variables]
+
     shape = (1, len(state_channels)) + tuple(dataset.image_shape())
     samples = []
     for i in range(cfg.inference.num_ensembles):
         torch.manual_seed(cfg.inference.seed + i)
         with torch.autocast("cuda", dtype=torch.bfloat16):
             x = sample_flow(net, condition, shape, noise_scheduler, **sampler_args)
-        samples.append(x[0].float().cpu().numpy())
+        x = dataset.denormalize_state(x[0].float().cpu().numpy())
+        samples.append(x[kept_channels])
         logger.info(f"Generated sample {i + 1}/{cfg.inference.num_ensembles}")
 
-    samples = dataset.denormalize_state(np.stack(samples))
-    truth = dataset.denormalize_state(item["state"])
+    samples = np.stack(samples)
+    truth = dataset.denormalize_state(item["state"])[kept_channels]
     background = dataset.denormalize_background(item["background"])
 
     # Ensemble-mean error and ensemble spread compared with HRRR
-    output_variables = list(cfg.inference.output_variables) or state_channels
     for variable in output_variables:
-        c = state_channels.index(variable)
+        c = variables.index(variable)
         rmse = np.sqrt(np.mean((samples[:, c].mean(axis=0) - truth[c]) ** 2))
         spread = np.sqrt(np.mean(samples[:, c].var(axis=0)))
         logger.info(f"{variable}: ensemble-mean RMSE {rmse:.4g}, spread {spread:.4g}")
@@ -106,7 +113,7 @@ def main(cfg: DictConfig):
     # Save the samples and the HRRR truth
     data_vars = {}
     for variable in output_variables:
-        c = state_channels.index(variable)
+        c = variables.index(variable)
         data_vars[variable] = (("ensemble", "y", "x"), samples[:, c])
         data_vars[f"{variable}_hrrr"] = (("y", "x"), truth[c])
     output = xr.Dataset(
@@ -123,7 +130,7 @@ def main(cfg: DictConfig):
 
     # Plot the ERA5 input (if available), up to two samples, and HRRR
     for variable in cfg.inference.plot_variables:
-        c = state_channels.index(variable)
+        c = variables.index(variable)
         panels = [
             (f"Sample {i + 1}", samples[i, c]) for i in range(min(len(samples), 2))
         ]

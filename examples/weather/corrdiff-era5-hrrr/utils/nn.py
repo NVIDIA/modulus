@@ -16,8 +16,10 @@
 
 from typing import Any, Literal
 
+from jaxtyping import Float
 from tensordict import TensorDict
 import torch
+from torch import Tensor
 
 from physicsnemo.core import Module
 from physicsnemo.diffusion.noise_schedulers import RectifiedFlowNoiseScheduler
@@ -40,6 +42,23 @@ class TimeScaledModel(Module):
         Backbone called as ``model(x, t, condition=condition)``.
     time_scale : float, optional
         Factor applied to the time before calling the backbone, by default 999.
+
+    Forward
+    -------
+    x : torch.Tensor
+        Noisy state of shape :math:`(B, C, H, W)`.
+    t : torch.Tensor
+        Flow-matching times of shape :math:`(B,)`.
+    condition : torch.Tensor | TensorDict | None, optional
+        Condition passed to the backbone, see :func:`build_condition`.
+    **model_kwargs : Any
+        Other keyword arguments passed to the backbone.
+
+    Outputs
+    -------
+    torch.Tensor
+        Backbone output of shape :math:`(B, C, H, W)`, the predicted clean
+        state.
     """
 
     def __init__(self, model: Module, time_scale: float = 999.0):
@@ -47,7 +66,22 @@ class TimeScaledModel(Module):
         self.model = model
         self.time_scale = time_scale
 
-    def forward(self, x, t, condition=None, **model_kwargs):
+    def forward(
+        self,
+        x: Float[Tensor, "B C H W"],
+        t: Float[Tensor, " B"],
+        condition: Tensor | TensorDict | None = None,
+        **model_kwargs: Any,
+    ) -> Float[Tensor, "B C H W"]:
+        if not torch.compiler.is_compiling():
+            if x.ndim != 4:
+                raise ValueError(
+                    f"Expected tensor of shape (B, C, H, W) but got tensor of shape {tuple(x.shape)}"
+                )
+            if t.shape != (x.shape[0],):
+                raise ValueError(
+                    f"Expected tensor of shape ({x.shape[0]},) but got tensor of shape {tuple(t.shape)}"
+                )
         # Scale in float32: a reduced precision t would quantize the scaled
         # time to a coarser grid than in training
         return self.model(

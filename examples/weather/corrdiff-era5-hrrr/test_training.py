@@ -14,15 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import os
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
 import torch
+from torch.utils.data import DistributedSampler
+import xarray as xr
 from hydra import compose, initialize
 from omegaconf import DictConfig, OmegaConf
 
 import train
+from datasets.hrrr_era5 import HRRRERA5Dataset
 from utils.nn import TimeScaledModel, build_condition, get_dit, sample_flow
 from utils.trainer import Trainer
 
@@ -96,6 +102,8 @@ def test_checkpointing(tmp_path: Path, cfg: DictConfig):
     cfg.training.rundir = rundir
     cfg.training.batch_size = 2 * DistributedManager().world_size
 
+    cfg.training.checkpoints_to_keep = 2
+
     # Train for 10 steps, then continue the same run to 20 steps
     train.main(cfg)
     cfg.training.total_train_steps = 20
@@ -104,8 +112,45 @@ def test_checkpointing(tmp_path: Path, cfg: DictConfig):
     assert trainer.scheduler.last_epoch == 10
     trainer.train()
 
+    # Only the two most recent checkpoints remain
     checkpoint_path = os.path.join(rundir, "checkpoints")
-    assert os.path.isfile(os.path.join(checkpoint_path, "TimeScaledModel.0.20.mdlus"))
+    assert sorted(os.listdir(checkpoint_path)) == [
+        "TimeScaledModel.0.15.mdlus",
+        "TimeScaledModel.0.20.mdlus",
+        "checkpoint.0.15.pt",
+        "checkpoint.0.20.pt",
+    ]
+
+
+def test_resume_mid_epoch(tmp_path: Path, cfg: DictConfig):
+    """Test that a run resumed in the middle of an epoch continues with the
+    next batch of that epoch."""
+    dist = DistributedManager()
+    cfg.training.rundir = _setup_rundir(tmp_path)
+    cfg.training.batch_size = 2 * dist.world_size
+    cfg.training.total_train_steps = 3
+    train.main(cfg)
+    trainer = Trainer(cfg)
+
+    # The order of the first epoch on this rank, and the batch that comes next
+    order = list(
+        DistributedSampler(
+            trainer.dataset_train,
+            num_replicas=dist.world_size,
+            rank=dist.rank,
+            shuffle=True,
+            seed=cfg.training.seed,
+            drop_last=True,
+        )
+    )
+    batches_done = trainer.total_steps * trainer.num_accumulation_rounds
+    assert 0 < batches_done < len(trainer.train_dataloader)
+    batch_size = trainer.local_batch_size
+    expected = order[batches_done * batch_size : (batches_done + 1) * batch_size]
+
+    batch = next(trainer.dataset_iterator)
+    expected_state = np.stack([trainer.dataset_train[i]["state"] for i in expected])
+    assert torch.equal(batch["state"], torch.from_numpy(expected_state))
 
 
 @pytest.mark.parametrize("t", [None, [0.0, 1.0]])
@@ -146,6 +191,134 @@ def test_loss_equals_x0_mse(
         expected = x0_mse(x0, t=t, condition=condition)
     assert torch.isfinite(loss).all()
     assert torch.equal(loss, expected)
+
+
+def _write_hrrr_era5_data(path: Path) -> dict:
+    """Write a small dataset in the layout that HRRRERA5Dataset expects. The ERA5
+    fields are linear in latitude and longitude, so their bilinear
+    interpolation to the HRRR grid is exact."""
+    times = pd.date_range("2025-01-01", periods=6, freq="h")
+    (y, x) = np.meshgrid(np.arange(12), np.arange(16), indexing="ij")
+    lat = (35.0 + 0.5 * y + 0.1 * x).astype(np.float32)
+    lon = (-105.0 + 0.6 * x + 0.05 * y).astype(np.float32)
+    rng = np.random.default_rng(0)
+    hrrr = rng.normal(size=(6, 2, 12, 16)).astype(np.float32)
+    xr.Dataset(
+        {
+            "HRRR": (("time", "channel", "y", "x"), hrrr),
+            "latitude": (("y", "x"), lat),
+            "longitude": (("y", "x"), lon),
+            "valid_data": ("time", np.array([True] * 5 + [False])),  # last hour invalid
+        },
+        coords={"time": times, "channel": np.array(["u10m", "t2m"])},
+    ).to_zarr(path / "hrrr-conus" / "2025.zarr")
+
+    # ERA5 fields c0 + c1 * lat + c2 * lon, without the hour at index 4
+    (era5_lat, era5_lon) = (np.arange(50.0, 29.0, -1.0), np.arange(-110.0, -89.0))
+    coefs = np.array([[1.0, 0.2, -0.3], [2.0, -0.1, 0.4], [3.0, 0.05, 0.1]])
+    fields = (
+        coefs[:, 0, None, None]
+        + coefs[:, 1, None, None] * era5_lat[:, None]
+        + coefs[:, 2, None, None] * era5_lon[None, :]
+    )
+    era5_times = times[[0, 1, 2, 3, 5]]
+    xr.Dataset(
+        {
+            "data": (
+                ("time", "channel", "latitude", "longitude"),
+                np.repeat(fields[None], len(era5_times), axis=0).astype(np.float32),
+            )
+        },
+        coords={
+            "time": era5_times,
+            "channel": np.array(["u10m", "tcwv", "sp"]),
+            "latitude": era5_lat,
+            "longitude": era5_lon,
+        },
+    ).to_zarr(path / "era5-conus" / "2025.zarr")
+
+    invariant_names = ["elev_mean", "elev_std", "lsm_mean"]
+    invariants = rng.normal(size=(3, 12, 16)).astype(np.float32)
+    os.makedirs(path / "invariants")
+    xr.Dataset(
+        {v: (("y", "x"), invariants[k]) for (k, v) in enumerate(invariant_names)}
+    ).to_netcdf(path / "invariants" / "invariants_HRRR.nc")
+
+    stats = {
+        "hrrr": {"u10m": {"mean": 0.5, "std": 2.0}, "t2m": {"mean": -1.0, "std": 4.0}},
+        "era5": {v: {"mean": 1.0, "std": 3.0} for v in ["u10m", "tcwv", "sp"]},
+        "invariant": {v: {"mean": 0.1, "std": 2.0} for v in invariant_names},
+    }
+    os.makedirs(path / "stats")
+    with open(path / "stats" / "hrrr_era5_stats.json", "w") as f:
+        json.dump(stats, f)
+    return {
+        "hrrr": hrrr,
+        "lat": lat,
+        "lon": lon,
+        "coefs": coefs,
+        "invariants": invariants,
+        "times": times,
+    }
+
+
+def test_hrrr_era5_dataset(tmp_path: Path):
+    """Test time filtering, cropping, interpolation, normalization, patches,
+    and presence flags of HRRRERA5Dataset on a small synthetic dataset."""
+    data = _write_hrrr_era5_data(tmp_path)
+    params = dict(
+        data_path=str(tmp_path),
+        years=[2025],
+        time_range_train=["2025-01-01T00:00:00", "2025-01-01T02:00:00"],
+        time_range_valid=["2025-01-01T02:00:00", "2025-01-02T00:00:00"],
+        crop_window=[[1, 11], [2, 14]],
+        drop_variables=["tcwv", "sp"],
+        drop_prob=1.0,
+    )
+    crop = (slice(1, 11), slice(2, 14))
+
+    # Validation on the full domain: the dataset skips the invalid HRRR hour
+    # and the hour missing in ERA5, and keeps every input
+    valid = HRRRERA5Dataset(train=False, patch_shape=None, **params)
+    assert list(valid.times) == list(data["times"][[2, 3]])
+    assert valid.image_shape() == (10, 12)
+    assert len(valid.background_channels()) == 3 + 1 + 3
+    item = valid[0]
+    np.testing.assert_allclose(
+        item["state"],
+        (data["hrrr"][2][:, crop[0], crop[1]] - np.array([0.5, -1.0])[:, None, None])
+        / np.array([2.0, 4.0])[:, None, None],
+        rtol=1e-6,
+    )
+    (lat, lon) = (data["lat"][crop], data["lon"][crop])
+    coefs = data["coefs"]
+    era5 = (
+        coefs[:, 0, None, None]
+        + coefs[:, 1, None, None] * lat
+        + coefs[:, 2, None, None] * lon
+    )
+    np.testing.assert_allclose(item["background"][:3], (era5 - 1.0) / 3.0, atol=1e-4)
+    np.testing.assert_allclose(
+        item["background"][4:],
+        (data["invariants"][:, crop[0], crop[1]] - 0.1) / 2.0,
+        rtol=1e-6,
+    )
+    year_phase = 2 * np.pi * (2 / 24) / 365.25  # 02:00 on January 1
+    np.testing.assert_allclose(
+        item["scalar_conditions"],
+        [np.sin(year_phase), np.cos(year_phase), 1, 1],
+        rtol=1e-5,
+    )
+
+    # Training patches: with drop_prob = 1, the dataset replaces tcwv and sp by
+    # their climatological mean (zero) and sets their presence flags to zero
+    train_ds = HRRRERA5Dataset(train=True, patch_shape=[4, 4], **params)
+    assert len(train_ds) == 2
+    item = train_ds[1]
+    assert item["state"].shape == (2, 4, 4)
+    assert item["background"].shape == (7, 4, 4)
+    assert np.all(item["background"][1:3] == 0)
+    np.testing.assert_array_equal(item["scalar_conditions"][2:], [0, 0])
 
 
 class GaussianX0Predictor(torch.nn.Module):
