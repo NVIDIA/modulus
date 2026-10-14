@@ -70,28 +70,24 @@ def get_point_to_cells_adjacency(mesh: "Mesh") -> Adjacency:
             device=mesh.points.device,
         )
 
-    from physicsnemo.mesh.neighbors._adjacency import build_adjacency_from_pairs
+    ### Sort the flattened cells by point id
+    # The flattened cells list each cell's points in cell order, so a stable
+    # sort by point id alone keeps each point's cells ascending, and the cell of
+    # each sorted entry is its flat position // n_vertices_per_cell. No
+    # composite (point, cell) keys and no cell-id array are needed.
+    n_vertices_per_cell = mesh.cells.shape[1]
+    sorted_point_ids, order = torch.sort(mesh.cells.reshape(-1), stable=True)
 
-    ### Create (point_id, cell_id) pairs for all vertices in all cells
-    n_cells, n_vertices_per_cell = mesh.cells.shape
-
-    # Flatten cells to get all point indices
-    # Shape: (n_cells * n_vertices_per_cell,)
-    point_ids = mesh.cells.reshape(-1)
-
-    # Create corresponding cell indices for each point
-    # Shape: (n_cells * n_vertices_per_cell,)
-    cell_ids = torch.arange(
-        n_cells, dtype=torch.int64, device=mesh.cells.device
-    ).repeat_interleave(n_vertices_per_cell)
-
-    ### Build adjacency using shared utility
-    return build_adjacency_from_pairs(
-        source_indices=point_ids,
-        target_indices=cell_ids,
-        n_sources=mesh.n_points,
-        n_targets=mesh.n_cells,
+    ### offsets[i] is the number of entries whose point is below i
+    offsets = torch.searchsorted(
+        sorted_point_ids,
+        torch.arange(
+            mesh.n_points + 1, dtype=sorted_point_ids.dtype, device=mesh.points.device
+        ),
     )
+    del sorted_point_ids
+    indices = order // n_vertices_per_cell
+    return Adjacency(offsets=offsets, indices=indices, device=mesh.points.device)
 
 
 def get_point_to_points_adjacency(mesh: "Mesh") -> Adjacency:
