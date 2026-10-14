@@ -2293,11 +2293,18 @@ class Mesh(
             # Accumulate one vertex at a time over the static vertex count rather
             # than gathering an (n_cells, n_vertices_per_cell, *data_shape)
             # tensor. The sum runs in the order of mean(dim=1), which it matches
-            # bitwise on CPU
-            cell_values = point_values[self.cells[:, 0]]
+            # bitwise on CPU. Like mean(dim=1), floats narrower than float32
+            # accumulate in float32 and round once at the end.
+            field_dtype = point_values.dtype
+            accumulate_dtype = (
+                torch.float32
+                if point_values.is_floating_point() and point_values.element_size() < 4
+                else field_dtype
+            )
+            cell_values = point_values[self.cells[:, 0]].to(accumulate_dtype)
             for j in range(1, n_vertices_per_cell):
                 cell_values += point_values[self.cells[:, j]]
-            return cell_values.div_(n_vertices_per_cell)
+            return cell_values.div_(n_vertices_per_cell).to(field_dtype)
 
         converted = fields.apply(
             _mean_over_cell_vertices,
