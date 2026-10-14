@@ -34,7 +34,7 @@ from jaxtyping import Float, Int
 from tensordict import TensorDict
 
 from physicsnemo.mesh.utilities._tolerances import safe_eps
-from physicsnemo.utils._index_tuple_ops import sort_index_tuples, unique_index_tuples
+from physicsnemo.utils._index_tuple_ops import sort_index_tuples_, unique_index_tuples
 
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh
@@ -277,8 +277,9 @@ def extract_candidate_facets(
     )
 
     ### Sort vertices within each sub-simplex to canonical form for deduplication
-    # Shape remains (n_cells, n_combinations, n_vertices_per_subsimplex)
-    candidate_facets = sort_index_tuples(candidate_facets)
+    # Shape remains (n_cells, n_combinations, n_vertices_per_subsimplex). The
+    # gather output is ours, so it is sorted in place.
+    candidate_facets = sort_index_tuples_(candidate_facets)
 
     ### Reshape to (n_cells * n_combinations, n_vertices_per_subsimplex)
     candidate_facets = candidate_facets.reshape(-1, n_vertices_per_subsimplex)

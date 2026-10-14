@@ -58,6 +58,37 @@ def sort_index_tuples(rows: torch.Tensor) -> torch.Tensor:
     return _sort_by_network(rows, network)
 
 
+def sort_index_tuples_(rows: torch.Tensor) -> torch.Tensor:
+    """Sort the entries of each integer tuple in place where possible.
+
+    Same values as :func:`sort_index_tuples`, for a tensor that the caller owns
+    and no longer needs unsorted, such as a fresh gather. Tuples of at most four
+    entries are sorted in place by the same sorting network (on CPU at any size,
+    on CUDA at the sizes where :func:`sort_index_tuples` uses the network), so no
+    sorted copy and no unused permutation are allocated. Otherwise this returns
+    :func:`sort_index_tuples` of ``rows``.
+
+    Parameters
+    ----------
+    rows : torch.Tensor
+        Integer tensor with shape ``(..., n_columns)``, possibly overwritten.
+
+    Returns
+    -------
+    torch.Tensor
+        ``rows`` sorted in place, or a new sorted tensor of the same shape.
+    """
+    network = _SORTING_NETWORKS.get(rows.shape[-1])
+    if network is None or (rows.is_cuda and rows.numel() < _SORTING_NETWORK_MIN_NUMEL):
+        return sort_index_tuples(rows)
+    for i, j in network:
+        column_i, column_j = rows[..., i], rows[..., j]
+        lower = torch.minimum(column_i, column_j)
+        column_j.clamp_(min=column_i)  # the maximum, in place
+        column_i.copy_(lower)
+    return rows
+
+
 def _sort_by_network(
     rows: torch.Tensor, network: tuple[tuple[int, int], ...]
 ) -> torch.Tensor:
