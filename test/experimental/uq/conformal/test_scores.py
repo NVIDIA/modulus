@@ -77,10 +77,11 @@ def test_quantile_regression_asymmetry(device):
         (QuantileRegressionScore(), {"lo": -torch.ones(5), "hi": torch.ones(5)}),
     ],
 )
-def test_interval_endpoints_invert_score(score, aux):
+def test_interval_endpoints_invert_score(score, aux, device):
     """At this scale, endpoint scores stay close to the threshold."""
-    pred = torch.randn(5)
-    threshold = torch.tensor(0.42)
+    aux = None if aux is None else {k: v.to(device) for k, v in aux.items()}
+    pred = torch.randn(5, device=device)
+    threshold = torch.tensor(0.42, device=device)
     lo, hi = score.interval(pred, threshold, aux=aux)
     for endpoint in (lo, hi):
         torch.testing.assert_close(
@@ -91,12 +92,12 @@ def test_interval_endpoints_invert_score(score, aux):
         )
 
 
-def test_normalized_low_precision_sigma_keeps_intervals_tight():
+def test_normalized_low_precision_sigma_keeps_intervals_tight(device):
     """Float16 sigma must not inflate a float64 unit radius to 15.65234375."""
     score = NormalizedErrorScore()
-    pred = torch.zeros(1, dtype=torch.float64)
+    pred = torch.zeros(1, dtype=torch.float64, device=device)
     target = torch.ones_like(pred)
-    aux = {"sigma": torch.full((1,), 60000.0, dtype=torch.float16)}
+    aux = {"sigma": torch.full((1,), 60000.0, dtype=torch.float16, device=device)}
     threshold = score.score(pred, target, aux=aux)
     assert_admitted_covered(score, pred, target, threshold, aux)
     lo, hi = score.interval(pred, threshold, aux=aux)
@@ -124,12 +125,19 @@ def test_normalized_low_precision_sigma_keeps_intervals_tight():
     ],
 )
 def test_normalized_mixed_dtype_score_boundary_is_contained(
-    pred_dtype, target_dtype, sigma_dtype
+    pred_dtype, target_dtype, sigma_dtype, device
 ):
     score = NormalizedErrorScore(eps=1e-3)
-    pred = torch.tensor([0.0, 1000.0, -1000.0, 1.0, 0.0], dtype=pred_dtype)
-    target = torch.tensor([1.0, 1000.5, -999.5, -1.0, 0.0], dtype=target_dtype)
-    aux = {"sigma": torch.tensor([60000.0, 0.0, -1.0, 0.3, 60000.0], dtype=sigma_dtype)}
+    pred = torch.tensor(
+        [0.0, 1000.0, -1000.0, 1.0, 0.0], dtype=pred_dtype, device=device
+    )
+    target = torch.tensor(
+        [1.0, 1000.5, -999.5, -1.0, 0.0], dtype=target_dtype, device=device
+    )
+    sigma = torch.tensor(
+        [60000.0, 0.0, -1.0, 0.3, 60000.0], dtype=sigma_dtype, device=device
+    )
+    aux = {"sigma": sigma}
     threshold = score.score(pred, target, aux=aux)
     assert threshold.dtype == torch.result_type(pred, target)
     assert torch.isfinite(threshold).all()
