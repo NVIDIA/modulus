@@ -2259,19 +2259,24 @@ class Mesh(
                 )
 
         ### Convert each point data field to cell data by averaging over cell vertices
-        new_cell_data = self.cell_data.clone()
+        # A shallow copy: with_data shares the unchanged leaves anyway
+        new_cell_data = self.cell_data.copy()
+        n_vertices_per_cell = self.cells.shape[1]
 
         def _mean_over_cell_vertices(point_values: torch.Tensor) -> torch.Tensor:
             """Average a single point field over the vertices of each cell."""
-            # Shape: (n_cells, n_vertices_per_cell, *data_shape)
-            cell_values = point_values[self.cells]
-            # Promote integer/bool fields to float first: torch.mean rejects
-            # integer dtypes, and a mean of integers is real-valued anyway.
-            # Casting after the gather rather than the point field before it
-            # keeps the gather on the narrow source dtype, which measures faster.
-            if not cell_values.is_floating_point() and not cell_values.is_complex():
-                cell_values = cell_values.to(torch.float64)
-            return cell_values.mean(dim=1)
+            # Promote integer/bool fields to float first: a mean of integers is
+            # real-valued, and an integer sum could overflow.
+            if not point_values.is_floating_point() and not point_values.is_complex():
+                point_values = point_values.to(torch.float64)
+            # Accumulate one vertex at a time over the static vertex count rather
+            # than gathering an (n_cells, n_vertices_per_cell, *data_shape)
+            # tensor. The sum runs in the order of mean(dim=1), which it matches
+            # bitwise on CPU
+            cell_values = point_values[self.cells[:, 0]]
+            for j in range(1, n_vertices_per_cell):
+                cell_values += point_values[self.cells[:, j]]
+            return cell_values.div_(n_vertices_per_cell)
 
         converted = fields.apply(
             _mean_over_cell_vertices,
