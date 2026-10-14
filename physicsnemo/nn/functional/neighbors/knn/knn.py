@@ -188,11 +188,15 @@ class KNN(FunctionSpec):
     def _preferred_name(points: torch.Tensor) -> str:
         """Return the implementation auto-dispatch prefers for ``points``.
 
-        Warp computes in float32, so float64 CUDA points keep cuML.
+        Warp computes in float32, so float64 and integer CUDA points keep cuML.
         """
         if not points.is_cuda:
             return "scipy"
-        if 1 <= points.shape[-1] <= 3 and points.dtype != torch.float64:
+        if 1 <= points.shape[-1] <= 3 and points.dtype in (
+            torch.float32,
+            torch.float16,
+            torch.bfloat16,
+        ):
             return "warp"
         return "cuml"
 

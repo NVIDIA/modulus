@@ -114,7 +114,7 @@ def morton_codes(
     return codes
 
 
-def build_morton_tree(points: torch.Tensor, leaf_size: int = LEAF_SIZE) -> dict:
+def build_morton_tree(points: torch.Tensor) -> dict:
     """Build a heap-layout BVH over Morton-sorted float32 ``(n, 3)`` points.
 
     Returns a dict of flat tensors: the points in tree order (``tree_points``),
@@ -131,16 +131,16 @@ def build_morton_tree(points: torch.Tensor, leaf_size: int = LEAF_SIZE) -> dict:
     codes, order = torch.sort(codes)
     tree_points = points[order].contiguous()
 
-    n_leaves = -(-n // leaf_size)
+    n_leaves = -(-n // LEAF_SIZE)
     n_leaves_pow2 = 1 << max(n_leaves - 1, 0).bit_length()
     n_internal = n_leaves_pow2 - 1
 
     ### Leaf boxes from padded chunks; empty padding leaves get inverted boxes,
     # whose distance to any query is infinite, so traversal prunes them.
-    n_pad = n_leaves_pow2 * leaf_size - n
+    n_pad = n_leaves_pow2 * LEAF_SIZE - n
     pad_lo = tree_points.new_full((n_pad, 3), float("inf"))
-    level_lo = torch.cat([tree_points, pad_lo]).view(-1, leaf_size, 3).amin(dim=1)
-    level_hi = torch.cat([tree_points, -pad_lo]).view(-1, leaf_size, 3).amax(dim=1)
+    level_lo = torch.cat([tree_points, pad_lo]).view(-1, LEAF_SIZE, 3).amin(dim=1)
+    level_hi = torch.cat([tree_points, -pad_lo]).view(-1, LEAF_SIZE, 3).amax(dim=1)
     levels_lo, levels_hi = [level_lo], [level_hi]
     while level_lo.shape[0] > 1:
         level_lo = level_lo.view(-1, 2, 3).amin(dim=1)
@@ -156,8 +156,8 @@ def build_morton_tree(points: torch.Tensor, leaf_size: int = LEAF_SIZE) -> dict:
     is_leaf = ids >= n_internal
     left = torch.where(is_leaf, -1, 2 * ids + 1)
     right = torch.where(is_leaf, -1, 2 * ids + 2)
-    leaf_start = ((ids - n_internal) * leaf_size).clamp(min=0)
-    leaf_count = torch.where(is_leaf, (n - leaf_start).clamp(0, leaf_size), 0)
+    leaf_start = ((ids - n_internal) * LEAF_SIZE).clamp(min=0)
+    leaf_count = torch.where(is_leaf, (n - leaf_start).clamp(0, LEAF_SIZE), 0)
     return dict(
         tree_points=tree_points,
         order=order,
@@ -176,27 +176,28 @@ def build_morton_tree(points: torch.Tensor, leaf_size: int = LEAF_SIZE) -> dict:
 _KERNELS: dict = {}
 
 
-def get_tree_knn_kernel(
-    k: int, stack_size: int = STACK_SIZE, index_dtype=wp.int32, window: bool = True
-):
-    """Return the per-``k`` Warp kernel for shrinking-radius kNN traversal.
+def _knn_capacity(k: int) -> int:
+    """Round ``k`` up to a power of two, so that varying ``k`` compiles few kernels."""
+    return 1 << (k - 1).bit_length()
+
+
+def get_tree_knn_kernel(capacity: int):
+    """Return the Warp kernel for shrinking-radius kNN with ``k <= capacity``.
 
     One thread handles query ``query_order[tid]``. Node arrays are flat:
     ``node_lo``/``node_hi`` boxes, ``left``/``right`` children (-1 for a
     leaf, root at 0), and ``leaf_start``/``leaf_count`` ranges into
-    ``tree_points``. ``order`` maps tree positions to output indices. With
-    ``window=True``, the initial radius is the k-th distance among the ``2k``
-    tree-order points around ``window_pos[query]``.
+    ``tree_points``. ``order`` maps tree positions to output indices. The
+    initial radius is the k-th distance among the ``2k`` tree-order points
+    around ``window_pos[query]``.
     """
-    key = (k, stack_size, index_dtype, window)
-    if key in _KERNELS:
-        return _KERNELS[key]
+    if capacity in _KERNELS:
+        return _KERNELS[capacity]
 
-    vec_f = wp.types.vector(length=k, dtype=wp.float32)
-    vec_i = wp.types.vector(length=k, dtype=wp.int32)
-    stack_i = wp.types.vector(length=stack_size, dtype=wp.int32)
-    stack_f = wp.types.vector(length=stack_size, dtype=wp.float32)
-    IT = index_dtype
+    vec_f = wp.types.vector(length=capacity, dtype=wp.float32)
+    vec_i = wp.types.vector(length=capacity, dtype=wp.int32)
+    stack_i = wp.types.vector(length=STACK_SIZE, dtype=wp.int32)
+    stack_f = wp.types.vector(length=STACK_SIZE, dtype=wp.float32)
 
     @wp.func
     def box_dist_sq(q: wp.vec3, lo: wp.vec3, hi: wp.vec3) -> float:
@@ -209,47 +210,47 @@ def get_tree_knn_kernel(
         order: wp.array(dtype=wp.int64),
         node_lo: wp.array(dtype=wp.vec3),
         node_hi: wp.array(dtype=wp.vec3),
-        left: wp.array(dtype=IT),
-        right: wp.array(dtype=IT),
-        leaf_start: wp.array(dtype=IT),
-        leaf_count: wp.array(dtype=IT),
+        left: wp.array(dtype=wp.int32),
+        right: wp.array(dtype=wp.int32),
+        leaf_start: wp.array(dtype=wp.int32),
+        leaf_count: wp.array(dtype=wp.int32),
         queries: wp.array(dtype=wp.vec3),
         query_order: wp.array(dtype=wp.int32),
         window_pos: wp.array(dtype=wp.int32),
+        k: int,
         out_idx: wp.array2d(dtype=wp.int64),
         out_dist: wp.array2d(dtype=wp.float32),
     ):
         qi = query_order[wp.tid()]
         q = queries[qi]
         if not wp.isfinite(q):
-            for j in range(wp.static(k)):
+            for j in range(k):
                 out_idx[qi, j] = wp.int64(-1)
                 out_dist[qi, j] = wp.inf
             return
         best_d = vec_f()
         best_i = vec_i()
-        bound = float(_FLOAT_MAX)
+        last = k - 1
         n_points = tree_points.shape[0]
 
-        if wp.static(window):
-            # k-th distance among the 2k points around the query's Morton
-            # position: an upper bound on the true k-th distance.
-            for j in range(wp.static(k)):
-                best_d[j] = float(_FLOAT_MAX)
-            width = wp.min(2 * wp.static(k), n_points)
-            start = wp.clamp(window_pos[qi] - wp.static(k), 0, n_points - width)
-            for p in range(start, start + width):
-                d2 = wp.length_sq(tree_points[p] - q)
-                if d2 < best_d[wp.static(k - 1)]:
-                    j = int(wp.static(k - 1))
-                    while j > 0 and best_d[j - 1] > d2:
-                        best_d[j] = best_d[j - 1]
-                        j -= 1
-                    best_d[j] = d2
-            # Inflate so the window's own k-th point still enters the k-list.
-            bound = best_d[wp.static(k - 1)] * 1.000001 + 1.0e-30
+        # k-th distance among the 2k points around the query's Morton
+        # position: an upper bound on the true k-th distance.
+        for j in range(k):
+            best_d[j] = float(_FLOAT_MAX)
+        width = wp.min(2 * k, n_points)
+        start = wp.clamp(window_pos[qi] - k, 0, n_points - width)
+        for p in range(start, start + width):
+            d2 = wp.length_sq(tree_points[p] - q)
+            if d2 < best_d[last]:
+                j = int(last)
+                while j > 0 and best_d[j - 1] > d2:
+                    best_d[j] = best_d[j - 1]
+                    j -= 1
+                best_d[j] = d2
+        # Inflate so the window's own k-th point still enters the k-list.
+        bound = best_d[last] * 1.000001 + 1.0e-30
 
-        for j in range(wp.static(k)):
+        for j in range(k):
             best_d[j] = bound
             best_i[j] = -1
 
@@ -261,15 +262,15 @@ def get_tree_knn_kernel(
         while sp > 0:
             sp -= 1
             node = st_node[sp]
-            if st_dist[sp] >= best_d[wp.static(k - 1)]:
+            if st_dist[sp] >= best_d[last]:
                 continue
             lc = int(left[node])
             if lc < 0:
                 s = int(leaf_start[node])
                 for p in range(s, s + int(leaf_count[node])):
                     d2 = wp.length_sq(tree_points[p] - q)
-                    if d2 < best_d[wp.static(k - 1)]:
-                        j = int(wp.static(k - 1))
+                    if d2 < best_d[last]:
+                        j = int(last)
                         while j > 0 and best_d[j - 1] > d2:
                             best_d[j] = best_d[j - 1]
                             best_i[j] = best_i[j - 1]
@@ -290,17 +291,17 @@ def get_tree_knn_kernel(
                     dn = dr
                     df = dl
                 # Push the farther child first so the nearer one pops first.
-                if df < best_d[wp.static(k - 1)] and sp < wp.static(stack_size):
+                if df < best_d[last] and sp < wp.static(STACK_SIZE):
                     st_node[sp] = far
                     st_dist[sp] = df
                     sp += 1
-                if dn < best_d[wp.static(k - 1)] and sp < wp.static(stack_size):
+                if dn < best_d[last] and sp < wp.static(STACK_SIZE):
                     st_node[sp] = near
                     st_dist[sp] = dn
                     sp += 1
 
         # A slot stays empty only when no point has a finite distance.
-        for j in range(wp.static(k)):
+        for j in range(k):
             if best_i[j] >= 0:
                 out_idx[qi, j] = order[best_i[j]]
                 out_dist[qi, j] = wp.sqrt(best_d[j])
@@ -308,7 +309,7 @@ def get_tree_knn_kernel(
                 out_idx[qi, j] = wp.int64(-1)
                 out_dist[qi, j] = wp.inf
 
-    _KERNELS[key] = tree_knn
+    _KERNELS[capacity] = tree_knn
     return tree_knn
 
 
@@ -316,18 +317,14 @@ def tree_knn_query(
     tree: dict,
     queries: torch.Tensor,
     k: int,
-    *,
-    query_order: torch.Tensor | None = None,
-    window_pos: torch.Tensor | None = None,
-    stack_size: int = STACK_SIZE,
-    index_dtype=wp.int32,
+    query_order: torch.Tensor,
+    window_pos: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Run the traversal kernel over a flat tree (see :func:`build_morton_tree`).
 
-    ``queries`` are float32 ``(m, 3)``. ``query_order`` (int32) sets the
-    thread-to-query map (identity when ``None``). ``window_pos`` (int32) is
-    each query's position in the tree order for the radius bound; ``None``
-    starts every query with an unbounded radius.
+    ``queries`` are float32 ``(m, 3)``. ``query_order`` (int32) maps threads
+    to queries and ``window_pos`` (int32) is each query's position in the tree
+    order, both from :func:`morton_query_plan`.
     """
     m = queries.shape[0]
     device = queries.device
@@ -335,19 +332,13 @@ def tree_knn_query(
     out_dist = torch.empty((m, k), dtype=torch.float32, device=device)
     if m == 0:
         return out_idx, out_dist
-    if query_order is None:
-        query_order = torch.arange(m, dtype=torch.int32, device=device)
-    use_window = window_pos is not None
-    if not use_window:
-        window_pos = query_order  # unused placeholder of the right type
-    kernel = get_tree_knn_kernel(k, stack_size, index_dtype, use_window)
-    torch_index_dtype = torch.int32 if index_dtype == wp.int32 else torch.int64
+    kernel = get_tree_knn_kernel(_knn_capacity(k))
 
     def as_vec3(t):
         return wp.from_torch(t, dtype=wp.vec3, return_ctype=True)
 
-    def as_index(t):
-        return wp.from_torch(t.to(torch_index_dtype), return_ctype=True)
+    def as_array(t):
+        return wp.from_torch(t, return_ctype=True)
 
     wp_device, wp_stream = FunctionSpec.warp_launch_context(queries)
     with FunctionSpec.warp_stream_scope(wp_stream):
@@ -356,18 +347,19 @@ def tree_knn_query(
             dim=m,
             inputs=[
                 as_vec3(tree["tree_points"]),
-                wp.from_torch(tree["order"], return_ctype=True),
+                as_array(tree["order"]),
                 as_vec3(tree["node_lo"]),
                 as_vec3(tree["node_hi"]),
-                as_index(tree["left"]),
-                as_index(tree["right"]),
-                as_index(tree["leaf_start"]),
-                as_index(tree["leaf_count"]),
+                as_array(tree["left"]),
+                as_array(tree["right"]),
+                as_array(tree["leaf_start"]),
+                as_array(tree["leaf_count"]),
                 as_vec3(queries),
-                wp.from_torch(query_order, return_ctype=True),
-                wp.from_torch(window_pos, return_ctype=True),
-                wp.from_torch(out_idx, return_ctype=True),
-                wp.from_torch(out_dist, return_ctype=True),
+                as_array(query_order),
+                as_array(window_pos),
+                k,
+                as_array(out_idx),
+                as_array(out_dist),
             ],
             device=wp_device,
             stream=wp_stream,
@@ -435,18 +427,16 @@ def knn_impl(
             f"`knn` warp implementation needs 1 <= k <= number of points, "
             f"got {k=} and {points.shape[0]} points"
         )
-    if points.shape[0] >= 2**31:
+    if max(points.shape[0], queries.shape[0]) >= 2**31:
         raise ValueError(
-            "`knn` warp implementation supports fewer than 2**31 points, "
-            f"got {points.shape[0]}"
+            "`knn` warp implementation supports fewer than 2**31 points and "
+            f"queries, got {points.shape[0]} and {queries.shape[0]}"
         )
     pts = _as_float32_xyz(points)
     qrs = _as_float32_xyz(queries)
     tree = build_morton_tree(pts)
     query_order, window_pos = morton_query_plan(tree, qrs)
-    indices, distances = tree_knn_query(
-        tree, qrs, k, query_order=query_order, window_pos=window_pos
-    )
+    indices, distances = tree_knn_query(tree, qrs, k, query_order, window_pos)
     return indices, distances.to(points.dtype)
 
 

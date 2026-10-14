@@ -150,7 +150,8 @@ def test_knn_warp(device: str, k: int, dtype: torch.dtype):
 
 
 # The Warp search is exact: compare it with SciPy and torch on random clouds.
-@pytest.mark.parametrize("k", [1, 11])
+# k = 5 and 11 run in kernels compiled for 8 and 16 neighbors.
+@pytest.mark.parametrize("k", [1, 5, 11, 16])
 @pytest.mark.parametrize("dim", [2, 3])
 def test_knn_warp_matches_exact(device: str, k: int, dim: int):
     points = torch.randn(2000, dim, device=device)
@@ -223,14 +224,15 @@ def test_knn_warp_error_handling(device: str):
         knn(points, points, k=21, implementation="warp")
 
 
-# Auto-dispatch prefers Warp for CUDA points of up to three dimensions below
-# float64, cuML for other CUDA points, and SciPy on CPU.
+# Auto-dispatch prefers Warp for CUDA points of up to three dimensions in
+# float32 or lower precision, cuML for other CUDA points, and SciPy on CPU.
 @pytest.mark.parametrize(
     "dim, dtype, expected_cuda",
     [
         (3, torch.float32, "warp"),
         (2, torch.bfloat16, "warp"),
         (3, torch.float64, "cuml"),
+        (3, torch.int64, "cuml"),
         (4, torch.float32, "cuml"),
     ],
 )
