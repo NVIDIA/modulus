@@ -643,8 +643,7 @@ class BVH(TensorClass):
 
         Uses batched iterative BVH traversal where all queries are processed
         simultaneously in a vectorized manner. CPU queries outside
-        ``torch.compile`` are traversed in slices of at most 32768 to bound
-        memory.
+        ``torch.compile`` are traversed in bounded-size slices to bound memory.
 
         Parameters
         ----------
