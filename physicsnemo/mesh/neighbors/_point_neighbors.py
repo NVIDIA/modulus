@@ -157,10 +157,10 @@ def get_point_to_points_adjacency(mesh: "Mesh") -> Adjacency:
     if mesh.n_manifold_dims == 1:
         candidate_edges = sort_index_tuples(mesh.cells)
     else:
-        candidate_edges, _ = extract_candidate_facets(
+        candidate_edges, parent_cell_indices = extract_candidate_facets(
             mesh.cells, manifold_codimension=mesh.n_manifold_dims - 1
         )
-        del _
+        del parent_cell_indices
     edge_keys = candidate_edges[:, 0].long() * n_points + candidate_edges[:, 1]
     del candidate_edges
 

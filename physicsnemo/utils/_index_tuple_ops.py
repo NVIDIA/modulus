@@ -163,14 +163,10 @@ def unique_index_tuples(
             return_counts=return_counts,
         )
 
-    # Accumulate the keys in place; the first product is a new tensor, so the
-    # in-place updates never write to ``rows``.
-    packed = rows[:, 0].to(dtype=torch.int64)
+    # Accumulate the keys in place in a copy, which never aliases ``rows``.
+    packed = rows[:, 0].to(dtype=torch.int64, copy=True)
     for column_idx in range(1, n_columns):
-        if column_idx == 1:
-            packed = packed * index_bound
-        else:
-            packed *= index_bound
+        packed *= index_bound
         packed += rows[:, column_idx]
 
     unique_result = torch.unique(

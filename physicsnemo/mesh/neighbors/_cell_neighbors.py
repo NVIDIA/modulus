@@ -104,13 +104,13 @@ def get_cell_to_cells_adjacency(
 
     ### Label each candidate with its unique facet and that facet's cell count
     # Temporaries are deleted at their last use throughout, to lower the peak.
-    _, facet_ids, facet_counts = unique_index_tuples(
+    unique_facets, facet_ids, facet_counts = unique_index_tuples(
         candidate_facets,
         index_bound=mesh.n_points,
         return_inverse=True,
         return_counts=True,
     )
-    del _, candidate_facets
+    del unique_facets, candidate_facets
 
     ### Group the candidates of each facet into one contiguous run
     sorted_facet_ids, order = torch.sort(facet_ids)
