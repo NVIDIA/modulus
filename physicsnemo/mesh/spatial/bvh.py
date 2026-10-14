@@ -286,6 +286,10 @@ def _compute_leaf_aabbs(
 # BVH tensorclass
 # ---------------------------------------------------------------------------
 
+# Queries per BVH traversal in eager mode: bounds the traversal frontier's
+# memory, which otherwise grows with the number of queries.
+_QUERY_CHUNK_SIZE = 32768
+
 
 class BVH(TensorClass):
     """Bounding Volume Hierarchy for efficient spatial queries.
@@ -638,7 +642,8 @@ class BVH(TensorClass):
         r"""Find candidate cells that might contain each query point.
 
         Uses batched iterative BVH traversal where all queries are processed
-        simultaneously in a vectorized manner.
+        simultaneously in a vectorized manner. Outside ``torch.compile``,
+        queries are traversed in slices of at most 32768 to bound memory.
 
         Parameters
         ----------
@@ -668,12 +673,29 @@ class BVH(TensorClass):
         (:math:`O(\log N)` iterations).
         """
         self._validate_query_points(query_points)
-        all_q, all_c = self._traverse(
-            query_points,
-            max_candidates_per_point,
-            aabb_tolerance,
-        )
         n_queries = query_points.shape[0]
+        if not torch.compiler.is_compiling() and n_queries > _QUERY_CHUNK_SIZE:
+            ### Traverse fixed-size query slices. Each query's candidates (and its
+            # max_candidates cutoff) are independent of the other queries, and
+            # the adjacency sorts pairs by (query, cell), so the result is the same.
+            parts_q: list[torch.Tensor] = []
+            parts_c: list[torch.Tensor] = []
+            for start in range(0, n_queries, _QUERY_CHUNK_SIZE):
+                chunk_q, chunk_c = self._traverse(
+                    query_points[start : start + _QUERY_CHUNK_SIZE],
+                    max_candidates_per_point,
+                    aabb_tolerance,
+                )
+                parts_q.append(chunk_q + start)
+                parts_c.append(chunk_c)
+            all_q, all_c = torch.cat(parts_q), torch.cat(parts_c)
+            del parts_q, parts_c
+        else:
+            all_q, all_c = self._traverse(
+                query_points,
+                max_candidates_per_point,
+                aabb_tolerance,
+            )
         adjacency = build_adjacency_from_pairs(
             source_indices=all_q,
             target_indices=all_c,

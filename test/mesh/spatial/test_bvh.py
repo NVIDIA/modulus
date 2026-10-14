@@ -583,6 +583,30 @@ class TestBVHTraversal:
                 f"Missing: {set_1 - set_8}"
             )
 
+    @pytest.mark.parametrize("max_candidates", [None, 2])
+    def test_query_slices_match_single_traversal(self, monkeypatch, max_candidates):
+        """Traversing queries in slices gives the same adjacency as one pass."""
+        from physicsnemo.mesh.spatial import bvh as bvh_module
+
+        torch.manual_seed(0)
+        points = torch.rand(40, 2)
+        cells = torch.randint(0, 40, (60, 3))
+        bvh = BVH.from_mesh(Mesh(points=points, cells=cells), leaf_size=2)
+        query = torch.rand(23, 2)
+
+        monkeypatch.setattr(bvh_module, "_QUERY_CHUNK_SIZE", 1000)
+        whole = bvh.find_candidate_cells(
+            query, max_candidates_per_point=max_candidates, aabb_tolerance=0.05
+        )
+        monkeypatch.setattr(bvh_module, "_QUERY_CHUNK_SIZE", 5)
+        sliced = bvh.find_candidate_cells(
+            query, max_candidates_per_point=max_candidates, aabb_tolerance=0.05
+        )
+
+        assert whole.n_total_neighbors > query.shape[0]
+        assert torch.equal(sliced.offsets, whole.offsets)
+        assert torch.equal(sliced.indices, whole.indices)
+
 
 ### Device Handling Tests ###
 
