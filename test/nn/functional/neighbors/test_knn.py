@@ -198,6 +198,21 @@ def test_knn_warp_opcheck(device: str):
     torch.library.opcheck(knn_warp, args=(points, queries, 5))
 
 
+# Non-finite queries get index -1 and distance inf; the other rows are unaffected.
+def test_knn_warp_non_finite_queries(device: str):
+    points = torch.rand(1000, 3, device=device)
+    queries = torch.rand(5, 3, device=device)
+    queries[1] = float("nan")
+    queries[2, 0] = float("inf")
+    indices, distances = knn(points, queries, k=3, implementation="warp")
+    bad = torch.tensor([1, 2], device=device)
+    assert (indices[bad] == -1).all()
+    assert torch.isinf(distances[bad]).all()
+    good = torch.tensor([0, 3, 4], device=device)
+    reference = knn(points, queries[good], k=3, implementation="torch")
+    KNN.compare_forward((indices[good], distances[good]), reference)
+
+
 # Validate the Warp implementation's input checks.
 def test_knn_warp_error_handling(device: str):
     points = torch.randn(20, 4, device=device)

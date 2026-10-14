@@ -221,6 +221,11 @@ def get_tree_knn_kernel(
     ):
         qi = query_order[wp.tid()]
         q = queries[qi]
+        if not wp.isfinite(q):
+            for j in range(wp.static(k)):
+                out_idx[qi, j] = wp.int64(-1)
+                out_dist[qi, j] = wp.inf
+            return
         best_d = vec_f()
         best_i = vec_i()
         bound = float(_FLOAT_MAX)
@@ -294,9 +299,14 @@ def get_tree_knn_kernel(
                     st_dist[sp] = dn
                     sp += 1
 
+        # A slot stays empty only when no point has a finite distance.
         for j in range(wp.static(k)):
-            out_idx[qi, j] = order[best_i[j]]
-            out_dist[qi, j] = wp.sqrt(best_d[j])
+            if best_i[j] >= 0:
+                out_idx[qi, j] = order[best_i[j]]
+                out_dist[qi, j] = wp.sqrt(best_d[j])
+            else:
+                out_idx[qi, j] = wp.int64(-1)
+                out_dist[qi, j] = wp.inf
 
     _KERNELS[key] = tree_knn
     return tree_knn
@@ -406,7 +416,9 @@ def knn_impl(
     tuple[torch.Tensor, torch.Tensor]
         ``(indices, distances)``, each ``(M, k)``: int64 indices into
         ``points`` and Euclidean distances (computed in float32, returned in
-        the input dtype), sorted ascending per query.
+        the input dtype), sorted ascending per query. A query with a
+        non-finite coordinate, or a slot that no point at a finite distance
+        can fill, gets index -1 and distance inf.
     """
     validate_inputs(points, queries)
     if points.ndim != 2 or queries.ndim != 2 or points.shape[1] != queries.shape[1]:
