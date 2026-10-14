@@ -104,6 +104,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exist. A field is declared as a `RankSpec` or a mapping of values,
   `{"rank": n}` (YAML: `pressure: {rank: 0}`); a mapping of mappings is a
   nested group. Integer leaves are no longer accepted.
+- Mesh geometry, curvature, sampling, mesh generation and LSQ gradients, and
+  the PyTorch backends of the deformation functionals, solve their small
+  per-cell determinants, inverses and least-squares problems in closed form
+  instead of with batched `torch.linalg` calls. Vertex angles, Gaussian
+  curvature and quality metrics become up to 1000x faster on GPU, and many
+  mesh operations 4-130x faster on CPU.
 - GLOBE's field declarations are renamed after the schemas they hold:
   `output_field_ranks`, `boundary_source_data_ranks` and `global_data_ranks`
   become `output_schema`, `boundary_source_schemas` and `global_schema`
@@ -203,6 +209,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `repair_mesh(fix_orientation=True)` orients every mesh except point clouds,
   instead of only surfaces in 3D.
 
+- `compute_mesh_statistics` reads all statistics in one device-to-host
+  transfer instead of about 20 `.item()` calls.
+
 ### Deprecated
 
 - Unified external aerodynamics recipe: `training.loss_type: rmse` is
@@ -268,6 +277,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Triangle areas use direct area components and a rescaled norm, preserving
   thin faces and their quadrature measures without Gram cancellation or
   overflow/underflow in the norm.
+- Vertex angles of nearly flat triangles in 2D and nearly flat tetrahedra are
+  now accurate. A 2D triangle with an angle near pi used to get angles of 0, 0
+  and 0, which also threw off Gaussian curvature and quality metrics.
+- Gaussian curvature of curves in 3D is now correct: a unit circle with 1000
+  segments had a curvature of 499 instead of 1.
+- Small angles from `stable_angle_between_vectors`, volumes of thin
+  tetrahedra in 4D or more, and FEM cotangent weights of thin cells keep their
+  accuracy in float32. The first two used to come out as 0.
+- FEM cotangent weights of long, thin but well-shaped cells are accurate in
+  any vertex order. A tetrahedron with one edge 5000 times longer than the
+  others used to get the weights of a degenerate cell.
+- Vertex angles of triangles in 3D are correct in float16 and at any
+  coordinate scale, and `stable_angle_between_vectors` is correct in float16.
+  Both used to return NaN or wrong angles there.
+- On CUDA, LSQ gradients of rank-deficient stencils, such as those of a flat
+  surface, are now minimum-norm solutions, as on CPU. They used to be NaN,
+  wrong by orders of magnitude, or a `LinAlgError`.
+- On CUDA, `sample_data_at_points` next to a degenerate cell no longer raises
+  `LinAlgError`. Degenerate cells contain no sample points on any device, and
+  `compute_circumcenters` returns their centroid instead of NaN or infinity.
+- Edge flips in `mesh_implicit_domain` work at any coordinate scale; below
+  about 1e-13 they were silently skipped.
+- The PyTorch Sobolev deformation accepts float32 cells of any size, and the
+  StVK strain energy has finite gradients for degenerate reference cells.
 - Unified external aero recipe: near-wall SDF normals no longer flip inward
   from float32 roundoff. Stored signed distances are unchanged.
 - Fixes mesh dtype handling: preserves integer-coordinate precision, normalizes
