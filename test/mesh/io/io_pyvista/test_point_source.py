@@ -448,13 +448,19 @@ class TestCellCentroidsDualGraph:
             "line polydata",
         ],
     )
-    def test_simplex_fast_path_matches_vtk_loop(self, case, monkeypatch):
-        """The vectorized LINE/TRIANGLE/TETRA path gives the VTK loop's edges, in order."""
+    @pytest.mark.parametrize("packed_keys", [True, False])
+    def test_simplex_fast_path_matches_vtk_loop(self, case, packed_keys, monkeypatch):
+        """The vectorized LINE/TRIANGLE/TETRA path gives the VTK loop's edges, in
+        order, both with packed int64 facet keys and with the tuple-lexsort fallback."""
         import physicsnemo.mesh.io.io_pyvista as io_pyvista
 
         pv_mesh = self._simplex_dual_graph_cases()[case]
         simplex_cells = io_pyvista._homogeneous_simplex_cells(pv_mesh)
         assert simplex_cells is not None
+        local_facets = io_pyvista._SIMPLEX_FACETS[simplex_cells.shape[1]]
+        assert io_pyvista._packed_facet_keys(simplex_cells, local_facets) is not None
+        if not packed_keys:
+            monkeypatch.setattr(io_pyvista, "_packed_facet_keys", lambda *_: None)
         assert io_pyvista._simplex_dual_graph_edges(simplex_cells) is not None
         fast = io_pyvista._build_dual_graph_edges(pv_mesh)
 
@@ -464,6 +470,14 @@ class TestCellCentroidsDualGraph:
         assert len(reference) > 0
         assert fast.dtype == reference.dtype == torch.long
         assert torch.equal(fast, reference)
+
+    def test_packed_facet_keys_fall_back_on_overflow(self):
+        """Facet keys that could overflow int64 are not packed."""
+        from physicsnemo.mesh.io.io_pyvista import _SIMPLEX_FACETS, _packed_facet_keys
+
+        cells = np.array([[0, 1, 2, 3], [1, 2, 3, 2**21]])
+        assert _packed_facet_keys(cells, _SIMPLEX_FACETS[4]) is None
+        assert _packed_facet_keys(cells[:, :3], _SIMPLEX_FACETS[3]) is not None
 
     def test_simplex_fast_path_falls_back_on_repeated_vertex(self):
         """A cell that repeats a vertex is left to the VTK loop."""

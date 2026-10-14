@@ -2046,6 +2046,47 @@ def _homogeneous_simplex_cells(
     return connectivity.reshape(n_cells, cell_size)
 
 
+def _packed_facet_keys(
+    cells: np.ndarray,
+    local_facets: np.ndarray,
+) -> np.ndarray | None:
+    """Pack each cell's sorted facets into one ``int64`` key per facet.
+
+    With base ``n_points``, the key orders facets exactly like their sorted
+    vertex tuples, so a stable argsort of the keys equals the lexsort of the
+    tuples. Returns ``None`` (use the tuple lexsort) when the keys could
+    overflow ``int64`` or a point id is negative.
+
+    Parameters
+    ----------
+    cells : np.ndarray
+        Shape ``(n_cells, k)`` connectivity.
+    local_facets : np.ndarray
+        Shape ``(n_facets, k - 1)`` local vertex indices of each facet.
+
+    Returns
+    -------
+    np.ndarray or None
+        Shape ``(n_cells * n_facets,)``, row ``cell * n_facets + facet``.
+    """
+    n_cells = len(cells)
+    n_facets, facet_size = local_facets.shape
+    if int(cells.min()) < 0:
+        return None
+    n_points = int(cells.max()) + 1
+    if n_points**facet_size > np.iinfo(np.int64).max:
+        return None
+    keys = np.empty((n_cells, n_facets), dtype=np.int64)
+    for f, facet in enumerate(local_facets):
+        facet_vertices = np.sort(cells[:, facet], axis=1)
+        key = facet_vertices[:, 0].astype(np.int64)
+        for c in range(1, facet_size):
+            key *= n_points
+            key += facet_vertices[:, c]
+        keys[:, f] = key
+    return keys.reshape(-1)
+
+
 def _simplex_dual_graph_edges(
     cells: np.ndarray,
 ) -> np.ndarray | None:
@@ -2081,14 +2122,21 @@ def _simplex_dual_graph_edges(
     # intermediate is freed as soon as it is used to keep the peak low.
     local_facets = _SIMPLEX_FACETS[cell_size]
     n_facets = len(local_facets)
-    facets = cells[:, local_facets]
-    facets.sort(axis=2)
-    facets = facets.reshape(n_cells * n_facets, -1)
-    order = np.lexsort(facets.T[::-1])
-    facets = facets[order]
     # same[t] says sorted facets t and t+1 are equal.
-    same = (facets[1:] == facets[:-1]).all(axis=1)
-    del facets
+    keys = _packed_facet_keys(cells, local_facets)
+    if keys is not None:
+        order = np.argsort(keys, kind="stable")
+        keys = keys[order]
+        same = keys[1:] == keys[:-1]
+        del keys
+    else:
+        facets = cells[:, local_facets]
+        facets.sort(axis=2)
+        facets = facets.reshape(n_cells * n_facets, -1)
+        order = np.lexsort(facets.T[::-1])
+        facets = facets[order]
+        same = (facets[1:] == facets[:-1]).all(axis=1)
+        del facets
     owner = order // n_facets
     local_index = (order % n_facets).astype(np.int8)
     del order
