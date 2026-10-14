@@ -101,8 +101,12 @@ def mesh_lsq_gradient_torch(
 
         A_weighted = sqrt_w * relative
         b_weighted = sqrt_w * delta_values
+        # Only the weighted system is needed from here on
+        del flat_indices, neighbors, center_points, relative
+        del values_center, delta_values, dist2, sqrt_w
 
         solution = batched_lstsq(A_weighted, b_weighted)
+        del A_weighted, b_weighted
         gradients_flat[entity_indices] = solution
 
     ### Restore gradient output shape.
