@@ -164,11 +164,17 @@ optimizing the parameters of a global deformation:
         closed_surface_volume_energy,
         surface_bending_energy,
     )
+    from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
 
-    volume_penalty = closed_surface_volume_energy(reference, points)
-    bending_penalty = surface_bending_energy(reference, points)
-    loss = target_loss + 200.0 * volume_penalty + 0.05 * bending_penalty
+    sphere = sphere_icosahedral.load(subdivisions=2)
+    stretch = torch.tensor([1.2, 1.0, 1.0], requires_grad=True)
+    points = sphere.points * stretch  # a stand-in for a learned deformation
+
+    volume_penalty = closed_surface_volume_energy(sphere, points)
+    bending_penalty = surface_bending_energy(sphere, points)
+    loss = 200.0 * volume_penalty + 0.05 * bending_penalty  # add your objective
     loss.backward()
+    print(stretch.grad)  # all positive: a descent step shrinks the stretched sphere
 
 The volume term controls only the scalar enclosed volume. Bending regularizes
 changes between adjacent triangle normals, but neither term detects global
@@ -211,6 +217,26 @@ measure energies choose a zero current-coordinate subgradient there. They can
 discourage collapse while the simplex has positive measure, but cannot reopen
 an already collapsed embedded simplex without another objective term or a
 noncollapsed initialization.
+
+Summary
+-------
+
+.. autosummary::
+   :nosignatures:
+
+   simplex_strain_energy
+   simplex_measure_energy
+   total_measure_energy
+   simplex_inversion_energy
+   surface_bending_energy
+   closed_surface_volume_energy
+
+See Also
+--------
+
+- :doc:`transformations` for the deformations that these energies regularize.
+- User Guide: `Meshes in ML Pipelines
+  <https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh/ml_integration.html>`_
 
 API Reference
 -------------
