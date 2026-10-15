@@ -15,9 +15,9 @@ and others), so it is the main way to load and save files.
   tetrahedra. With ``point_source="cell_centroids"``, the cell centroids
   become a point cloud or a dual graph, which avoids tetrahedralization of a
   large polyhedral mesh.
-- :func:`to_pyvista` converts a ``Mesh`` to a ``pyvista.PointSet`` (points),
-  a ``pyvista.PolyData`` (curves and surfaces), or a
-  ``pyvista.UnstructuredGrid`` (volumes).
+- :func:`to_pyvista` converts a ``Mesh`` to a ``pyvista.PolyData`` (curves
+  and surfaces), a ``pyvista.UnstructuredGrid`` (volumes), or a
+  ``pyvista.PointSet`` (a point cloud without cells).
 - :func:`to_zarr` and :func:`from_zarr` save and load a ``Mesh`` or a
   :class:`~physicsnemo.mesh.domain_mesh.DomainMesh`, with all of its data, in
   a Zarr store.
