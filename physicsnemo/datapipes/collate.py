@@ -202,7 +202,16 @@ class DefaultCollator(Collator):
                 require_keys(data, self.keys, what="Key")
             data_list = [data.select(*self.keys) for data in data_list]
 
-        batched_data = torch.stack(data_list, dim=self.stack_dim)
+        dim = self.stack_dim
+        batch_dims = data_list[0].batch_dims
+        if -batch_dims - 1 <= dim <= batch_dims:
+            batched_data = torch.stack(data_list, dim=dim)
+        else:
+            # A dim past the batch dims stacks the tensors themselves.
+            # ``torch.stack`` on TensorDicts deprecates that in tensordict 0.15.
+            batched_data = data_list[0].apply(
+                lambda *tensors: torch.stack(tensors, dim=dim), *data_list[1:]
+            )
 
         # Collate metadata only if requested
         if self.collate_metadata:

@@ -87,16 +87,19 @@ def test_default_collate_specific_keys(batch_of_samples):
     assert "y" not in batched_data
 
 
+@pytest.mark.filterwarnings("error::FutureWarning")
 def test_default_collate_different_stack_dim():
     samples = [
-        (TensorDict({"x": torch.randn(3, 10)}), {}),
-        (TensorDict({"x": torch.randn(3, 10)}), {}),
+        (TensorDict({"x": torch.randn(3, 10), "g": {"y": torch.randn(3)}}), {}),
+        (TensorDict({"x": torch.randn(3, 10), "g": {"y": torch.randn(3)}}), {}),
     ]
     collator = dp.DefaultCollator(stack_dim=1, collate_metadata=False)
     batched_data = collator(samples)
 
     # Stack along dim 1: (3, 10) -> (3, 2, 10)
     assert batched_data["x"].shape == (3, 2, 10)
+    assert batched_data["g", "y"].shape == (3, 2)
+    torch.testing.assert_close(batched_data["x"][:, 1], samples[1][0]["x"])
 
 
 def test_default_collate_disable_metadata():
