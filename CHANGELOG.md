@@ -411,6 +411,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coordinates in unused neighbor slots when `max_points` exceeds the number of
   points. Those slots now stay zero, as with the warp backend, so point 0 no
   longer receives their gradient.
+- The transient conjugate heat transfer tank filling example trains again, on
+  one GPU or several. Before, its `train.py` stopped with a `TypeError` before
+  the first step.
 
 ### Security
 
