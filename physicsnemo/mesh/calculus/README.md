@@ -204,7 +204,7 @@ div_v = compute_divergence_points_dec(mesh, vector_field)  # (n_points,)
 
 This computes $\star_0^{-1}\, d^{\ast}\, \star_1\, \flat(X)$: the net flux
 through the boundary of each dual cell, per unit dual volume. It is exact for
-linear vector fields at interior vertices of regular grids and of 1D meshes.
+linear vector fields at interior vertices of uniform grids and of 1D meshes.
 On irregular triangle or tetrahedral meshes it is not exact, and its pointwise
 error does not shrink as the mesh refines.
 

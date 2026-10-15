@@ -1167,7 +1167,7 @@ class Mesh(
         --------
         >>> # Triangle mesh in 3D
         >>> mesh = create_triangle_mesh_3d()  # doctest: +SKIP
-        >>> normals = mesh.compute_point_normals()  # area-weighted (default)  # doctest: +SKIP
+        >>> normals = mesh.compute_point_normals()  # angle-area-weighted (default)  # doctest: +SKIP
         >>> normals_unweighted = mesh.compute_point_normals(weighting="unweighted")  # doctest: +SKIP
         >>> normals_angle = mesh.compute_point_normals(weighting="angle")  # doctest: +SKIP
         >>> # Normals are unit vectors (or zero for isolated points)
@@ -2968,7 +2968,7 @@ class Mesh(
         >>> mesh = Mesh(points, cells)  # 100 points, 200 cells  # doctest: +SKIP
         >>> padded = mesh.pad_to_next_power(power=1.5)  # doctest: +SKIP
         >>> # Points padded to floor(1.5^n) >= 100, cells to floor(1.5^m) >= 200
-        >>> # For power=1.5: 100 points -> 129 points, 200 cells -> 216 cells
+        >>> # For power=1.5: 100 points -> 129 points, 200 cells -> 291 cells
         >>> # Padding cells have zero area and don't affect computations
         """
         if not torch.compiler.is_compiling():
