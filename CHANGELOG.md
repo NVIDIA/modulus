@@ -73,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   charges the target leaf's own extent: on a 200k-face car with 200k volume
   points the dual plan held 1.6e9 pairs at `theta=0.5` and the point plan
   holds 1.5e8.
+- The PhysicsNeMo-Mesh API reference documents `physicsnemo.mesh.fields`
+  (`RankSpec` and `FieldSchema`) and the `physicsnemo.mesh.primitives` catalog.
 
 ### Changed
 
@@ -232,6 +234,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CUDA device.
 - `BoundingBoxFilter` takes about half as long on CPU. On a GPU it
   synchronizes once per coordinate key, instead of once per filtered tensor.
+- The PhysicsNeMo-Mesh tutorials in `examples/minimal/mesh` are reorganized into
+  nine notebooks, from a first mesh to ML pipelines, and re-executed with their
+  outputs. The mesh API reference opens with a map of its submodules.
 
 ### Deprecated
 
@@ -403,6 +408,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coordinates in unused neighbor slots when `max_points` exceeds the number of
   points. Those slots now stay zero, as with the warp backend, so point 0 no
   longer receives their gradient.
+- Eleven PhysicsNeMo-Mesh API pages that listed no functions now document them,
+  and the pages of tensorclasses such as `Mesh` no longer list every TensorDict
+  method.
+- PhysicsNeMo-Mesh examples that raised and claims that the code contradicts,
+  such as the sign of the Laplacian and the dimensions each calculus operator
+  supports, are corrected across the API reference, READMEs, and docstrings.
 
 ### Security
 
