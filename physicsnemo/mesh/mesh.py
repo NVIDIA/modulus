@@ -180,7 +180,6 @@ class _MeshTensorClassMeta(type(TensorClass)):
 class Mesh(
     TensorClass,
     tensor_only=True,
-    skip_post_init_on_rebuild=True,
     metaclass=_MeshTensorClassMeta,
 ):
     r"""A PyTorch-based, dimensionally-generic Mesh data structure.
@@ -489,9 +488,9 @@ class Mesh(
         Called automatically during ``load()`` by tensorclass, and explicitly
         from ``__init__`` during normal construction. This is the single source
         of truth for all default values, type coercions, and shape validation.
-        Rebuilds of an existing mesh, such as ``clone``, ``to`` and ``apply``,
-        skip it (``skip_post_init_on_rebuild``): their fields are already
-        normalized.
+        Tensordict also runs it when it rebuilds a mesh without ``__init__``
+        (``clone``, ``to``, ``apply``, ``double``, ``torch.stack``, ...), which
+        catches the rebuilds that would change a dtype or a shape.
         """
         ### cells: default empty-cells sentinel for point clouds
         if self.cells is None:

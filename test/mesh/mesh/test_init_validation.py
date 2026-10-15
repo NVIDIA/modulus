@@ -709,29 +709,13 @@ def test_to_complex_preserves_integer_cells():
     assert converted.cells.dtype == torch.int64
 
 
-def test_post_init_runs_on_new_data_but_not_on_rebuilds(monkeypatch, tmp_path):
-    """``__post_init__`` checks data that comes in (construction, load) once;
-    tensordict's rebuilds of an existing mesh (``clone``, ``to``, ``apply``)
-    skip it (``skip_post_init_on_rebuild``)."""
-    calls = []
-    post_init = Mesh.__post_init__
-
-    def counting_post_init(self):
-        calls.append(type(self))
-        post_init(self)
-
-    monkeypatch.setattr(Mesh, "__post_init__", counting_post_init)
-
+def test_rebuilds_that_change_dtypes_or_shapes_are_validated():
+    """tensordict rebuilds a mesh without ``__init__`` for generic casts and for
+    stacking; ``__post_init__`` still rejects the invalid meshes they would build.
+    (Mesh does not opt into ``skip_post_init_on_rebuild`` for this reason.)"""
     mesh = Mesh(points=torch.randn(4, 3), cells=torch.tensor([[0, 1, 2], [1, 3, 2]]))
-    assert len(calls) == 1
 
-    mesh.clone()
-    mesh.to("cpu")
-    mesh.to(torch.float64)
-    mesh.apply(lambda t: t)
-    assert len(calls) == 1
-
-    mesh.save(tmp_path / "mesh")
-    loaded = Mesh.load(tmp_path / "mesh")
-    assert len(calls) == 2
-    assert torch.equal(loaded.cells, mesh.cells)
+    with pytest.raises(TypeError, match="integer dtype"):
+        mesh.double()  # also casts the cells; ``mesh.to(torch.float64)`` does not
+    with pytest.raises(ValueError, match="points"):
+        torch.stack([mesh, mesh])

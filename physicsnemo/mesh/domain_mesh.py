@@ -50,11 +50,7 @@ class _DomainMeshTensorClassMeta(type(TensorClass)):
         raise TypeError(f"type '{cls.__name__}' is not subscriptable")
 
 
-class DomainMesh(
-    TensorClass,
-    skip_post_init_on_rebuild=True,
-    metaclass=_DomainMeshTensorClassMeta,
-):
+class DomainMesh(TensorClass, metaclass=_DomainMeshTensorClassMeta):
     r"""A simulation domain represented as an interior mesh with named boundary meshes.
 
     A ``DomainMesh`` groups an interior :class:`Mesh` (either a volumetric mesh
@@ -177,12 +173,13 @@ class DomainMesh(
             self.boundaries = TensorDict(self.boundaries, batch_size=[])
         elif self.boundaries is None:
             self.boundaries = TensorDict({}, batch_size=[])
-        else:
+        elif self.boundaries.batch_size:
             self.boundaries.batch_size = torch.Size([])
 
         ### global_data: coerce dict -> TensorDict, None -> empty TensorDict
         if isinstance(self.global_data, TensorDict):
-            self.global_data.batch_size = torch.Size([])
+            if self.global_data.batch_size:
+                self.global_data.batch_size = torch.Size([])
         else:
             self.global_data = TensorDict(
                 {} if self.global_data is None else dict(self.global_data),
