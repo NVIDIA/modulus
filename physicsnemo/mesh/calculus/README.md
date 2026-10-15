@@ -364,6 +364,17 @@ grad_p = mesh_with_grad.point_data["pressure_gradient"]  # (n_points, n_spatial_
 
 `mesh.compute_cell_derivatives` does the same for `cell_data` with LSQ.
 
+For one field, the `Mesh` methods `gradient`, `divergence`, `curl`, and
+`laplacian` return the result tensor directly. They accept a data key or a
+tensor:
+
+```python
+grad_p = mesh.gradient("pressure", gradient_type="extrinsic")  # (n_points, 3)
+div_v = mesh.divergence(vector_field, method="dec")  # (n_points,)
+curl_v = mesh.curl(vector_field)  # (n_points, 3)
+lap_p = mesh.laplacian("pressure")  # (n_points,)
+```
+
 ### Direct Operator Calls
 
 ```python
