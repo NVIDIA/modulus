@@ -80,6 +80,15 @@ def test_set_generator_empties_the_cache():
     ds.close()
 
 
+def test_close_empties_the_cache():
+    reader = _CountingReader()
+    ds = MeshDataset(reader, cache_host=True)
+    ds[0]
+    ds[1]
+    ds.close()
+    assert not ds._host_cache and not ds._host_cache_index_locks
+
+
 class _SlowCountingReader(_CountingReader):
     """Counting reader whose reads overlap in time, so a race would over-read."""
 

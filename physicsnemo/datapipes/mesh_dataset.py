@@ -104,7 +104,7 @@ class MeshDataset(DatasetBase):
             the same index from this cache, so each index is read once. Meant
             for fitting runs on one or a few samples: the cached sample keeps
             the reader's subsample, so every epoch sees the same one.
-            :meth:`set_generator` empties the cache. The cache has no size
+            :meth:`set_generator` and :meth:`close` empty the cache. It has no size
             limit and hands out the cached object itself, so unless
             ``device`` moves samples to another device, transforms must not
             modify them in place (the built-in mesh transforms do not).
@@ -365,7 +365,10 @@ class MeshDataset(DatasetBase):
     def close(self) -> None:
         """Close the dataset, its reader, and stop prefetching.
 
-        Waits for any in-flight prefetch tasks to complete before shutdown.
+        Waits for any in-flight prefetch tasks to complete before shutdown,
+        then empties the ``cache_host`` cache.
         """
         super().close()
+        self._host_cache.clear()
+        self._host_cache_index_locks.clear()
         self.reader.close()
