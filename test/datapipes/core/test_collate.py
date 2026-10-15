@@ -18,7 +18,7 @@
 
 import pytest
 import torch
-from tensordict import TensorDict
+from tensordict import NonTensorData, TensorDict
 
 import physicsnemo.datapipes as dp
 
@@ -111,10 +111,22 @@ def test_default_collate_stack_dim_past_batch_dims(
     batch_size, stack_dim, expected_shape
 ):
     """A ``stack_dim`` past the samples' batch dims stacks each tensor as
-    ``torch.stack`` does, and the batch keeps the samples' batch size."""
+    ``torch.stack`` does, and the batch keeps the samples' batch size.
+    Non-tensor values keep one value per sample, along a new dim right after
+    the batch dims."""
     samples = [
-        (TensorDict({"x": torch.randn(3, 10)}, batch_size=batch_size), {})
-        for _ in range(2)
+        (
+            TensorDict(
+                {
+                    "x": torch.randn(3, 10),
+                    "name": NonTensorData(name, batch_size=batch_size),
+                    "info": {"tag": NonTensorData(name.upper(), batch_size=batch_size)},
+                },
+                batch_size=batch_size,
+            ),
+            {},
+        )
+        for name in ("a", "b")
     ]
     batched_data = dp.DefaultCollator(stack_dim=stack_dim)(samples)
 
@@ -124,6 +136,9 @@ def test_default_collate_stack_dim_past_batch_dims(
         batched_data["x"],
         torch.stack([data["x"] for data, _ in samples], dim=stack_dim),
     )
+    for key, values in (("name", ["a", "b"]), (("info", "tag"), ["A", "B"])):
+        expected = [values] * batch_size[0] if batch_size else values
+        assert batched_data.get(key).tolist() == expected
 
 
 def test_default_collate_disable_metadata():

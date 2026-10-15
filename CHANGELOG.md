@@ -274,7 +274,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subclass declares, and still raises `TypeError` for any other keyword.
 - `DefaultCollator` with a `stack_dim` past the batch dimensions of the
   samples stacks each tensor with `torch.stack`, without TensorDict behaviour
-  that 0.15 deprecates. The batch's `batch_size` now matches its tensors.
+  that 0.15 deprecates. The batch's `batch_size` now matches its tensors, and
+  samples with non-tensor data no longer fail to collate.
 - The API reference again shows the docstrings of `Mesh`, `DomainMesh` and the
   other tensorclasses in `physicsnemo.mesh`. TensorDict 0.14 replaced them
   with generated signatures.
