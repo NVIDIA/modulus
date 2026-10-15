@@ -130,3 +130,24 @@ pdf_documents = [
 ]
 
 # napoleon_custom_sections = ["Variable Shape"]
+
+
+def _skip_tensordict_members(app, what, name, obj, skip, options):
+    """Leave the TensorDict API of tensorclasses to the TensorDict docs.
+
+    ``@tensorclass`` copies every TensorDict method onto the class it decorates
+    (``Mesh`` gains about 360 of them), so documenting them would bury the class's
+    own API. Dataclass fields stay: tensorclass also turns them into properties.
+    """
+    if what != "class":
+        return None
+    target = getattr(obj, "fget", obj)
+    target = getattr(target, "__func__", target)
+    module = getattr(target, "__module__", None) or ""
+    from_tensordict = module.startswith("tensordict")
+    is_field = "_make_prop" in getattr(target, "__qualname__", "")
+    return True if from_tensordict and not is_field else None
+
+
+def setup(app):
+    app.connect("autodoc-skip-member", _skip_tensordict_members)
