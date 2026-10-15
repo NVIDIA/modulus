@@ -149,16 +149,20 @@ mesh). Two names in ``physicsnemo.mesh`` describe these containers. They
 are defined in ``physicsnemo.mesh.mesh`` and exported from
 ``physicsnemo.mesh``:
 
-.. py:data:: physicsnemo.mesh.mesh.MeshFieldAssociation
+.. currentmodule:: physicsnemo.mesh.mesh
+
+.. py:data:: MeshFieldAssociation
 
    The type ``Literal["point_data", "cell_data", "global_data"]``. Each value
    is the name of a ``Mesh`` attribute, so ``getattr(mesh, association)``
    returns the container.
 
-.. py:data:: physicsnemo.mesh.mesh.MESH_FIELD_ASSOCIATIONS
+.. py:data:: MESH_FIELD_ASSOCIATIONS
 
    The tuple ``("point_data", "cell_data", "global_data")``, which holds the
    values of ``MeshFieldAssociation`` for checks at run time.
+
+.. currentmodule:: physicsnemo.mesh.fields
 
 .. code:: python
 
