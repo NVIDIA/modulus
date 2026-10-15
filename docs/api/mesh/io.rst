@@ -3,35 +3,50 @@ I/O
 
 .. currentmodule:: physicsnemo.mesh.io
 
-Conversion between PhysicsNeMo :class:`~physicsnemo.mesh.mesh.Mesh` objects and
-`PyVista <https://pyvista.org/>`_ meshes. Because PyVista supports a wide range of
-file formats (VTK, STL, PLY, OBJ, and many others), this module serves as the
-primary I/O gateway for PhysicsNeMo-Mesh.
+``physicsnemo.mesh.io`` converts between :class:`~physicsnemo.mesh.mesh.Mesh`
+and `PyVista <https://pyvista.org/>`_ meshes, and saves meshes in the native
+Zarr format. PyVista reads and writes many file formats (VTK, STL, PLY, OBJ,
+and others), so it is the main way to load and save files.
 
-:func:`from_pyvista`
-    Convert a ``pyvista.PolyData`` or ``pyvista.UnstructuredGrid`` to a
-    :class:`~physicsnemo.mesh.mesh.Mesh`. Point data and cell data arrays are
-    carried over.
+- :func:`from_pyvista` converts a ``pyvista.PolyData``,
+  ``pyvista.UnstructuredGrid``, or ``pyvista.PointSet`` to a ``Mesh``, with
+  its point data and cell data. It detects the manifold dimension, or you set
+  it with ``manifold_dim``. Polygons and polyhedra become triangles and
+  tetrahedra. With ``point_source="cell_centroids"``, the cell centroids
+  become a point cloud or a dual graph, which avoids tetrahedralization of a
+  large polyhedral mesh.
+- :func:`to_pyvista` converts a ``Mesh`` to a ``pyvista.PointSet`` (points),
+  a ``pyvista.PolyData`` (curves and surfaces), or a
+  ``pyvista.UnstructuredGrid`` (volumes).
+- :func:`to_zarr` and :func:`from_zarr` save and load a ``Mesh`` or a
+  :class:`~physicsnemo.mesh.domain_mesh.DomainMesh`, with all of its data, in
+  a Zarr store.
 
-:func:`to_pyvista`
-    Convert a :class:`~physicsnemo.mesh.mesh.Mesh` to a ``pyvista.PolyData``
-    (for surface meshes) or ``pyvista.UnstructuredGrid`` (for volume meshes).
+Example
+-------
+
+This example makes a PyVista sphere. To load a file, use
+``pv.read("geometry.stl")`` in its place.
 
 .. code:: python
 
     import pyvista as pv
-    from physicsnemo.mesh.io import from_pyvista, to_pyvista
+    from physicsnemo.mesh.io import from_pyvista, from_zarr, to_pyvista, to_zarr
 
-    # Load any format PyVista supports
-    pv_mesh = pv.read("geometry.stl")
+    pv_mesh = pv.Sphere(theta_resolution=16, phi_resolution=16)
     mesh = from_pyvista(pv_mesh)
+    print(mesh.n_manifold_dims, mesh.n_spatial_dims)  # 2 3
 
-    # Work with the mesh in PhysicsNeMo...
     mesh = mesh.subdivide(levels=1, filter="loop")
 
-    # Export back to PyVista for saving or visualization
+    # Back to PyVista, to save in any format it supports.
     pv_out = to_pyvista(mesh)
     pv_out.save("refined.vtk")
+
+    # Native storage keeps every field and nested key.
+    to_zarr(mesh, "refined.zarr")
+    restored = from_zarr("refined.zarr")
+    print(restored.n_cells == mesh.n_cells)  # True
 
 .. tip::
 
@@ -44,9 +59,31 @@ primary I/O gateway for PhysicsNeMo-Mesh.
    coordinates doubles their storage relative to ``float32`` and may keep
    downstream PyVista computations in double precision.
 
+Summary
+-------
+
+.. autosummary::
+   :nosignatures:
+
+   from_pyvista
+   to_pyvista
+   from_zarr
+   to_zarr
+
+See Also
+--------
+
+- :doc:`tessellation` for polygon meshes.
+- Tutorial: `Loading, Converting, and Saving Meshes
+  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_2_io_interop.ipynb>`_
+
 API Reference
 -------------
 
-.. automodule:: physicsnemo.mesh.io
-   :members:
-   :show-inheritance:
+.. autofunction:: from_pyvista
+
+.. autofunction:: to_pyvista
+
+.. autofunction:: from_zarr
+
+.. autofunction:: to_zarr
