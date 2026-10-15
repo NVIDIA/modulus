@@ -27,7 +27,7 @@ mesh.draw()
 With `backend="auto"` (the default), the backend depends on the spatial
 dimension of the mesh (`n_spatial_dims`):
 
-- 1D and 2D space: matplotlib.
+- 0D to 2D space: matplotlib.
 - 3D space: PyVista.
 
 If the preferred backend is not installed, `draw()` uses the other one.
@@ -126,7 +126,10 @@ mesh.draw(
 
 The PyVista backend ignores `alpha_edges` and warns when it is not 1.0.
 
-### Custom Axes (Matplotlib Only)
+### Drawing on Existing Axes or Plotters
+
+Pass `ax` to draw on an existing matplotlib `Axes` or pyvista `Plotter`, for
+example to overlay several meshes in one scene. With matplotlib:
 
 ```python
 import matplotlib.pyplot as plt
@@ -277,7 +280,7 @@ The visualization code has four files:
 - `physicsnemo/mesh/visualization/draw_mesh.py`: main dispatcher with backend
   selection.
 - `physicsnemo/mesh/visualization/_matplotlib_impl.py`: matplotlib backend
-  (1D to 3D space; no tetrahedra).
+  (0D to 3D space; volume meshes are drawn as their boundary surface).
 - `physicsnemo/mesh/visualization/_pyvista_impl.py`: PyVista backend.
 - `physicsnemo/mesh/visualization/_scalar_utils.py`: scalar data processing.
 

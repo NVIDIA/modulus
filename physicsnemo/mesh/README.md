@@ -279,10 +279,17 @@ grad_T = mesh_with_grad.point_data["temperature_gradient"]
 
 print(f"Gradient shape: {grad_T.shape}")  # torch.Size([20058, 3])
 print(f"grad T = {grad_T[0].round(decimals=3)}")  # tensor([1., 2., 0.])
+
+error = (grad_T - torch.tensor([1.0, 2.0, 0.0])).norm(dim=-1)
+print(f"median error = {error.median():.1e}")  # 3.5e-04
 ```
 
-The default, `gradient_type="intrinsic"`, projects the gradient onto the
-tangent plane of the surface instead.
+On a surface, only the tangential part of the extrinsic gradient is reliable.
+The neighbors of a vertex on a flat region barely span the normal direction,
+so the normal component is poorly determined. On this mesh, 5% of the
+vertices have an error above 0.01, while the tangential part is accurate to
+0.005 at every vertex. The default, `gradient_type="intrinsic"`, projects the
+gradient onto the tangent plane of the surface instead.
 
 ### Moving to GPU
 
@@ -812,10 +819,8 @@ on a CPU and use a GPU when one is present. Work through them in order:
 
 ## Documentation & Resources
 
-- [User Guide](https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh.html):
-  concepts, method choices, and ML integration.
-- [API reference](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/index.html):
-  one page per submodule.
+- User Guide and API reference: see [Documentation](#documentation) at the
+  top of this page.
 - Tests: the [`test/mesh/`](../../test/mesh/) directory shows usage patterns
   for every submodule.
 - Source: explore [`physicsnemo/mesh/`](./) for implementation details.
