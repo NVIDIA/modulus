@@ -78,6 +78,21 @@ def test_with_data_data_containers_do_not_alias_source_structure():
     assert "added" not in mesh.global_data
 
 
+def test_with_data_dict_does_not_alias_source_groups():
+    mesh = Mesh(
+        points=torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]),
+        cells=torch.tensor([[0, 1, 2]]),
+        point_data={"flow": {"p": torch.tensor([1.0, 2.0, 3.0])}},
+    )
+    result = mesh.with_data(point_data={**mesh.point_data, "extra": torch.ones(3)})
+
+    result.point_data["flow", "p"] = torch.zeros(3)
+    result.point_data["flow", "added"] = torch.zeros(3)
+
+    assert torch.equal(mesh.point_data["flow", "p"], torch.tensor([1.0, 2.0, 3.0]))
+    assert "added" not in mesh.point_data["flow"]
+
+
 def test_with_data_empty_mapping_clears_association():
     mesh = _mesh_with_data()
     result = mesh.with_data(cell_data={})

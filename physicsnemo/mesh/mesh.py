@@ -149,6 +149,26 @@ def _set_subclass_fields(obj: Any, base: type, fields: dict[str, Any]) -> None:
         setattr(obj, name, value)
 
 
+def _conflicting_keys(src: TensorDict, dst: TensorDict) -> set[str | tuple[str, ...]]:
+    """Return the leaf keys of ``src`` that would overwrite data in ``dst``.
+
+    A key conflicts if it equals a leaf key of ``dst``, or if one of the two is
+    a prefix of the other: a leaf replacing a group of the same name, or a group
+    replacing a leaf. Groups of the same name with disjoint leaves merge.
+    """
+
+    def as_tuple(key: str | tuple[str, ...]) -> tuple[str, ...]:
+        return key if isinstance(key, tuple) else (key,)
+
+    dst_keys = [as_tuple(k) for k in dst.keys(include_nested=True, leaves_only=True)]
+    conflicts = set()
+    for key in src.keys(include_nested=True, leaves_only=True):
+        k = as_tuple(key)
+        if any(k[: len(d)] == d or d[: len(k)] == k for d in dst_keys):
+            conflicts.add(key)
+    return conflicts
+
+
 def _requested_dtype(
     args: tuple[Any, ...], kwargs: dict[str, Any]
 ) -> torch.dtype | None:
@@ -2171,12 +2191,13 @@ class Mesh(
         def _replacement(
             value: TensorDict | dict[str, torch.Tensor] | None,
             current: TensorDict,
-        ) -> TensorDict | dict[str, torch.Tensor]:
+        ) -> TensorDict:
             if value is None:
                 return current.copy()
             if isinstance(value, TensorDict):
                 return value.copy()
-            return value
+            # A dict may hold the source's nested TensorDicts; copy them too.
+            return TensorDict(value).copy()
 
         return replace(
             self,
@@ -2231,9 +2252,7 @@ class Mesh(
         # Effective measures are not interpolated; use lumped_point_measures.
         ### Check for key conflicts
         if not overwrite_keys:
-            src_keys = set(fields.keys(include_nested=True, leaves_only=True))
-            dst_keys = set(self.point_data.keys(include_nested=True, leaves_only=True))
-            conflicts = src_keys & dst_keys
+            conflicts = _conflicting_keys(fields, self.point_data)
             if conflicts:
                 raise ValueError(
                     f"Keys {conflicts} already exist in point_data. "
@@ -2313,9 +2332,7 @@ class Mesh(
         fields = self.point_data.exclude(EFFECTIVE_MEASURE_KEY)
         ### Check for key conflicts
         if not overwrite_keys:
-            src_keys = set(fields.keys(include_nested=True, leaves_only=True))
-            dst_keys = set(self.cell_data.keys(include_nested=True, leaves_only=True))
-            conflicts = src_keys & dst_keys
+            conflicts = _conflicting_keys(fields, self.cell_data)
             if conflicts:
                 raise ValueError(
                     f"Keys {conflicts} already exist in cell_data. "

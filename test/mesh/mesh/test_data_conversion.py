@@ -129,6 +129,36 @@ class TestCellDataToPointData:
         with pytest.raises(ValueError):
             mesh.cell_data_to_point_data()
 
+    def test_key_conflict_between_field_and_group_raises_error(self):
+        """A cell field named like a point data group conflicts with it."""
+        points = torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+        cells = torch.tensor([[0, 1, 2]])
+        mesh = Mesh(
+            points=points,
+            cells=cells,
+            point_data={"p": {"ref": torch.tensor([1.0, 2.0, 3.0])}},
+            cell_data={"p": torch.tensor([7.0])},
+        )
+
+        with pytest.raises(ValueError):
+            mesh.cell_data_to_point_data()
+
+    def test_groups_with_disjoint_fields_merge(self):
+        """Groups of the same name merge when their fields differ."""
+        points = torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+        cells = torch.tensor([[0, 1, 2]])
+        mesh = Mesh(
+            points=points,
+            cells=cells,
+            point_data={"g": {"a": torch.tensor([1.0, 2.0, 3.0])}},
+            cell_data={"g": {"b": torch.tensor([7.0])}},
+        )
+
+        result = mesh.cell_data_to_point_data()
+
+        assert torch.equal(result.point_data["g", "a"], torch.tensor([1.0, 2.0, 3.0]))
+        assert torch.equal(result.point_data["g", "b"], torch.tensor([7.0, 7.0, 7.0]))
+
     def test_overwrite_keys(self):
         """Test that overwrite_keys=True allows overwriting."""
         points = torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
@@ -343,6 +373,20 @@ class TestPointDataToCellData:
         )
 
         ### Should raise error
+        with pytest.raises(ValueError):
+            mesh.point_data_to_cell_data()
+
+    def test_key_conflict_between_group_and_field_raises_error(self):
+        """A point data group named like a cell field conflicts with it."""
+        points = torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+        cells = torch.tensor([[0, 1, 2]])
+        mesh = Mesh(
+            points=points,
+            cells=cells,
+            point_data={"q": {"x": torch.tensor([1.0, 2.0, 3.0])}},
+            cell_data={"q": torch.tensor([42.0])},
+        )
+
         with pytest.raises(ValueError):
             mesh.point_data_to_cell_data()
 
