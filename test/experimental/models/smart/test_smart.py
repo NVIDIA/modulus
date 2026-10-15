@@ -23,6 +23,7 @@ import torch
 
 from physicsnemo import Module
 from physicsnemo.experimental.models.smart import SMART
+from test.common import compare_output, validate_checkpoint
 
 
 @pytest.fixture(autouse=True)
@@ -64,46 +65,6 @@ def test_geometry_sampling_uses_full_pool_without_dense_embeddings():
     assert not torch.equal(embedded[1], embedded[2])
     repeat = model(points, queries, geometry_generator=torch.Generator().manual_seed(0))
     assert torch.equal(output[0], repeat[0])
-
-
-@pytest.fixture(
-    params=[
-        "cpu",
-        pytest.param(
-            "cuda",
-            marks=pytest.mark.skipif(
-                not torch.cuda.is_available(), reason="CUDA required"
-            ),
-        ),
-    ]
-)
-def device(request):
-    return torch.device(request.param)
-
-
-@pytest.mark.parametrize("custom", [False, True])
-def test_constructor(custom):
-    options = (
-        dict(
-            hidden_dim=32,
-            num_heads=4,
-            num_layers=3,
-            num_latents=12,
-            geometry_subsample=20,
-            parameter_channels=2,
-            share_weights=False,
-        )
-        if custom
-        else {}
-    )
-    model = SMART(**options)
-    for key, value in options.items():
-        assert getattr(model, key) == value
-    assert model.surface_channels == 1 and model.volume_channels == 3
-    assert model.share_weights is (not custom)
-    assert len(model.encoder_refinement) == model.num_layers - 1
-    for i, block in enumerate(model.encoder_refinement):
-        assert (block is model.decoder[i]) == model.share_weights
 
 
 def test_query_independence_and_chunks(device):
@@ -151,9 +112,8 @@ def test_batch_and_geometry_order_independence(device):
         )
 
 
-@pytest.mark.parametrize("share_weights", [True, False])
-@pytest.mark.parametrize("num_layers", [1, 3])
-def test_backward_and_conditioning(device, share_weights, num_layers):
+@pytest.mark.parametrize("share_weights,num_layers", [(True, 1), (True, 3), (False, 3)])
+def test_smart_forward_backward(device, share_weights, num_layers):
     model = small_model(
         parameter_channels=2, share_weights=share_weights, num_layers=num_layers
     ).to(device)
@@ -162,6 +122,12 @@ def test_backward_and_conditioning(device, share_weights, num_layers):
     parameters = torch.randn(2, 2, device=device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
     pressure, velocity = model(geometry, queries, queries, parameters)
+    assert pressure.shape == (2, 9, 1)
+    assert velocity.shape == (2, 9, 3)
+    assert all(
+        (block is model.decoder[i]) == share_weights
+        for i, block in enumerate(model.encoder_refinement)
+    )
     (pressure.square().mean() + velocity.square().mean()).backward()
     for name, parameter in model.named_parameters():
         assert parameter.grad is not None, name
@@ -207,7 +173,7 @@ def test_geometry_latent_override(device):
     generator.manual_seed(27)
     rng = (
         torch.cuda.get_rng_state(device)
-        if device.type == "cuda"
+        if torch.device(device).type == "cuda"
         else torch.get_rng_state()
     ).clone()
     actual = model.encode_geometry(geometry, generator=generator, num_latents=11)
@@ -215,7 +181,7 @@ def test_geometry_latent_override(device):
     assert model.num_latents == 8
     current_rng = (
         torch.cuda.get_rng_state(device)
-        if device.type == "cuda"
+        if torch.device(device).type == "cuda"
         else torch.get_rng_state()
     )
     assert torch.equal(current_rng, rng)
@@ -272,33 +238,66 @@ def test_invalid_inputs():
         model.decode_queries(queries[:1], contexts, torch.zeros(1, 2))
 
 
-@pytest.mark.parametrize("share_weights", [True, False])
-def test_checkpoint_roundtrip(tmp_path, device, share_weights):
-    model = (
-        small_model(share_weights=share_weights, parameter_channels=2).to(device).eval()
-    )
-    path = tmp_path / "smart.mdlus"
-    model.save(str(path))
-    restored = Module.from_checkpoint(str(path)).to(device).eval()
-    assert restored.share_weights == share_weights
-    assert (restored.decoder[0] is restored.encoder_refinement[0]) == share_weights
+@pytest.mark.parametrize(
+    "options",
+    [
+        pytest.param({}, id="shared"),
+        pytest.param(dict(share_weights=False), id="unshared"),
+        pytest.param(dict(attention_precision="bfloat16"), id="attention-bf16"),
+        pytest.param(
+            dict(
+                attention_precision="float16",
+                attention_precision_scope="sdpa",
+                qk_normalization=True,
+            ),
+            id="sdpa-fp16",
+        ),
+        pytest.param(
+            dict(
+                attention_precision="float16",
+                attention_precision_scope="decoder_sdpa",
+                qk_normalization=True,
+                qk_temperature_max=8.0,
+            ),
+            id="decoder-sdpa-fp16",
+        ),
+    ],
+)
+def test_smart_checkpoint(device, tmp_path, monkeypatch, options):
+    """Use the standard model save/load and from_checkpoint validation."""
+    monkeypatch.chdir(tmp_path)
+    model = small_model(parameter_channels=2, **options).to(device).eval()
+    restored = small_model(parameter_channels=2, **options).to(device).eval()
+    # The shared helper restores in training mode. Use a cloud smaller than
+    # either sampling budget so checkpoint comparisons do not resample it.
     inputs = (
-        torch.randn(2, 33, 3, device=device),
+        torch.randn(2, 8, 3, device=device),
         torch.randn(2, 11, 3, device=device),
         torch.randn(2, 19, 3, device=device),
         torch.randn(2, 2, device=device),
     )
-    with torch.no_grad():
-        torch.testing.assert_close(model(*inputs), restored(*inputs), rtol=0, atol=0)
+    assert validate_checkpoint(model, restored, inputs, rtol=0, atol=0)
 
 
-def test_checkpoint_precision_override_preserves_architecture(tmp_path):
+@pytest.mark.parametrize("scope", ["attention", "sdpa", "decoder_sdpa"])
+def test_checkpoint_precision_override_preserves_architecture(tmp_path, scope):
     """Changing arithmetic is supported; changing normalization is not a resume."""
-    model = small_model(attention_precision="float16", qk_normalization=True)
+    model = small_model(
+        attention_precision="float16",
+        attention_precision_scope=scope,
+        qk_normalization=True,
+    )
     path = tmp_path / "attention.mdlus"
     model.save(path)
-    restored = Module.from_checkpoint(path, override_args={"attention_precision": None})
+    restored = Module.from_checkpoint(
+        path,
+        override_args={
+            "attention_precision": None,
+            "attention_precision_scope": "attention",
+        },
+    )
     assert restored.qk_normalization and restored.attention_precision is None
+    assert restored.attention_precision_scope == "attention"
     assert all(block.attention_dtype is None for block in restored.geometry_attention)
     for name, value in model.state_dict().items():
         torch.testing.assert_close(value, restored.state_dict()[name], rtol=0, atol=0)
@@ -307,7 +306,8 @@ def test_checkpoint_precision_override_preserves_architecture(tmp_path):
 
 
 @pytest.mark.parametrize("case", ["shared", "unshared"])
-def test_numerical_regression(case, device):
+def test_smart_forward_accuracy(case, device):
+    """Compare against frozen weights/inputs using the common accuracy comparator."""
     data = torch.load(
         Path(__file__).parent / "data" / f"{case}.pth",
         map_location=device,
@@ -316,7 +316,7 @@ def test_numerical_regression(case, device):
     model = SMART(**data["config"]).to(device).eval()
     model.load_state_dict(data["weights"])
     with torch.no_grad():
-        torch.testing.assert_close(
+        assert compare_output(
             model(**data["inputs"]), data["outputs"], atol=3e-6, rtol=3e-5
         )
 
@@ -367,27 +367,11 @@ def test_autocast_preserves_small_residual_updates(device):
             block.output.linear.bias.fill_(0.002)
         queries = torch.zeros(1, 5, 3, device=device)
         contexts = tuple(torch.zeros(1, 8, 24, device=device) for _ in range(16))
-        with torch.autocast(device.type, dtype=torch.bfloat16):
+        with torch.autocast(torch.device(device).type, dtype=torch.bfloat16):
             actual = model.decode_queries(queries, contexts)
         torch.testing.assert_close(
             actual.float(), torch.full_like(actual.float(), 1.064), atol=2e-4, rtol=0
         )
-
-
-def test_attention_precision_checkpoint(tmp_path, device):
-    """Retain attention-only autocast in serialization and fp32 output heads."""
-    model = small_model(attention_precision="bfloat16").to(device).eval()
-    geometry = torch.randn(1, 32, 3, device=device)
-    queries = torch.randn(1, 13, 3, device=device)
-    with torch.no_grad():
-        expected = model(geometry, queries)[0]
-    assert expected.dtype == torch.float32
-    checkpoint = tmp_path / "attention.mdlus"
-    model.save(checkpoint)
-    restored = Module.from_checkpoint(checkpoint).to(device).eval()
-    assert restored.attention_precision == "bfloat16"
-    with torch.no_grad():
-        torch.testing.assert_close(restored(geometry, queries)[0], expected)
 
 
 @pytest.mark.parametrize("normalize", [False, True])
@@ -421,7 +405,7 @@ def test_sdpa_scope_keeps_projections_float32(device, monkeypatch, normalize):
 
     monkeypatch.setattr(F, "linear", observed_linear)
     monkeypatch.setattr(F, "scaled_dot_product_attention", observed_sdpa)
-    with torch.autocast(device.type, dtype=torch.bfloat16):
+    with torch.autocast(torch.device(device).type, dtype=torch.bfloat16):
         actual = mixed(query, context)
     actual.square().mean().backward()
     assert projection_dtypes and set(projection_dtypes) == {torch.float32}
@@ -434,43 +418,13 @@ def test_sdpa_scope_keeps_projections_float32(device, monkeypatch, normalize):
     assert (actual_grad - original_grad).norm() / original_grad.norm() < 0.02
 
 
-@pytest.mark.parametrize("scope", ["sdpa", "decoder_sdpa"])
-def test_sdpa_precision_scope_checkpoint(tmp_path, scope):
-    """Keep execution scope in checkpoints and permit arithmetic-only overrides."""
-    model = small_model(
-        attention_precision="float16",
-        attention_precision_scope=scope,
-        qk_normalization=True,
-    ).eval()
-    geometry, query = torch.randn(1, 32, 3), torch.randn(1, 13, 3)
-    with torch.no_grad():
-        expected = model(geometry, query)[0]
-    path = tmp_path / "sdpa.mdlus"
-    model.save(path)
-    restored = Module.from_checkpoint(path).eval()
-    assert restored.attention_precision_scope == scope
-    with torch.no_grad():
-        torch.testing.assert_close(restored(geometry, query)[0], expected)
-    reference = Module.from_checkpoint(
-        path,
-        override_args={
-            "attention_precision": None,
-            "attention_precision_scope": "attention",
-        },
-    ).eval()
-    for name, value in model.state_dict().items():
-        torch.testing.assert_close(value, reference.state_dict()[name], rtol=0, atol=0)
-    assert reference.qk_normalization
-
-
-@pytest.mark.parametrize("shared", [False, True])
-def test_qk_normalization_bounds_scores_and_checkpoints(tmp_path, monkeypatch, shared):
-    """Large projected Q/K must stay bounded and query-independent after saving."""
+def test_qk_normalization_bounds_scores(monkeypatch):
+    """Large projected Q/K must stay bounded and query-independent."""
     import math
 
     from torch.nn import functional as F
 
-    model = small_model(qk_normalization=True, share_weights=shared).eval()
+    model = small_model(qk_normalization=True).eval()
     with torch.no_grad():
         for module in model.modules():
             if isinstance(module, torch.nn.MultiheadAttention):
@@ -491,12 +445,6 @@ def test_qk_normalization_bounds_scores_and_checkpoints(tmp_path, monkeypatch, s
         single = model(geometry, query[:, 3:4])[0]
     torch.testing.assert_close(single, expected[:, 3:4], atol=1e-6, rtol=1e-5)
     assert observed
-    path = tmp_path / "normalized.mdlus"
-    model.save(path)
-    restored = Module.from_checkpoint(path).eval()
-    assert restored.qk_normalization
-    with torch.no_grad():
-        torch.testing.assert_close(restored(geometry, query)[0], expected)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA precision check")
