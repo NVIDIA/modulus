@@ -122,12 +122,13 @@ class TestSurfacePrimitives:
             edge = (mesh.points[i] - mesh.points[j]).norm()
             assert torch.isclose(edge, torch.tensor(2.0))
 
+    @pytest.mark.parametrize("radius", [2.5, 1e20, 1e-25])
     @pytest.mark.parametrize("subdivisions", [0, 1, 2])
-    def test_sphere_icosahedral_radius(self, subdivisions):
-        """All vertices lie at the requested radius, at every level."""
+    def test_sphere_icosahedral_radius(self, subdivisions, radius):
+        """All vertices lie at the requested radius, at every level and scale."""
         mesh = primitives.surfaces.sphere_icosahedral.load(
-            radius=2.5, subdivisions=subdivisions
+            radius=radius, subdivisions=subdivisions
         )
 
-        radii = mesh.points.norm(dim=1)
-        assert torch.allclose(radii, torch.full_like(radii, 2.5))
+        radii = mesh.points.double().norm(dim=1) / radius
+        assert torch.allclose(radii, torch.ones_like(radii))

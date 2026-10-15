@@ -77,7 +77,8 @@ def load(
         resolution=resolution,
         capping=True,
     )
-    surface = from_pyvista(cylinder).clean()  # weld coincident points
+    # Weld coincident points, with a tolerance relative to the size
+    surface = from_pyvista(cylinder).clean(tolerance=1e-6 * min(radius, height))
 
     ### Fill the convex surface with a fan of tetrahedra from its center
     points = torch.cat([surface.points, surface.points.new_zeros(1, 3)], dim=0)

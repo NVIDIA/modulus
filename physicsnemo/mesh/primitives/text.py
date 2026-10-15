@@ -261,8 +261,22 @@ def _group_letters(text_path):
 def _winding_number(
     points: Float[torch.Tensor, "n_points 2"],
     segments: Float[torch.Tensor, "n_segments 2 2"],
+    max_pairs: int = 2**22,
 ) -> Float[torch.Tensor, " n_points"]:
-    """Compute the winding number of closed polyline contours around points."""
+    """Compute the winding number of closed polyline contours around points.
+
+    Points are processed in chunks of at most ``max_pairs`` point-segment
+    pairs, which bounds the memory use.
+    """
+    chunk = max(1, max_pairs // max(1, len(segments)))
+    if len(points) > chunk:
+        return torch.cat(
+            [
+                _winding_number(points[i : i + chunk], segments, max_pairs)
+                for i in range(0, len(points), chunk)
+            ]
+        )
+
     v0, v1 = segments[:, 0], segments[:, 1]  # (n_segments, 2)
     px, py = points[:, :1], points[:, 1:]  # (n_points, 1)
 

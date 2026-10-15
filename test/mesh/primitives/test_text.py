@@ -163,5 +163,27 @@ def test_text_2d_2d_curved_glyph_area():
     assert mesh.cell_areas.sum().item() == pytest.approx(abs(expected), rel=1e-3)
 
 
+def test_winding_number_chunked():
+    """Chunking bounds memory without changing the winding numbers."""
+    from physicsnemo.mesh.primitives.text import _winding_number
+
+    ### A counter-clockwise unit square, and a clockwise square inside it
+    def square(lo, hi, reverse=False):
+        corners = torch.tensor([[lo, lo], [hi, lo], [hi, hi], [lo, hi]])
+        if reverse:
+            corners = corners.flip(0)
+        return torch.stack([corners, corners.roll(-1, dims=0)], dim=1)
+
+    segments = torch.cat([square(0.0, 1.0), square(0.25, 0.75, reverse=True)])
+    points = torch.rand(1000, 2, generator=torch.Generator().manual_seed(0)) * 1.2
+    points = points - 0.1
+    in_outer = ((points > 0) & (points < 1)).all(dim=1)
+    in_hole = ((points > 0.25) & (points < 0.75)).all(dim=1)
+    expected = in_outer.float() - in_hole.float()
+
+    assert torch.equal(_winding_number(points, segments), expected)
+    assert torch.equal(_winding_number(points, segments, max_pairs=24), expected)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

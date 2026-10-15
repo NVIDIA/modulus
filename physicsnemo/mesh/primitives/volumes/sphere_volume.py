@@ -68,7 +68,8 @@ def load(
     sphere = pv.Sphere(
         radius=radius, theta_resolution=resolution, phi_resolution=resolution
     )
-    surface = from_pyvista(sphere).clean()  # weld coincident points
+    # Weld coincident points, with a tolerance relative to the size
+    surface = from_pyvista(sphere).clean(tolerance=1e-6 * radius)
 
     ### Fill the convex surface with a fan of tetrahedra from its center
     points = torch.cat([surface.points, surface.points.new_zeros(1, 3)], dim=0)

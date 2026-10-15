@@ -101,22 +101,24 @@ class TestVolumePrimitives:
         assert (det > -tol).all()
 
     @requires_pyvista
+    @pytest.mark.parametrize("scale", [1.0, 1e-12])
     @pytest.mark.parametrize("example_name", PYVISTA_VOLUMES)
-    def test_pyvista_volumes_partition_solid(self, example_name):
+    def test_pyvista_volumes_partition_solid(self, example_name, scale):
         """Tetrahedra fill the solid without overlap (VTK 9.7 Delaunay did not)."""
-        surfaces = {
-            "sphere_volume": pv.Sphere(
-                radius=1.0, theta_resolution=20, phi_resolution=20
-            ),
-            "cylinder_volume": pv.Cylinder(radius=1.0, height=2.0, resolution=20),
-        }
-        mesh = getattr(primitives.volumes, example_name).load()
-        tets = mesh.points.double()[mesh.cells]  # (n_cells, 4, 3)
+        if example_name == "sphere_volume":
+            mesh = primitives.volumes.sphere_volume.load(radius=scale)
+            surface = pv.Sphere(radius=1.0, theta_resolution=20, phi_resolution=20)
+        else:
+            mesh = primitives.volumes.cylinder_volume.load(
+                radius=scale, height=2 * scale
+            )
+            surface = pv.Cylinder(radius=1.0, height=2.0, resolution=20)
+        tets = mesh.points.double()[mesh.cells] / scale  # (n_cells, 4, 3)
         signed_volumes = torch.det(tets[:, 1:] - tets[:, [0]]) / 6
 
         ### All positive, summing to the volume of the surface polyhedron
         assert (signed_volumes > 0).all()
-        expected = surfaces[example_name].triangulate().volume
+        expected = surface.triangulate().volume
         assert signed_volumes.sum().item() == pytest.approx(expected, rel=1e-5)
 
         ### Random interior samples lie strictly inside exactly one tetrahedron
