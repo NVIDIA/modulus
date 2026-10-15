@@ -150,21 +150,24 @@ def _set_subclass_fields(obj: Any, base: type, fields: dict[str, Any]) -> None:
 
 
 def _conflicting_keys(src: TensorDict, dst: TensorDict) -> set[str | tuple[str, ...]]:
-    """Return the leaf keys of ``src`` that would overwrite data in ``dst``.
+    """Return the keys of ``src`` that would overwrite data in ``dst``.
 
-    A key conflicts if it equals a leaf key of ``dst``, or if one of the two is
-    a prefix of the other: a leaf replacing a group of the same name, or a group
-    replacing a leaf. Groups of the same name with disjoint leaves merge.
+    A key conflicts if a leaf key of ``dst`` equals it or is a prefix of it (a
+    leaf or group, even an empty one, replacing a leaf), or if it is a leaf
+    that is a prefix of a leaf key of ``dst`` (a leaf replacing a group).
+    Groups of the same name with disjoint leaves merge.
     """
 
     def as_tuple(key: str | tuple[str, ...]) -> tuple[str, ...]:
         return key if isinstance(key, tuple) else (key,)
 
     dst_keys = [as_tuple(k) for k in dst.keys(include_nested=True, leaves_only=True)]
+    src_leaves = {as_tuple(k) for k in src.keys(include_nested=True, leaves_only=True)}
     conflicts = set()
-    for key in src.keys(include_nested=True, leaves_only=True):
+    for key in src.keys(include_nested=True):
         k = as_tuple(key)
-        if any(k[: len(d)] == d or d[: len(k)] == k for d in dst_keys):
+        is_leaf = k in src_leaves
+        if any(k[: len(d)] == d or (is_leaf and d[: len(k)] == k) for d in dst_keys):
             conflicts.add(key)
     return conflicts
 
