@@ -20,15 +20,12 @@ This module provides the Adjacency tensorclass for representing ragged arrays
 using offset-indices encoding, commonly used in graph and mesh processing.
 """
 
-import builtins
-
 import torch
 from jaxtyping import Int
-from tensordict import tensorclass
+from tensordict import TensorClass
 
 
-@tensorclass
-class Adjacency:
+class Adjacency(TensorClass):
     """Ragged adjacency list stored with offset-indices encoding.
 
     This structure efficiently represents variable-length neighbor lists using two
@@ -78,15 +75,20 @@ class Adjacency:
                     f"Even for 0 sources, offsets should be [0]."
                 )
 
+            ### Read the first and last offsets in one device-to-host transfer
+            # (each transfer of a CUDA tensor synchronizes the device).
+            first_offset, last_offset = torch.stack(
+                (self.offsets[0], self.offsets[-1])
+            ).tolist()
+
             ### Validate offsets starts at 0
-            if self.offsets[0].item() != 0:
+            if first_offset != 0:
                 raise ValueError(
-                    f"First offset must be 0, but got {self.offsets[0].item()=}. "
+                    f"First offset must be 0, but got {first_offset=}. "
                     f"The offset-indices encoding requires offsets[0] == 0."
                 )
 
             ### Validate last offset equals length of indices
-            last_offset = self.offsets[-1].item()
             indices_length = len(self.indices)
             if last_offset != indices_length:
                 raise ValueError(
@@ -95,7 +97,7 @@ class Adjacency:
                     f"The offset-indices encoding requires offsets[-1] == len(indices)."
                 )
 
-    def to_list(self) -> list[list[builtins.int]]:
+    def to_list(self) -> list[list[int]]:
         """Convert adjacency to a ragged list-of-lists representation.
 
         This method is primarily for testing and comparison with other libraries.
@@ -135,12 +137,12 @@ class Adjacency:
         return result
 
     @property
-    def n_sources(self) -> builtins.int:
+    def n_sources(self) -> int:
         """Number of source elements (points or cells) in the adjacency."""
         return len(self.offsets) - 1
 
     @property
-    def n_total_neighbors(self) -> builtins.int:
+    def n_total_neighbors(self) -> int:
         """Total number of neighbor relationships across all sources."""
         return len(self.indices)
 
@@ -212,7 +214,7 @@ class Adjacency:
 
         return source_indices, self.indices
 
-    def truncate_per_source(self, max_count: builtins.int | None = None) -> "Adjacency":
+    def truncate_per_source(self, max_count: int | None = None) -> "Adjacency":
         """Limit each source to at most max_count neighbors.
 
         This is useful for capping the number of candidates in spatial queries
@@ -289,9 +291,9 @@ def build_adjacency_from_pairs(
 
     Algorithm:
         1. Sort pairs by source index (then by target for consistency)
-        2. Use bincount to count neighbors per source
-        3. Use cumsum to compute offsets
-        4. Return Adjacency with sorted neighbor lists
+        2. Binary-search the sorted sources for each source's first pair,
+           which gives the offsets without a device synchronization
+        3. Return Adjacency with sorted neighbor lists
 
     Parameters
     ----------
@@ -323,10 +325,14 @@ def build_adjacency_from_pairs(
     device = source_indices.device
 
     ### Handle empty pairs
+    # Each Adjacency here and below is built with its device, so storing it in a
+    # Mesh cache on that device keeps the object instead of re-creating it (and
+    # re-running the validating __post_init__) through ``.to(device)``.
     if len(source_indices) == 0:
         return Adjacency(
             offsets=torch.zeros(n_sources + 1, dtype=torch.int64, device=device),
             indices=torch.zeros(0, dtype=torch.int64, device=device),
+            device=device,
         )
 
     if n_targets is None:
@@ -348,16 +354,16 @@ def build_adjacency_from_pairs(
     sorted_targets = target_indices[sort_indices]
 
     ### Compute offsets for each source
-    # offsets[i] marks the start of source i's neighbor list
-    offsets = torch.zeros(n_sources + 1, dtype=torch.int64, device=device)
-
-    # Count occurrences of each source index
-    source_counts = torch.bincount(sorted_sources, minlength=n_sources)
-
-    # Cumulative sum to get offsets
-    offsets[1:] = torch.cumsum(source_counts, dim=0)
+    # offsets[i] marks the start of source i's neighbor list: the number of pairs
+    # whose source is below i. (CUDA bincount would synchronize twice to bound
+    # its input.)
+    offsets = torch.searchsorted(
+        sorted_sources,
+        torch.arange(n_sources + 1, dtype=sorted_sources.dtype, device=device),
+    )
 
     return Adjacency(
         offsets=offsets,
         indices=sorted_targets,
+        device=device,
     )
