@@ -630,8 +630,8 @@ python src/infer.py model=smart_surface dataset=drivaer_ml_smart_surface \
 ```
 
 Set `datasets/dataset_paths.yaml` as for the other DrivAerML recipes. The native
-CFD files must contain the `vehicle` boundary and the usual freestream metadata;
-these variants do not read CAD or auxiliary STL files.
+CFD files must contain the `vehicle` boundary and the usual freestream metadata.
+These variants do not read CAD or auxiliary STL files.
 
 Three counts have different meanings:
 
@@ -642,40 +642,40 @@ Three counts have different meanings:
   full cloud. Changing this count does not change field-query samples.
 - **Field queries:** `sampling_resolution=200000` during training. Surface queries
   are sampled online with coordinates, normals, targets, and integration measures
-  kept aligned. Volume queries reuse the reader's efficient cyclic block sampling;
-  a spatially shuffled on-disk point order is preferable. The CFD boundary is
+  kept aligned. Volume queries reuse the reader's efficient cyclic block sampling.
+  A spatially shuffled on-disk point order is preferable. The CFD boundary is
   retained in full regardless of the query budget.
 
 Reader-derived case/epoch seeds isolate geometry and query randomness. SMART's
-`independent_validation=true` gives validation a separate reader at epoch zero;
-training resamples each epoch. Inference inherits the recipe's large query cap
+`independent_validation=true` gives validation a separate reader at epoch zero.
+Training resamples each epoch. Inference inherits the recipe's large query cap
 (`sampling_resolution=100000000`), while `model.eval_chunk_size=8192` bounds
 SMART decoder activations. Geometry is encoded once per case and reused across
 all chunks. Ensure the query cap exceeds the case size for full-mesh fields and
 surface drag/lift integration. Full query arrays and predictions still occupy
-memory; chunking does not make data loading out-of-core.
+memory. Chunking does not make data loading out-of-core.
 
-Surface normals enter the existing additive query projection; volume features
+Surface normals enter the existing additive query projection. Volume features
 use the recipe's signed SDF/closest-point direction operation on the **CFD**
-boundary. The fast pseudo-normal sign depends on boundary orientation; it does
+boundary. The fast pseudo-normal sign depends on boundary orientation. It does
 not make an open or non-manifold surface watertight. Freestream velocity supplies
 three global conditioning channels. Geometry and queries are centered together
 on the complete CFD boundary and scaled by `L_ref`, so the coordinate frame does
 not change with query sampling. Full surface data is loaded before online query
-selection; volume target reads remain subsampled. Existing model/dataset configs
+selection. Volume target reads remain subsampled. Existing model/dataset configs
 and their sampling behavior are unchanged.
 
 SMART is integrated through this recipe and uses its preprocessing and training
 defaults. The implementation was developed independently from the published
 paper and PhysicsNeMo components. The CFD geometry source, query features,
-global conditioning, and sample counts above are recipe choices; these configs
+global conditioning, and sample counts above are recipe choices. These configs
 do not claim to reproduce the paper's experiments or another model's accuracy.
 `compile=false` is the SMART default because sampling uses an explicit per-case
 generator.
 
 The shared trainer saves the final epoch and checkpoints optimizer, scheduler,
 and gradient-scaler states after the epoch scheduler update. Checkpoints created
-by older recipe versions retain their historical scheduler state; loading them
+by older recipe versions retain their historical scheduler state. Loading them
 does not automatically correct that state.
 
 ### Dataset config anatomy
