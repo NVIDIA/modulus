@@ -413,21 +413,28 @@ def _compute_triangle_circumcenters_3d(vertices: torch.Tensor) -> torch.Tensor:
     edge_02 = vertices_64[:, 2, :] - p0
 
     normal = torch.linalg.cross(edge_01, edge_02, dim=-1)
-    normal_norm_sq = (
-        (normal * normal)
-        .sum(dim=-1, keepdim=True)
-        .clamp_min(torch.finfo(torch.float64).eps)
-    )
+    normal_norm_sq = (normal * normal).sum(dim=-1, keepdim=True)
 
     edge_01_sq = (edge_01 * edge_01).sum(dim=-1, keepdim=True)
     edge_02_sq = (edge_02 * edge_02).sum(dim=-1, keepdim=True)
+
+    # Scale-free degeneracy test: |normal|^2 / (|e01|^2 |e02|^2) = sin^2 of the
+    # angle at p0, against the (n * eps)^2 of normalized_gram_inverse.
+    # Degenerate cells return their centroid, like the general path.
+    is_degenerate = ~(
+        normal_norm_sq
+        > (2 * torch.finfo(torch.float64).eps) ** 2 * edge_01_sq * edge_02_sq
+    )
+    normal_norm_sq = torch.where(is_degenerate, 1.0, normal_norm_sq)
 
     offset = (
         edge_01_sq * torch.linalg.cross(edge_02, normal, dim=-1)
         + edge_02_sq * torch.linalg.cross(normal, edge_01, dim=-1)
     ) / (2.0 * normal_norm_sq)
 
-    return (p0 + offset).to(dtype=output_dtype)
+    return torch.where(is_degenerate, vertices_64.mean(dim=1), p0 + offset).to(
+        dtype=output_dtype
+    )
 
 
 def compute_circumcenters(

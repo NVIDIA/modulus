@@ -635,6 +635,28 @@ class TestCurvatureNumerical:
             f"Got {mean_H:.2f}, expected {expected_H:.2f}"
         )
 
+    def test_tiny_radius_sphere_float32(self, device):
+        """K scales as 1/r^2 and H as 1/r down to a float32 sphere 15 um across
+        (dual areas about 5e-12), measured against the unit sphere. Scaling by
+        a power of two keeps the coordinates exact."""
+        mesh = create_sphere_mesh(radius=1.0, subdivisions=2, device=device)
+        scale = 2.0**-17
+        small = mesh.with_points(mesh.points * scale)
+        assert small.points.dtype == torch.float32
+
+        torch.testing.assert_close(
+            small.gaussian_curvature_vertices * scale**2,
+            mesh.gaussian_curvature_vertices,
+            rtol=1e-4,
+            atol=0.0,
+        )
+        torch.testing.assert_close(
+            small.mean_curvature_vertices * scale,
+            mesh.mean_curvature_vertices,
+            rtol=1e-4,
+            atol=0.0,
+        )
+
     def test_large_radius_sphere(self, device):
         """Test curvature on very large sphere."""
         radius = 100.0

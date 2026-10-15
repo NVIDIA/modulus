@@ -287,6 +287,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   samples stacks each tensor with `torch.stack`, without TensorDict behaviour
   that 0.15 deprecates. The batch's `batch_size` now matches its tensors, and
   samples with non-tensor data no longer fail to collate.
+- `physicsnemo.mesh` no longer raises small lengths, areas and volumes to a
+  fixed floor, which distorted results on float32 meshes in metres a few
+  millimetres across. Area-weighted aggregation, `partition_cells` centroids,
+  support volumes, the DEC Laplacian and sharp, Gaussian and mean curvature,
+  and triangle circumcenters now give the same results at any scale.
+- `sample_random_points_on_cells` with a small `alpha` no longer places some
+  points outside their cells.
+- In float32, `sdf_polygon_2d` no longer gives NaN distances for a polygon
+  with a repeated vertex or NaN gradients on its edges, and
+  `mesh_implicit_domain` now meshes float32 polygons such as a square.
 - The API reference again shows the docstrings of `Mesh`, `DomainMesh` and the
   other tensorclasses in `physicsnemo.mesh`. TensorDict 0.14 replaced them
   with generated signatures.

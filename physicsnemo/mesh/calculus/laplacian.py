@@ -39,8 +39,6 @@ from typing import TYPE_CHECKING
 import torch
 from jaxtyping import Float, Int
 
-from physicsnemo.mesh.utilities._tolerances import safe_eps
-
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh
 
@@ -182,12 +180,14 @@ def compute_laplacian_points_dec(
     ### Normalize by Voronoi areas
     # Standard cotangent Laplacian: Δf_i = (1/A_voronoi_i) × accumulated_sum
     dual_volumes_0 = get_or_compute_dual_volumes_0(mesh)
+    # Isolated vertices (zero dual volume, zero sum) keep their 0
+    dual_volumes_0 = torch.where(dual_volumes_0 > 0, dual_volumes_0, 1.0)
 
     if point_values.ndim == 1:
-        laplacian = laplacian / dual_volumes_0.clamp(min=safe_eps(dual_volumes_0.dtype))
+        laplacian = laplacian / dual_volumes_0
     else:
         laplacian = laplacian / dual_volumes_0.view(
             -1, *([1] * (point_values.ndim - 1))
-        ).clamp(min=safe_eps(dual_volumes_0.dtype))
+        )
 
     return laplacian

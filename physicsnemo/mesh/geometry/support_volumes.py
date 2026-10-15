@@ -348,10 +348,10 @@ def compute_vertex_support_volume_cell_fractions(
     dual_volumes = torch.zeros(mesh.n_points, dtype=dtype, device=device)
     dual_volumes.scatter_add_(0, global_vertex_indices, voronoi_areas)
 
-    # Divide each per-cell area by the vertex total (guaranteed to sum to 1.0)
-    fractions = voronoi_areas / dual_volumes[global_vertex_indices].clamp(
-        min=safe_eps(dtype)
-    )
+    # Divide each per-cell area by the vertex total (guaranteed to sum to 1.0).
+    # Only a zero total (whose areas are all 0) is replaced, keeping its 0.
+    vertex_totals = dual_volumes[global_vertex_indices]
+    fractions = voronoi_areas / torch.where(vertex_totals > 0, vertex_totals, 1.0)
 
     cell_vertex_pairs = torch.stack([cell_indices_out, local_vertex_indices], dim=1)
     return fractions, cell_vertex_pairs
