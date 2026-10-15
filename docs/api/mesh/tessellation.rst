@@ -87,7 +87,7 @@ exact-boundary contract provides three guarantees:
   them.
 - The entire process is deterministic.
 
-Interior filling is not differentiable: the output carries no autograd
+Interior filling is not differentiable. The output carries no autograd
 history.
 
 You can attach provenance fields (``"boundary_marker"`` and
