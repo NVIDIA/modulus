@@ -69,16 +69,16 @@ and it makes the operations fast to vectorize.
 
 Core capabilities:
 
-- GPU acceleration: all operations are vectorized with
+- GPU acceleration: most operations are vectorized with
   [PyTorch](https://pytorch.org/) and run natively on
   [CUDA](https://developer.nvidia.com/cuda-toolkit).
 - Dimension-generic: works with n-D manifolds embedded in m-D spaces.
 - TensorDict integration: point, cell, and global data are
   [TensorDicts](https://github.com/pytorch/tensordict) that move with the mesh
   between devices.
-- Field schemas: `RankSpec` and `FieldSchema` declare the tensor rank of each
-  field, so that transformations rotate vectors and tensors correctly and
-  models can check their inputs.
+- Field schemas: `RankSpec` and `FieldSchema` declare how each named field
+  transforms under rotations and reflections (its tensor rank, symmetry, and
+  parity), so that a model can declare and check its inputs.
 - Simulation domains: `DomainMesh` holds an interior mesh with named boundary
   meshes.
 - Differentiable: most operations support
@@ -695,8 +695,8 @@ so user data never mixes with cached geometry.
 
 `DomainMesh` groups an interior `Mesh` with named boundary meshes (for
 example `"inlet"` and `"no_slip"`) for simulation domains. `RankSpec` and
-`FieldSchema` (in `physicsnemo.mesh.fields`) declare the tensor rank of each
-named field. See the
+`FieldSchema` (in `physicsnemo.mesh.fields`) declare the transformation law
+of each named field. See the
 [User Guide](https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh.html)
 for both.
 
