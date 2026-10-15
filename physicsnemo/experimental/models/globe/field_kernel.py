@@ -131,6 +131,18 @@ def _require_supported(schema: FieldSchema, *, label: str) -> None:
     true vectors, and build vector outputs on a basis of true vectors.  A
     field of rank 2 or more would be silently left out, and a pseudotensor
     would transform with the wrong sign under reflections.
+
+    Parameters
+    ----------
+    schema : FieldSchema
+        Parsed field declarations to check.
+    label : str
+        Name of the schema argument, used in error messages.
+
+    Raises
+    ------
+    NotImplementedError
+        If a field has rank other than 0 or 1, or has ``parity='odd'``.
     """
     for name, spec in schema.items():
         if spec.rank not in (0, 1):
@@ -625,7 +637,8 @@ class Kernel(Module):
 
         ### Vector magnitude, direction, and log-magnitude features
         with record_function("kernel::feature_engineering"):
-            # Per leaf: TD + 0-dim tensor would .item() the radius (a sync).
+            # Per leaf: TD + 0-dim tensor breaks the graph under torch.compile
+            # (tensordict 0.15), while apply traces.
             vectors_mag_squared: TensorDict = (vectors * vectors).sum(dim=-1).apply(
                 lambda t: t + self._smoothing_radius_sq
             )
@@ -741,10 +754,8 @@ class Kernel(Module):
 
                 basis_vectors = torch.stack(basis_vector_components, dim=-1)
 
-            ### Build per-field outputs in a single pass over the flat tensor.
-            # One immutable dict + one TensorDict construction (no setitem on
-            # the result), sidestepping pytorch/tensordict#1680 under
-            # torch.compile + torch.utils.checkpoint.
+            ### Build per-field outputs in a single pass over the flat tensor,
+            ### into one dict and then one TensorDict.
             n_vectors_in = len(vectors.keys(include_nested=True, leaves_only=True))
             coeffs_per_vector = 1 + 2 * (n_vectors_in - 1)  # r_hat + (theta, kappa) per non-r vector
 
@@ -809,7 +820,7 @@ class BarnesHutKernel(Kernel):
     -------
     Same parameters as :class:`Kernel`, with additions:
 
-    theta : float, optional, default=1.0
+    theta : float, optional, default=1.5
         Barnes-Hut opening angle.  A node is approximated when
         ``D/r < theta``.  Larger values are more aggressive (more
         approximation, faster).  At ``theta = 0``, all interactions
@@ -873,7 +884,7 @@ class BarnesHutKernel(Kernel):
         source_strengths: Float[torch.Tensor, " n_sources"] | None = None,
         source_data: TensorDict | None = None,
         global_data: TensorDict | None = None,
-        theta: float = 1.0,
+        theta: float = 1.5,
         cluster_tree: "ClusterTree | None" = None,
         target_tree: "ClusterTree | None" = None,
         dual_plan: "DualInteractionPlan | None" = None,
@@ -1091,7 +1102,11 @@ class BarnesHutKernel(Kernel):
                 else self._auto_chunk_size(n_near, device)
             )
 
-            for start in range(0, n_near, chunk_size):
+            ### Loop over the chunk count, not ``range(0, n_near, chunk_size)``:
+            ### torch.compile specializes ``range`` arguments, so that form would
+            ### recompile for every new pair count (each new geometry).
+            for i_chunk in range(_ceil_div(n_near, chunk_size)):
+                start = i_chunk * chunk_size
                 end = min(start + chunk_size, n_near)
 
                 chunk_tgt_ids = near_tgt_ids[start:end]
@@ -1113,7 +1128,7 @@ class BarnesHutKernel(Kernel):
                     )
 
                 with record_function("bh_kernel::near_scatter"):
-                    chunk_strengths = source_strengths[chunk_src_ids]
+                    chunk_strengths = torch.index_select(source_strengths, 0, chunk_src_ids)
                     self._pack_and_scatter(
                         chunk_result, chunk_strengths, chunk_tgt_ids, packed_buf
                     )
@@ -1139,7 +1154,7 @@ class BarnesHutKernel(Kernel):
 
             ### Broadcast node-level results to individual targets.
             with record_function("bh_kernel::far_node_broadcast"):
-                far_strengths = node_total_strength[far_src_nids]
+                far_strengths = torch.index_select(node_total_strength, 0, far_src_nids)
 
                 expanded_tgt_ids = dual_plan.far_broadcast_target_ids
                 pair_ids = dual_plan.far_broadcast_pair_ids
@@ -1157,25 +1172,32 @@ class BarnesHutKernel(Kernel):
         # Phase C: (near,far) - individual targets × source node centroids
         # ==================================================================
         if n_nf > 0:
-            nf_tgt_ids = dual_plan.nf_target_ids
-            nf_src_nids = dual_plan.nf_source_node_ids
+            ### Chunked like Phase A: with ``expand_far_targets`` this stream
+            ### carries almost every interaction, and evaluating it in one
+            ### call materializes every hidden activation for all of it.
+            ### It loops over the chunk count for the same reason as Phase A.
+            nf_chunk = self._auto_chunk_size(n_nf, device)
+            for i_chunk in range(_ceil_div(n_nf, nf_chunk)):
+                start = i_chunk * nf_chunk
+                nf_tgt_ids = dual_plan.nf_target_ids[start : start + nf_chunk]
+                nf_src_nids = dual_plan.nf_source_node_ids[start : start + nf_chunk]
 
-            ### Same evaluation as Phase B (source centroids + aggregates),
-            # but same scatter as Phase A (per-target, no broadcast).
-            with record_function("bh_kernel::nf_evaluate"):
-                nf_result = self._maybe_checkpointed_evaluate(
-                    nf_tgt_ids, nf_src_nids,
-                    target_points, aggregates.node_centroid,
-                    agg_scalars, agg_vectors,
-                    global_scalars, global_vectors,
-                    reference_length, device,
-                )
+                ### Same evaluation as Phase B (source centroids + aggregates),
+                # but same scatter as Phase A (per-target, no broadcast).
+                with record_function("bh_kernel::nf_evaluate"):
+                    nf_result = self._maybe_checkpointed_evaluate(
+                        nf_tgt_ids, nf_src_nids,
+                        target_points, aggregates.node_centroid,
+                        agg_scalars, agg_vectors,
+                        global_scalars, global_vectors,
+                        reference_length, device,
+                    )
 
-            with record_function("bh_kernel::nf_scatter"):
-                nf_strengths = node_total_strength[nf_src_nids]
-                self._pack_and_scatter(
-                    nf_result, nf_strengths, nf_tgt_ids, packed_buf
-                )
+                with record_function("bh_kernel::nf_scatter"):
+                    nf_strengths = torch.index_select(node_total_strength, 0, nf_src_nids)
+                    self._pack_and_scatter(
+                        nf_result, nf_strengths, nf_tgt_ids, packed_buf
+                    )
 
         # ==================================================================
         # Phase D: (far,near) - target node centroid × individual sources,
@@ -1199,7 +1221,7 @@ class BarnesHutKernel(Kernel):
 
             ### Broadcast to stage-1 survivors via the ragged mapping.
             with record_function("bh_kernel::fn_broadcast"):
-                fn_strengths = source_strengths[fn_src_ids]
+                fn_strengths = torch.index_select(source_strengths, 0, fn_src_ids)
 
                 expanded_tgt_ids = dual_plan.fn_expanded_target_ids
                 pair_ids = dual_plan.fn_expanded_pair_ids
@@ -1221,26 +1243,11 @@ class BarnesHutKernel(Kernel):
         duplicated forward/checkpoint plumbing across the four phases
         and keeps the gradient-checkpointing policy in one place.
 
-        The wrap fires in **both** training and eval, not just training,
-        for two reasons:
-
-        1. Memory savings (the original purpose).  In eval no autograd
-           tape is active (``train.py`` wraps validation in
-           ``torch.no_grad()``), so ``checkpoint(use_reentrant=False)``
-           degenerates to a near-no-op forward call - no recompute, no
-           extra memory, no extra compute.
-        2. Workaround for a Dynamo+CUDA TensorDict bug.  When the same
-           ``_gather_and_evaluate`` body is inlined into the parent
-           graph (i.e. without the checkpoint wrapper), FakeTensor
-           tracing fails to propagate ``TensorDict.batch_size`` through
-           ``(vectors * vectors).sum(dim=-1)``: leaf tensors get
-           reduced to 1D but the TD still reports its 2D pre-reduction
-           batch size, and any downstream op that consults
-           ``batch_size`` (``.unsqueeze(-1)``, ``concatenate_leaves``'s
-           reshape) trips on the inconsistency.  Wrapping the call in
-           ``checkpoint`` gives Dynamo a fresh sub-tracer scope that
-           tracks the post-reduction batch size correctly, so the
-           identical eager-mode-correct body now also traces correctly.
+        The wrap fires in eval as well as in training. In eval no autograd
+        tape is active (``train.py`` wraps validation in
+        ``torch.no_grad()``), so ``checkpoint(use_reentrant=False)``
+        degenerates to a near-no-op forward call - no recompute, no
+        extra memory, no extra compute.
         """
         if self.use_gradient_checkpointing:
             return checkpoint(
@@ -1297,7 +1304,7 @@ class BarnesHutKernel(Kernel):
 
         weighted = packed * weights.unsqueeze(-1)
         if broadcast_pair_ids is not None:
-            weighted = weighted[broadcast_pair_ids]
+            weighted = torch.index_select(weighted, 0, broadcast_pair_ids)
 
         ### ``index_add_`` rather than ``scatter_add_`` with broadcasted
         ### indices: equivalent semantics, but ``index_add_`` takes a 1-D
@@ -1417,8 +1424,13 @@ class BarnesHutKernel(Kernel):
         separately (magnitudes, dot products, basis construction).
         """
         n_pairs = tgt_ids.shape[0]
+        ### ``index_select`` rather than ``x[idx]``: same forward, but its
+        ### backward is an ``index_add_`` instead of the sort-based
+        ### ``index_put_(accumulate=True)`` (``indexing_backward``), which was
+        ### the largest GPU kernel of a DrivAerML training step on GB300.
         chunk_r = (
-            target_positions[tgt_ids] - source_positions[src_ids]
+            torch.index_select(target_positions, 0, tgt_ids)
+            - torch.index_select(source_positions, 0, src_ids)
         ) / reference_length
 
         ### Flatten source scalars into one tensor, gather once, split back.
@@ -1431,7 +1443,9 @@ class BarnesHutKernel(Kernel):
             source_scalars.keys(include_nested=True, leaves_only=True),
             key=str,
         )
-        gathered_src_scalars = concatenate_leaves(source_scalars)[src_ids]
+        gathered_src_scalars = torch.index_select(
+            concatenate_leaves(source_scalars), 0, src_ids
+        )
         scalars = TensorDict(
             {
                 "source_scalars": TensorDict(
@@ -1457,7 +1471,9 @@ class BarnesHutKernel(Kernel):
             source_vectors.keys(include_nested=True, leaves_only=True),
             key=str,
         )
-        gathered_src_vectors = concatenate_leaves(source_vectors)[src_ids]
+        gathered_src_vectors = torch.index_select(
+            concatenate_leaves(source_vectors), 0, src_ids
+        )
         vectors = TensorDict(
             {
                 "source_vectors": TensorDict(
@@ -1605,7 +1621,7 @@ class MultiscaleKernel(Module):
         Problem-level features with ``batch_size=()``. Automatically
         augmented with log-ratios of reference lengths before being passed
         to each kernel branch.
-    theta : float, optional, default=1.0
+    theta : float, optional, default=1.5
         Barnes-Hut opening angle (larger = more aggressive).
     cluster_tree : ClusterTree or None, optional, default=None
         Pre-built cluster tree for source points.  If ``None``, one is
@@ -1728,7 +1744,7 @@ class MultiscaleKernel(Module):
         source_data: TensorDict[str, Float[torch.Tensor, "n_sources ..."]]
         | None = None,
         global_data: TensorDict[str, Float[torch.Tensor, "..."]] | None = None,
-        theta: float = 1.0,
+        theta: float = 1.5,
         cluster_tree: "ClusterTree | None" = None,
         target_tree: "ClusterTree | None" = None,
         dual_plan: "DualInteractionPlan | None" = None,
