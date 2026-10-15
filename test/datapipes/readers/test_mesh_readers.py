@@ -303,6 +303,18 @@ class TestMeshDataset:
             torch.tensor([[2.0, 0.0, 0.0], [6.0, 0.0, 0.0]]),
         )
 
+    def test_close_closes_mesh_readers(self, tmp_path):
+        """MeshDataset.close() closes MeshReader and DomainMeshReader."""
+        two_triangles_2d.load().save(tmp_path / "m.pmsh")
+        DomainMesh(interior=Mesh(points=torch.randn(10, 3))).save(tmp_path / "dm.pdmsh")
+        for reader in (
+            MeshReader(tmp_path, pattern="*.pmsh"),
+            DomainMeshReader(tmp_path, pattern="*.pdmsh"),
+        ):
+            ds = MeshDataset(reader)
+            ds[0]
+            ds.close()
+
 
 class TestDomainMeshTransforms:
     """Tests for DomainMesh-aware transform behavior via apply_to_domain."""

@@ -84,7 +84,6 @@ class MeshDataset(DatasetBase):
         device: str | torch.device | None = None,
         num_workers: int = 1,
         cache_host: bool = False,
-        cache_host_views: int = 1,
     ) -> None:
         """
         Parameters
@@ -101,32 +100,25 @@ class MeshDataset(DatasetBase):
             GPU operations (H2D transfer, transforms) always run on the
             main thread in :meth:`_consume`.
         cache_host : bool, default=False
-            Keep every sample returned by the reader in host memory after
-            its first read and serve later requests for the same index
-            from that cache, so a dataset of a few (possibly repeated)
-            samples is read from disk once. Intended for single-sample or
-            few-sample fitting runs; the cached sample is the reader's
-            output for that index (including any subsampling the reader
-            applied), so repeated indices return the identical sample.
-            Requires the device transfer or non-mutating transforms, since
-            the cached object is handed out again on the next request.
-        cache_host_views : int, default=1
-            With ``cache_host``, the number of distinct reads of each index
-            to keep. Readers that subsample stochastically return a
-            different view of the same sample on each read (their generator
-            advances per epoch), so with ``k > 1`` the first ``k`` requests
-            for an index read ``k`` views from disk and later requests cycle
-            through them in order. ``1`` is the plain fixed-sample cache.
+            Keep each sample the reader returns and serve later requests for
+            the same index from this cache, so each index is read once. Meant
+            for fitting runs on one or a few samples: the cached sample keeps
+            the reader's subsample, so every epoch sees the same one.
+            :meth:`set_generator` empties the cache. The cache has no size
+            limit and hands out the cached object itself, so unless
+            ``device`` moves samples to another device, transforms must not
+            modify them in place (the built-in mesh transforms do not).
+            Samples loaded from ``.pmsh`` or ``.pdmsh`` files without
+            subsampling or pinning stay memory-mapped, so the operating
+            system's page cache holds their bytes.
         """
         super().__init__(num_workers=num_workers)
         self.reader = reader
         self.cache_host = bool(cache_host)
-        self.cache_host_views = max(1, int(cache_host_views))
-        self._host_cache: dict[int, list[tuple[Any, dict[str, Any]]]] = {}
-        self._host_cache_cursor: dict[int, int] = {}
+        self._host_cache: dict[int, tuple[Any, dict[str, Any]]] = {}
         # One lock per index: concurrent worker threads (num_workers > 1 or the
-        # dataset's own prefetch) must read an index at most
-        # ``cache_host_views`` times; the outer lock guards the lock table.
+        # dataset's own prefetch) must read an index only once; the outer lock
+        # guards the lock table.
         self._host_cache_lock = threading.Lock()
         self._host_cache_index_locks: dict[int, threading.Lock] = {}
         self.transforms = list(transforms) if transforms else []
@@ -147,7 +139,8 @@ class MeshDataset(DatasetBase):
         Forks *generator* into ``1 + len(self.transforms)`` independent
         children: the first goes to the reader, the rest map 1-to-1 to
         the transform list (deterministic transforms silently ignore
-        theirs).
+        theirs). Also empties the ``cache_host`` cache, so samples read
+        before seeding are read again with the new generator.
 
         Parameters
         ----------
@@ -155,6 +148,7 @@ class MeshDataset(DatasetBase):
             Parent generator (typically forked from the DataLoader's
             master generator).
         """
+        self._host_cache.clear()
         n_children = 1 + len(self.transforms)
         children = fork_generator(generator, n_children)
 
@@ -229,10 +223,10 @@ class MeshDataset(DatasetBase):
     ) -> tuple[Union[Mesh, DomainMesh, TensorDict], dict[str, Any]]:
         """Read one sample from the reader, through the host cache when enabled.
 
-        The per-index lock is held across the disk read so that concurrent
-        requests for one index (worker threads, prefetch) read it at most
-        ``cache_host_views`` times and later requests all see the same views.
-        Requests for different indices do not wait on each other.
+        The per-index lock is held across the read, so concurrent requests
+        for one index (worker threads, prefetch) read it once and all get
+        the same sample. Requests for different indices do not wait on each
+        other.
         """
         if not self.cache_host:
             return self.reader[index]
@@ -241,13 +235,10 @@ class MeshDataset(DatasetBase):
                 index, threading.Lock()
             )
         with index_lock:
-            views = self._host_cache.setdefault(index, [])
-            if len(views) < self.cache_host_views:
-                views.append(self.reader[index])
-                return views[-1]
-            cursor = self._host_cache_cursor.get(index, 0)
-            self._host_cache_cursor[index] = (cursor + 1) % len(views)
-            return views[cursor]
+            sample = self._host_cache.get(index)
+            if sample is None:
+                sample = self._host_cache[index] = self.reader[index]
+            return sample
 
     def _load_host(self, work_item: int) -> HostPayload:
         """Producer stage: read a mesh sample on a worker thread.
