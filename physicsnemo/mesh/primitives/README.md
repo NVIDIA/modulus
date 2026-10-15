@@ -112,8 +112,8 @@ Tetrahedral volume meshes.
 | Function | Dimensions | Description | Properties |
 | ---------- | ------------ | ------------- | ------------ |
 | `cube_volume` | 3D→3D | Tetrahedral cube mesh | Structured |
-| `sphere_volume` | 3D→3D | Tetrahedral sphere mesh | Fan from center |
-| `cylinder_volume` | 3D→3D | Tetrahedral cylinder mesh | Fan from center |
+| `sphere_volume` | 3D→3D | Tetrahedral sphere mesh | Delaunay |
+| `cylinder_volume` | 3D→3D | Tetrahedral cylinder mesh | Delaunay |
 | `tetrahedron_volume` | 3D→3D | Single tetrahedron | Minimal volume mesh |
 
 ### procedural/ - Mesh Variations and Noise Generation
