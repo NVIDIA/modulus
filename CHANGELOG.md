@@ -131,6 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bincount`, and adjacencies carry their device, so cached adjacencies are
   reused without revalidation. Cell adjacency and the dual graph are 1.4-1.6x
   faster with 30% less peak memory, and synchronize CUDA 5 times instead of 38.
+- Mesh adjacencies, facet extraction, manifold checks and `fix_orientation`
+  use up to 3x less peak memory, with unchanged results.
 - `physicsnemo.mesh.Mesh`, `DomainMesh`, `Adjacency`, `BVH`, `ClusterTree`,
   `DualInteractionPlan`, and `SourceAggregates` now inherit directly from
   `TensorClass` instead of using the `@tensorclass` decorator. Existing
@@ -287,6 +289,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on every rank using rank 0's file lookup.
 - `fix_orientation` no longer leaves opposite windings across sharp creases,
   such as the edges of a cube.
+- `Mesh.is_manifold()` no longer raises on a tetrahedral mesh with a
+  degenerate cell.
 - Mesh slicing reuses integer indices across connectivity, fields, and caches
   to avoid repeated CUDA synchronization for the same boolean mask.
   Point slicing skips mask processing when the output has no cells because
