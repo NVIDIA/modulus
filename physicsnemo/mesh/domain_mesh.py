@@ -25,7 +25,6 @@ from tensordict import TensorClass, TensorDict
 
 from physicsnemo.mesh.mesh import (
     Mesh,
-    _hide_var_keyword,
     _requested_dtype,
     _set_subclass_fields,
 )
@@ -143,7 +142,6 @@ class DomainMesh(TensorClass, metaclass=_DomainMeshTensorClassMeta):
     boundaries: TensorDict[str, Mesh] = None  # type: ignore[assignment]
     global_data: TensorDict = None  # type: ignore[assignment]
 
-    @_hide_var_keyword
     def __init__(
         self,
         interior: Mesh,

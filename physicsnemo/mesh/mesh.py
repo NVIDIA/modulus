@@ -15,11 +15,10 @@
 # limitations under the License.
 
 import dataclasses
-import inspect
 import itertools
 import math
 import types
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import (
@@ -129,22 +128,6 @@ def _check_geometry_values(valid: torch.Tensor, message: str) -> None:
         torch._assert_async(valid, message)
     elif not bool(valid):
         raise ValueError(message)
-
-
-def _hide_var_keyword(init: Callable) -> Callable:
-    """Drop the ``**kwargs`` parameter from the signature that ``init`` reports.
-
-    tensordict 0.14.x appends keyword-only parameters to the signature of the
-    ``__init__`` it wraps, which fails if that signature ends with ``**kwargs``.
-    This decorator can go once PhysicsNeMo requires tensordict 0.15 or later.
-    """
-    signature = inspect.signature(init)
-    init.__signature__ = signature.replace(
-        parameters=[
-            p for p in signature.parameters.values() if p.kind is not p.VAR_KEYWORD
-        ]
-    )
-    return init
 
 
 def _set_subclass_fields(obj: Any, base: type, fields: dict[str, Any]) -> None:
@@ -436,7 +419,6 @@ class Mesh(
     global_data: TensorDict = None  # type: ignore[assignment]
     _cache: TensorDict = None  # type: ignore[assignment]
 
-    @_hide_var_keyword
     def __init__(
         self,
         points: torch.Tensor,
