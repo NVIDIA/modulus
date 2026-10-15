@@ -17,14 +17,14 @@ Work through the tutorials in order. Each one assumes the earlier ones.
 | # | Notebook | Topics |
 | --- | -------- | ------ |
 | 1 | [Getting Started](tutorial_1_getting_started.ipynb) | The `Mesh` data structure, dimensions, data at three levels, drawing, devices, autograd |
-| 2 | [Loading, Converting, and Saving Meshes](tutorial_2_io_interop.ipynb) | PyVista import and export, file formats, polygon meshes, the native format |
+| 2 | [Loading, Converting, and Saving Meshes](tutorial_2_io_interop.ipynb) | PyVista import and export, file formats, polygon meshes, the native format, Zarr |
 | 3 | [Primitives and Mesh Generation](tutorial_3_primitives_generation.ipynb) | Example meshes, filling a boundary, meshing implicit shapes, isosurfaces |
-| 4 | [Mesh Operations](tutorial_4_operations.ipynb) | Transformations, subdivision, slicing, merging, boundaries |
-| 5 | [Discrete Calculus and Curvature](tutorial_5_calculus.ipynb) | Gradients, divergence, curl, curvature |
-| 6 | [Neighbors, Adjacency, and Spatial Queries](tutorial_6_neighbors_spatial.ipynb) | Adjacency, BVH queries, sampling, interpolation |
+| 4 | [Mesh Operations](tutorial_4_operations.ipynb) | Transformations, subdivision, slicing, merging, boundaries, edge graphs |
+| 5 | [Discrete Calculus and Curvature](tutorial_5_calculus.ipynb) | Gradients, divergence, curl, the Laplacian, curvature, physics losses |
+| 6 | [Neighbors, Adjacency, and Spatial Queries](tutorial_6_neighbors_spatial.ipynb) | Adjacency, BVH queries, sampling, interpolation, signed distance |
 | 7 | [Quality, Validation, and Repair](tutorial_7_quality_repair.ipynb) | Quality metrics, validation, topology checks, repair |
 | 8 | [Simulation Domains with DomainMesh](tutorial_8_domain_mesh.ipynb) | An interior mesh with named boundaries, as one object |
-| 9 | [Meshes in ML Pipelines](tutorial_9_ml_integration.ipynb) | Performance, batching, `torch.compile`, field schemas |
+| 9 | [Meshes in ML Pipelines](tutorial_9_ml_integration.ipynb) | Batching, features, a trained graph model, `torch.compile`, field schemas, performance |
 <!-- markdownlint-enable MD013 -->
 
 ### 1. Getting Started
@@ -49,6 +49,8 @@ How to bring meshes in and out of PhysicsNeMo-Mesh.
 - Ear clipping for non-convex polygons
 - The native format of `Mesh.save` and `Mesh.load` (`.pmsh`, and `.pdmsh` for a
   `DomainMesh`)
+- Chunked, compressed Zarr stores for training data, with `to_zarr` and
+  `from_zarr`
 
 ### 3. Primitives and Mesh Generation
 
@@ -63,64 +65,78 @@ How to get a mesh without a mesh file.
 
 ### 4. Mesh Operations
 
-How to change a mesh.
+How to change a mesh before it reaches a model.
 
-- Translation, rotation, scaling, and general linear transformations, with and
-  without the attached data
-- Subdivision (linear, Loop, and Butterfly)
-- Slicing by cells or points, and merging meshes
-- Boundary and facet extraction
-- Moving data between points and cells
+- Translation, scaling, rotation, and general linear maps, with vector fields
+  rotated together with the geometry
+- Changing the spatial dimension of a mesh
+- Subdivision with the linear, Loop, and Butterfly schemes
+- Selecting parts of a mesh with `slice_cells` and `slice_points`
+- Combining meshes with `Mesh.merge`
+- Boundary meshes, facet meshes, and edge graphs (`to_edge_graph`)
+- Converting fields between point data and cell data
 
 ### 5. Discrete Calculus and Curvature
 
-Derivatives of fields on a mesh.
+Derivatives of fields on a mesh, and how accurate they are.
 
-- Gradients by least squares (LSQ) and by discrete exterior calculus (DEC)
-- Divergence and curl
-- Gaussian and mean curvature
-- Intrinsic and extrinsic derivatives on surfaces
-- Vector calculus identities on a mesh
+- Gradients of scalar and vector fields with `compute_point_derivatives`
+- Choosing between least squares (LSQ) and discrete exterior calculus (DEC),
+  including on irregular cells
+- Divergence and curl, and why vector identities such as curl(grad f) = 0 hold
+  only approximately for LSQ
+- The Laplacian
+- Intrinsic and extrinsic gradients on a surface
+- Gaussian and mean curvature, and the Gauss-Bonnet theorem
+- Backpropagating through the operators in a physics loss
 
 ### 6. Neighbors, Adjacency, and Spatial Queries
 
-The queries that graph neural networks and point-based models need.
+The lookups that graph neural networks and training pipelines need.
 
-- Point and cell neighbors, stored as sparse adjacency, and conversion to
-  PyTorch Geometric
-- Bounding volume hierarchy (BVH) queries and point containment
-- Random sampling of points on cells
-- Interpolation of data at query points, including points outside the mesh
+- The four adjacency queries: point to points, point to cells, cell to cells,
+  and cell to points
+- The `Adjacency` class for ragged neighbor lists, and the `edge_index` tensor
+  of graph libraries, built with `expand_to_pairs`
+- Finding the cells that contain a point with a bounding volume hierarchy (BVH)
+- Sampling random points on cells, and interpolating fields at any point
+- Signed distance to a closed surface with `signed_distance_field`
 
 ### 7. Quality, Validation, and Repair
 
-How to find and fix problems in a mesh.
+How to find and fix defects in a mesh.
 
-- Quality metrics (aspect ratio, angles, quality score) and mesh statistics
-- Validation of a mesh
-- Topology checks: watertight and manifold meshes
-- Repair: duplicate points, degenerate cells, orientation
+- Per-cell quality metrics and summary statistics
+- What `validate()` checks, and what it does not check
+- Topology checks: watertight and manifold meshes, including volume meshes and
+  the Stanford bunny
+- Repairs with `clean()`, `repair_mesh()`, `fix_orientation()`, and
+  `fill_holes()`
 
 ### 8. Simulation Domains with DomainMesh
 
-How to represent a whole simulation case.
+How to keep the parts of one simulation sample together.
 
-- A `DomainMesh` from a real CFD case: an interior mesh and named boundary
-  meshes
-- Transformations of a whole domain, for data augmentation
-- Validation, and a check that the boundaries close the domain
-- Drawing boundary patches by boundary condition type
-- Spatial queries on a domain
+- Building a `DomainMesh` from a CFD result: an interior mesh, named boundary
+  meshes, and case parameters
+- Inspecting and iterating over the interior and the boundaries
+- Checking a domain with `validate()` and `is_boundary_watertight()`
+- Drawing the interior colored by a field, with the boundary curves over it
+- Rotating a domain together with its vector fields, for data augmentation
+- Spatial queries across the meshes of a domain, such as wall distance
+- Saving and loading a domain
 
 ### 9. Meshes in ML Pipelines
 
-How to use PhysicsNeMo-Mesh in training and inference code.
+How to turn meshes into model inputs.
 
-- Performance compared with PyVista and VTK
-- Padding and batching for `torch.compile`
-- Feature extraction and boundary conditions
-- An end-to-end preprocessing workflow for CAE data
-- Declaring the fields of a model with `FieldSchema`
+- Padding meshes of different sizes for batching and `torch.compile`
+- Geometric features (normals and curvature) and boundary conditions stored as
+  mesh data
+- End to end: from a mesh to a trained graph model
+- Compiling mesh code with `torch.compile`
+- Declaring and checking the fields of a model with `RankSpec` and `FieldSchema`
+- Performance of PhysicsNeMo-Mesh on a GPU compared with PyVista and VTK
 
 ## Install
 
@@ -130,6 +146,17 @@ and VTK) and Jupyter. From this directory, install them with:
 ```bash
 pip install -r requirements.txt
 ```
+
+The tutorials use APIs from PhysicsNeMo 2.3, such as `FieldSchema` in
+Tutorial 9. Until version 2.3.0 is released, install PhysicsNeMo from its main
+branch instead:
+
+<!-- markdownlint-disable MD013 -->
+```bash
+pip install "nvidia-physicsnemo[mesh-extras] @ git+https://github.com/NVIDIA/physicsnemo.git" \
+    jupyter ipykernel ipywidgets
+```
+<!-- markdownlint-enable MD013 -->
 
 To use a clone of the PhysicsNeMo repository instead, run this from the root of
 the clone:
@@ -145,7 +172,7 @@ first time that they run, so they need internet access once.
 ## Run
 
 Start Jupyter in this directory, because the notebooks read files from
-`assets/`:
+`assets/`. From the repository root, run:
 
 ```bash
 cd examples/minimal/mesh
