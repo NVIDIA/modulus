@@ -138,15 +138,20 @@ class BoundingBoxFilter(Transform):
             ids_in_bbox = ids_min & ids_max
             ids_in_bbox = ids_in_bbox.all(dim=-1)
 
-            # Apply mask to coordinates
-            updates[coord_key] = coords[ids_in_bbox]
-
-            # Apply same mask to dependent keys
-            for dep_key in self.dependent_keys:
-                if dep_key in data:
-                    updates[dep_key] = get_leaf(data, dep_key, what="Dependent key")[
-                        ids_in_bbox
-                    ]
+            # Mask the coordinates and their dependent keys in one TensorDict:
+            # a CUDA mask then synchronizes with the host once, not once per key.
+            selected = TensorDict(
+                {
+                    coord_key: coords,
+                    **{
+                        dep_key: get_leaf(data, dep_key, what="Dependent key")
+                        for dep_key in self.dependent_keys
+                        if dep_key in data
+                    },
+                },
+                batch_size=coords.shape[:1],
+            )[ids_in_bbox]
+            updates.update(selected.items(include_nested=True, leaves_only=True))
 
         return data.update(updates)
 
