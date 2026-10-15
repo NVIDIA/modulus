@@ -188,7 +188,7 @@ train:
   resume: true
   dataloader:
     preload_depth: 1
-    pin_memory: false # data.gpu_output puts batches on the GPU already
+    pin_memory: true # pin arrays read from disk before copying them to the GPU
 
 # ┌───────────────────────────────────────────┐
 # │            Validation Configs             │
@@ -198,7 +198,7 @@ val:
   num_workers: 0
   dataloader:
     preload_depth: 1
-    pin_memory: false
+    pin_memory: true
 
 # ┌───────────────────────────────────────────┐
 # │              Logging Configs              │
