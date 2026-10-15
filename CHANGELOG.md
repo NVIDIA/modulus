@@ -277,7 +277,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   descriptors are), for example when a geometry guardrail fitted on GPU is
   loaded on CPU. It then factorises in double precision with a jitter relative
   to the mean variance and warns; results where single precision succeeds are
-  unchanged.
+  unchanged. Percentiles against reference scores computed on another device
+  can then shift; refitting on the device the model is used on avoids this.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only

@@ -207,9 +207,10 @@ class TorchGMM(nn.Module):
                     "TorchGMM: a covariance is not positive definite in single "
                     "precision (redundant features or features on very different "
                     "scales); it was factorised in double precision with a jitter "
-                    "relative to its mean variance. Scores can differ from those "
-                    "computed on another device; standardising the features or a "
-                    "larger reg_covar avoids this.",
+                    "relative to its mean variance. Scores, and percentiles against "
+                    "reference scores computed on another device, can differ from "
+                    "those on that device; refit on the device the model is used "
+                    "on, or standardise the features or use a larger reg_covar.",
                     stacklevel=3,
                 )
                 return cov_chol
