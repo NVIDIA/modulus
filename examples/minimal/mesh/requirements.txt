@@ -1,6 +1,4 @@
-nvidia-physicsnemo
-pyvista[all,trame]
-matplotlib
+nvidia-physicsnemo[mesh-extras]
 jupyter
 ipykernel
 ipywidgets
