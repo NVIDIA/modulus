@@ -76,7 +76,7 @@ def load(
         raise ValueError(f"subdivisions must be non-negative, got {subdivisions=}")
 
     ### Start with base icosahedron
-    mesh = icosahedron_surface.load(radius=1.0, device=device)
+    mesh = icosahedron_surface.load(radius=radius, device=device)
 
     ### Apply subdivision levels
     if subdivisions > 0:

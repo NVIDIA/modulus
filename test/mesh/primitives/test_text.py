@@ -17,6 +17,7 @@
 """Tests for text rendering primitives."""
 
 import pytest
+import torch
 
 # Skip this module if matplotlib is not available (text primitives require it)
 pytest.importorskip("matplotlib")
@@ -115,6 +116,51 @@ def test_text_max_segment_length():
     assert mesh_fine.n_points > mesh_coarse.n_points, (
         "Smaller max_segment_length should produce more points"
     )
+
+
+def test_text_1d_2d_closed_outlines():
+    """Each glyph contour is a closed loop without zero-length edges."""
+    mesh = text_1d_2d("IO")
+
+    degree = torch.bincount(mesh.cells.flatten(), minlength=mesh.n_points)
+    assert (degree == 2).all()
+    edge_vectors = mesh.points[mesh.cells[:, 1]] - mesh.points[mesh.cells[:, 0]]
+    assert (edge_vectors.norm(dim=1) > 0).all()
+
+
+def test_text_2d_2d_curved_glyph_area():
+    """A thin curved ring (U+25CB) is filled up to its Bezier outline."""
+    from matplotlib.font_manager import FontProperties
+    from matplotlib.textpath import TextPath
+
+    ### Exact area of the quadratic Bezier glyph outline
+    fp = FontProperties(family="sans-serif", weight="bold")
+    path = TextPath((0, 0), "\u25cb", size=12.0, prop=fp)
+
+    def cross(a, b):
+        return a[0] * b[1] - a[1] * b[0]
+
+    expected = 0.0
+    for verts, code in path.iter_segments(curves=True):
+        if code == path.MOVETO:
+            start = current = verts
+        elif code == path.LINETO:
+            expected += cross(current, verts) / 2
+            current = verts
+        elif code == path.CURVE3:
+            ctrl, end = verts[:2], verts[2:]
+            expected += (
+                2 * cross(current, ctrl) + 2 * cross(ctrl, end) + cross(current, end)
+            ) / 6
+            current = end
+        elif code == path.CLOSEPOLY:
+            expected += cross(current, start) / 2
+            current = start
+        else:
+            raise AssertionError(f"unexpected path code {code}")
+
+    mesh = text_2d_2d("\u25cb", font_size=12.0)
+    assert mesh.cell_areas.sum().item() == pytest.approx(abs(expected), rel=1e-3)
 
 
 if __name__ == "__main__":
