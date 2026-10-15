@@ -24,6 +24,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import pyvista as pv
+from PIL import Image
 
 from physicsnemo.mesh.io import to_pyvista
 from physicsnemo.mesh.primitives.surfaces import cube_surface
@@ -44,7 +45,7 @@ def _render(mesh, coarse):
     """Render a surface with the coarse cube's edges and vertices on top."""
 
     # Draw edges and vertices as geometry: off-screen OpenGL ignores line widths.
-    cage = to_pyvista(coarse).extract_all_edges().tube(radius=0.012)
+    cage = to_pyvista(coarse).extract_all_edges().tube(radius=0.009)
     corners = pv.PolyData(coarse.points.numpy()).glyph(
         geom=pv.Sphere(radius=0.035), scale=False, orient=False
     )
@@ -98,6 +99,8 @@ def main():
     )
     figure.subplots_adjust(left=0.0, right=1.0, bottom=0.08, top=0.86, wspace=0.02)
     figure.savefig(OUTPUT, dpi=160, facecolor="white")
+    # A 256-color palette keeps the file small and looks the same.
+    Image.open(OUTPUT).convert("RGB").quantize(colors=256).save(OUTPUT, optimize=True)
     plt.close(figure)
     print(f"Saved {OUTPUT}")
 

@@ -28,6 +28,7 @@ import torch
 from matplotlib.collections import PolyCollection
 from matplotlib.patches import Ellipse, Polygon
 from matplotlib.tri import Triangulation
+from PIL import Image
 
 from physicsnemo.mesh.fields import FieldSchema
 from physicsnemo.mesh.primitives.planar import unit_square
@@ -193,7 +194,9 @@ def main():
     figure.subplots_adjust(
         left=0.05, right=0.99, bottom=0.08, top=0.88, wspace=0.04, hspace=0.06
     )
-    figure.savefig(OUTPUT, dpi=160, facecolor="white")
+    figure.savefig(OUTPUT, dpi=160, facecolor="white", bbox_inches="tight")
+    # Drop the unused alpha channel to keep the file small.
+    Image.open(OUTPUT).convert("RGB").save(OUTPUT, optimize=True)
     plt.close(figure)
     print(f"Saved {OUTPUT}")
 

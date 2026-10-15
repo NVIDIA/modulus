@@ -25,6 +25,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pyvista as pv
 from matplotlib.collections import LineCollection, PolyCollection
+from PIL import Image
 
 from physicsnemo.mesh.io import to_pyvista
 from physicsnemo.mesh.primitives.planar import annulus_2d
@@ -84,6 +85,7 @@ def _render(layers):
     plotter.set_background("white")
     plotter.view_vector(VIEW_VECTOR, viewup=(0.0, 0.0, 1.0))
     plotter.reset_camera()
+    plotter.camera.zoom(1.5)
     image = plotter.screenshot(return_img=True)
     plotter.close()
     return image
@@ -127,7 +129,8 @@ def main():
         _render(
             [
                 (
-                    cut,
+                    # Shrink each tetrahedron toward its centroid to show it.
+                    cut.shrink(0.8),
                     {
                         "color": MESH_COLOR,
                         "show_edges": True,
@@ -167,6 +170,8 @@ def main():
 
     figure.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.94)
     figure.savefig(OUTPUT, dpi=160, facecolor="white")
+    # A 256-color palette keeps the file small and looks the same.
+    Image.open(OUTPUT).convert("RGB").quantize(colors=256).save(OUTPUT, optimize=True)
     plt.close(figure)
     print(f"Saved {OUTPUT}")
 

@@ -25,6 +25,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pyvista as pv
 import torch
+from PIL import Image
 
 from physicsnemo.mesh.io import to_pyvista
 from physicsnemo.mesh.primitives.surfaces import torus
@@ -58,7 +59,7 @@ def _render(layers):
     plotter.set_background("white")
     plotter.view_vector(VIEW_VECTOR, viewup=(0.0, 0.0, 1.0))
     plotter.reset_camera()
-    plotter.camera.zoom(1.3)
+    plotter.camera.zoom(1.6)
     image = plotter.screenshot(return_img=True)
     plotter.close()
     return image
@@ -70,7 +71,7 @@ def main():
     torch.manual_seed(0)
     mesh = torus.load(major_radius=1.0, minor_radius=0.4, n_major=24, n_minor=10)
     x, y, z = mesh.points.unbind(dim=-1)
-    mesh.point_data["f"] = x * y + 2.0 * z
+    mesh.point_data["f"] = 2.0 * x * y + z
 
     # Pick cells in proportion to their area, then a uniform point in each pick.
     cell_indices = torch.multinomial(mesh.cell_areas, N_SAMPLES, replacement=True)
@@ -119,7 +120,7 @@ def main():
         ]
     )
 
-    figure, axes = plt.subplots(1, 2, figsize=(13.0, 5.4))
+    figure, axes = plt.subplots(1, 2, figsize=(14.5, 5.6))
     axes[0].imshow(vertex_image)
     axes[0].set_title(f"Vertex field f on a torus\n{mesh.n_points} vertices")
     axes[1].imshow(sample_image)
@@ -134,8 +135,10 @@ def main():
         shrink=0.75,
         pad=0.02,
     )
-    colorbar.set_label("f = xy + 2z")
+    colorbar.set_label("f = 2xy + z")
     figure.savefig(OUTPUT, dpi=160, facecolor="white", bbox_inches="tight")
+    # Drop the unused alpha channel to keep the file small.
+    Image.open(OUTPUT).convert("RGB").save(OUTPUT, optimize=True)
     plt.close(figure)
     print(f"Saved {OUTPUT}")
 

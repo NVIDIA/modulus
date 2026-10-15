@@ -24,6 +24,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import pyvista as pv
+from PIL import Image
 
 from physicsnemo.mesh.io import to_pyvista
 from physicsnemo.mesh.primitives import curves, planar, procedural, surfaces, volumes
@@ -83,8 +84,9 @@ def _render(mesh):
             show_edges=True,
             edge_color=EDGE_COLOR,
             line_width=0.6,
-            ambient=0.25,
-            diffuse=0.75,
+            lighting=mesh.n_spatial_dims == 3,
+            ambient=0.35,
+            diffuse=0.7,
         )
     plotter.set_background("white")
     if mesh.n_spatial_dims == 2:
@@ -124,6 +126,8 @@ def main():
         left=0.01, right=0.99, bottom=0.01, top=0.86, wspace=0.06, hspace=0.25
     )
     figure.savefig(OUTPUT, dpi=160, facecolor="white")
+    # A 256-color palette keeps the file small and looks the same.
+    Image.open(OUTPUT).convert("RGB").quantize(colors=256).save(OUTPUT, optimize=True)
     plt.close(figure)
     print(f"Saved {OUTPUT}")
 

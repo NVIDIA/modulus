@@ -27,6 +27,7 @@ import torch
 from matplotlib.collections import LineCollection, PolyCollection
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+from PIL import Image
 
 from physicsnemo.mesh.primitives.procedural import perturbed_grid
 
@@ -153,6 +154,8 @@ def main():
         left=0.02, right=0.98, bottom=0.07, top=0.92, wspace=0.08, hspace=0.3
     )
     figure.savefig(OUTPUT, dpi=160, facecolor="white")
+    # A 256-color palette keeps the file small and looks the same.
+    Image.open(OUTPUT).convert("RGB").quantize(colors=256).save(OUTPUT, optimize=True)
     plt.close(figure)
     print(f"Saved {OUTPUT}")
 

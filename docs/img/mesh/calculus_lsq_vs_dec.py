@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import torch
 from matplotlib.colors import LogNorm
 from matplotlib.tri import Triangulation
+from PIL import Image
 
 from physicsnemo.mesh.primitives.procedural import perturbed_grid
 
@@ -90,7 +91,6 @@ def main():
             norm=norm,
             shading="gouraud",
         )
-        axis.triplot(triangulation, color="white", linewidth=0.3, alpha=0.5)
         axis.set_title(f"(a) {label} gradient error")
         axis.set_aspect("equal")
         axis.set_axis_off()
@@ -134,6 +134,8 @@ def main():
         y=1.02,
     )
     figure.savefig(OUTPUT, dpi=160, facecolor="white", bbox_inches="tight")
+    # Drop the unused alpha channel to keep the file small.
+    Image.open(OUTPUT).convert("RGB").save(OUTPUT, optimize=True)
     plt.close(figure)
     print(f"Saved {OUTPUT}")
 
