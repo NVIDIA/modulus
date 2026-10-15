@@ -132,14 +132,21 @@ pdf_documents = [
 # napoleon_custom_sections = ["Variable Shape"]
 
 
+# Mesh and DomainMesh present these TensorDict methods as part of their own API
+# (they re-declare them for type checkers), so their pages keep them.
+_TENSORDICT_MEMBERS_TO_KEEP = frozenset({"save", "load", "clone"})
+
+
 def _skip_tensordict_members(app, what, name, obj, skip, options):
     """Leave the TensorDict API of tensorclasses to the TensorDict docs.
 
     ``@tensorclass`` copies every TensorDict method onto the class it decorates
-    (``Mesh`` gains about 360 of them), so documenting them would bury the class's
-    own API. Dataclass fields stay: tensorclass also turns them into properties.
+    (``physicsnemo.mesh.Mesh`` gains about 360 of them), so documenting them
+    would bury the class's own API. Dataclass fields stay: tensorclass turns them
+    into properties whose getter tensordict 0.15 names ``_make_prop`` (a private
+    name; recheck it when upgrading tensordict).
     """
-    if what != "class":
+    if what != "class" or name in _TENSORDICT_MEMBERS_TO_KEEP:
         return None
     target = getattr(obj, "fget", obj)
     target = getattr(target, "__func__", target)
