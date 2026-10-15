@@ -102,6 +102,30 @@ def test_default_collate_different_stack_dim():
     torch.testing.assert_close(batched_data["x"][:, 1], samples[1][0]["x"])
 
 
+@pytest.mark.filterwarnings("error::FutureWarning")
+@pytest.mark.parametrize(
+    "batch_size, stack_dim, expected_shape",
+    [([], 1, (3, 2, 10)), ([], -2, (3, 2, 10)), ([3], 2, (3, 10, 2))],
+)
+def test_default_collate_stack_dim_past_batch_dims(
+    batch_size, stack_dim, expected_shape
+):
+    """A ``stack_dim`` past the samples' batch dims stacks each tensor as
+    ``torch.stack`` does, and the batch keeps the samples' batch size."""
+    samples = [
+        (TensorDict({"x": torch.randn(3, 10)}, batch_size=batch_size), {})
+        for _ in range(2)
+    ]
+    batched_data = dp.DefaultCollator(stack_dim=stack_dim)(samples)
+
+    assert batched_data.batch_size == torch.Size(batch_size)
+    assert batched_data["x"].shape == expected_shape
+    torch.testing.assert_close(
+        batched_data["x"],
+        torch.stack([data["x"] for data, _ in samples], dim=stack_dim),
+    )
+
+
 def test_default_collate_disable_metadata():
     samples = [
         (TensorDict({"x": torch.randn(10)}), {"idx": 0}),
