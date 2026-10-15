@@ -392,7 +392,7 @@ uses its six axis-extreme vertices as controls.
     )
 
 ``smoothing=0.0`` interpolates the controls up to solver precision. A positive
-smoothing value adds diagonal regularization. This deliberately relaxes
+smoothing value adds diagonal regularization. This relaxes
 interpolation accuracy.
 
 Both evaluation backends use PyTorch for the dense coefficient solve. The Warp

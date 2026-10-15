@@ -46,7 +46,7 @@ neural implicit fields), in *any spatial dimension*, entirely in PyTorch
 tensor ops on CPU or CUDA. The meshed set is ``{phi < 0}`` intersected
 with the bounding box. Where the domain reaches the box, the generator
 treats its faces as a boundary, so external-flow "box minus obstacle"
-domains work directly. The generator is structurally robust. Every
+domains work directly. Every
 optimization step is validity-gated, so it always returns a positively
 oriented mesh with a closed-manifold boundary. Difficult inputs degrade
 element quality (reported in diagnostics), but never prevent the mesh

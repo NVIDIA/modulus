@@ -3,7 +3,7 @@ Fields and Schemas
 
 .. currentmodule:: physicsnemo.mesh.fields
 
-A mesh carries named fields, such as ``"pressure"``, ``"velocity"``, and
+A mesh has named fields, such as ``"pressure"``, ``"velocity"``, and
 ``"stress"``. Each field has a tensor rank: 0 for a scalar, 1 for a vector,
 2 for a rank-2 tensor, and so on. The rank sets the transformation law of the
 field, which is how its values change when you rotate or reflect the frame.
@@ -59,7 +59,7 @@ Declare a schema, attach matching data to a mesh, and check it:
     mesh.point_data["velocity"] = torch.tensor([1.0, 0.0]).expand(n, 2).clone()
     mesh.point_data["stress"] = torch.diag(torch.tensor([2.0, 1.0])).expand(n, 2, 2).clone()
 
-    schema.check(mesh.point_data, label="point data")  # passes silently
+    schema.check(mesh.point_data, label="point data")  # no error
 
 :meth:`FieldSchema.check` reports every missing field and every rank
 mismatch in one ``ValueError``. Extra fields in the data are allowed:
@@ -93,7 +93,7 @@ configuration files. It accepts these forms:
 
 - A field is a :class:`RankSpec`, or a mapping of its attributes:
   ``{"rank": 2, "symmetric": True}``. The key ``"rank"`` is required. A bare
-  integer is refused: write ``{"rank": 0}``, not ``0``.
+  integer raises ``TypeError``: write ``{"rank": 0}``, not ``0``.
 - A group is a mapping of fields or of other groups, such as
   ``{"surface": {"shear": {"rank": 1}}}``. ``{}`` is an empty group.
 - A dotted name is the same nesting: ``"surface.shear"`` and the nested
