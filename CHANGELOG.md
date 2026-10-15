@@ -89,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GLOBE's `BarnesHutKernel` needs less memory to train: an 80k-face DrivAerML
   training step no longer runs out of memory.
 - Refresh core, optional, development, and container dependency versions.
-  Require PyTorch 2.13 or newer and TensorDict 0.14.2 or newer;
+  Require PyTorch 2.13 or newer;
   use PyTorch 2.13's CUDA 12.9 wheels for the CUDA 12 backend. NATTEN
   extras select PyTorch 2.13 to match their prebuilt kernels. Python support remains
   3.11 through 3.14.
@@ -223,6 +223,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `compute_mesh_statistics` reads all statistics in one device-to-host
   transfer instead of about 20 `.item()` calls.
+- `MeshReader` and `DomainMeshReader` map sample files copy-on-write, so
+  editing a loaded sample in place no longer changes the dataset on disk.
+  Readers on Lustre also no longer take write locks.
+- Moving or copying a mesh with cached adjacencies no longer synchronizes a
+  CUDA device.
 
 ### Deprecated
 
@@ -267,6 +272,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `__init__` with tensordict 0.15, whose tensorclass subclasses inherit the
   parent's `__init__`. The base `__init__` accepts and stores the fields that a
   subclass declares, and still raises `TypeError` for any other keyword.
+- `DefaultCollator` with a `stack_dim` past the batch dimensions of the
+  samples stacks each tensor with `torch.stack`, without TensorDict behaviour
+  that 0.15 deprecates. The batch's `batch_size` now matches its tensors.
+- The API reference again shows the docstrings of `Mesh`, `DomainMesh` and the
+  other tensorclasses in `physicsnemo.mesh`. TensorDict 0.14 replaced them
+  with generated signatures.
+- The GLOBE examples no longer pin TensorDict 0.12, which conflicted with
+  PhysicsNeMo's own requirement.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only
@@ -380,6 +393,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
+- Requires TensorDict 0.15 (`tensordict[zarr]>=0.15.0,<0.16.0`). Building,
+  copying and moving small meshes takes 20-50% less time on CPU.
 - Drops `onnx`, `torchvision` and `pandas` from the required dependencies.
   `pandas` is now optional via `datapipes-extras` or `model-extras`.
 
