@@ -637,7 +637,8 @@ class Kernel(Module):
 
         ### Vector magnitude, direction, and log-magnitude features
         with record_function("kernel::feature_engineering"):
-            # Per leaf: TD + 0-dim tensor would .item() the radius (a sync).
+            # Per leaf: TD + 0-dim tensor breaks the graph under torch.compile
+            # (tensordict 0.15), while apply traces.
             vectors_mag_squared: TensorDict = (vectors * vectors).sum(dim=-1).apply(
                 lambda t: t + self._smoothing_radius_sq
             )
@@ -1432,12 +1433,12 @@ class BarnesHutKernel(Kernel):
         tensors (~8 bytes/pair) and references to the shared source data
         (O(1)), instead of the gathered float features (~300 bytes/pair).
 
-        Source scalars and vectors are pre-flattened via
-        ``concatenate_leaves`` before indexing, reducing K per-leaf index
-        ops to 1 cat + 1 index each.  Vectors are split back into
-        individual named leaves afterward because the feature engineering
-        pipeline in ``_evaluate_interactions`` processes each vector
-        separately (magnitudes, dot products, basis construction).
+        Source scalars and vectors are each packed into one tensor with
+        ``TensorDict.pack`` before indexing, reducing K per-leaf index ops
+        to 1 cat + 1 index each.  ``PackLayout.unpack`` splits the gathered
+        rows back into named leaves (views, no copies), because the feature
+        engineering pipeline in ``_evaluate_interactions`` processes each
+        vector separately (magnitudes, dot products, basis construction).
         """
         n_pairs = tgt_ids.shape[0]
         ### ``index_select`` rather than ``x[idx]``: same forward, but its
@@ -1449,25 +1450,15 @@ class BarnesHutKernel(Kernel):
             - torch.index_select(source_positions, 0, src_ids)
         ) / reference_length
 
-        ### Flatten source scalars into one tensor, gather once, split back.
-        # concatenate_leaves: 1 GPU kernel (torch.cat)
-        # [src_ids]: 1 GPU kernel (aten::index)
-        # Total: 2 kernels instead of K (one per TensorDict leaf).
-        # The split-back uses sorted keys matching concatenate_leaves's
-        # canonical column ordering so position i maps to the correct leaf.
-        src_scalar_keys = sorted(
-            source_scalars.keys(include_nested=True, leaves_only=True),
-            key=str,
-        )
-        gathered_src_scalars = torch.index_select(
-            concatenate_leaves(source_scalars), 0, src_ids
-        )
+        ### Gather each group of source leaves with one ``index_select``: ``pack``
+        ### concatenates the leaves (1 kernel) and ``unpack`` splits the
+        ### gathered rows back into views of named leaves.
+        flat_scalars, scalar_layout = source_scalars.pack()
+        flat_vectors, vector_layout = source_vectors.pack()
         scalars = TensorDict(
             {
-                "source_scalars": TensorDict(
-                    {k: gathered_src_scalars[..., i] for i, k in enumerate(src_scalar_keys)},
-                    batch_size=torch.Size([n_pairs]),
-                    device=device,
+                "source_scalars": scalar_layout.unpack(
+                    torch.index_select(flat_scalars, 0, src_ids)
                 ),
                 "global_scalars": global_scalars.expand(
                     n_pairs, *global_scalars.batch_size
@@ -1476,26 +1467,10 @@ class BarnesHutKernel(Kernel):
             batch_size=torch.Size([n_pairs]),
             device=device,
         )
-
-        ### Flatten source vectors, gather once, split back into named leaves.
-        # The split-back is required because _evaluate_interactions processes
-        # each vector leaf separately for magnitude/direction extraction and
-        # rotationally-equivariant basis construction.  Integer indexing
-        # along the last dimension creates non-contiguous views (zero copies).
-        # Sorted keys match concatenate_leaves's canonical column ordering.
-        src_vector_keys = sorted(
-            source_vectors.keys(include_nested=True, leaves_only=True),
-            key=str,
-        )
-        gathered_src_vectors = torch.index_select(
-            concatenate_leaves(source_vectors), 0, src_ids
-        )
         vectors = TensorDict(
             {
-                "source_vectors": TensorDict(
-                    {k: gathered_src_vectors[..., i] for i, k in enumerate(src_vector_keys)},
-                    batch_size=torch.Size([n_pairs, self.n_spatial_dims]),
-                    device=device,
+                "source_vectors": vector_layout.unpack(
+                    torch.index_select(flat_vectors, 0, src_ids)
                 ),
                 "global_vectors": global_vectors.expand(
                     torch.Size([n_pairs]) + global_vectors.batch_size
