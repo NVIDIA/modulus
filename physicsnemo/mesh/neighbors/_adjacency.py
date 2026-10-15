@@ -47,7 +47,8 @@ class Adjacency(TensorClass, skip_post_init_on_rebuild=True):
         Shape ``(total_neighbors,)``, integer dtype. The adjacencies that
         ``Mesh`` builds store cell indices as int64 and point indices in the
         dtype of ``mesh.cells``, so the point-to-points and cell-to-points
-        adjacencies of an int32 mesh have int32 indices.
+        adjacencies of an int32 mesh have int32 indices. A mesh without
+        cells gives int64 indices.
 
     Examples
     --------
