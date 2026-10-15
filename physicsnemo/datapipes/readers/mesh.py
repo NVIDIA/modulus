@@ -346,7 +346,9 @@ class MeshReader:
                     generator,
                 )
             return from_zarr(mesh_path)
-        return Mesh.load(mesh_path)
+        # mode="r": copy-on-write maps, so in-place edits of a sample never
+        # reach the dataset files, and readers on Lustre take no write locks.
+        return Mesh.load(mesh_path, mode="r")
 
     def _get_sample_metadata(self, index: int) -> dict[str, Any]:
         """Return metadata for the sample (e.g. source path)."""
@@ -617,7 +619,7 @@ class DomainMeshReader:
                     global_data=io_zarr._read_tree(root, "global_data"),
                 )
             return from_zarr(path)
-        return DomainMesh.load(path)
+        return DomainMesh.load(path, mode="r")  # see MeshReader._load_sample
 
     def __len__(self) -> int:
         return len(self._paths)
@@ -749,7 +751,7 @@ class DomainMeshReader:
 
                 new_boundaries[bnd_name] = from_zarr(matches[0])
             else:
-                new_boundaries[bnd_name] = Mesh.load(matches[0])
+                new_boundaries[bnd_name] = Mesh.load(matches[0], mode="r")
 
         return DomainMesh(
             interior=dm.interior,
