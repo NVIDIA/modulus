@@ -16,8 +16,7 @@
 
 """Pytest configuration for mesh.io.io_zarr tests.
 
-All tests in this directory require ``zarr >= 3`` and a tensordict release
-carrying the zarr storage backend (``TensorDict.from_zarr``).
+All tests in this directory require ``zarr >= 3``.
 """
 
 import pytest
@@ -26,9 +25,6 @@ import torch
 zarr = pytest.importorskip("zarr", minversion="3.0")
 
 from tensordict import TensorDict  # noqa: E402
-
-if not hasattr(TensorDict, "from_zarr"):
-    pytest.skip("tensordict build has no zarr storage backend", allow_module_level=True)
 
 from physicsnemo.mesh import DomainMesh, Mesh  # noqa: E402
 

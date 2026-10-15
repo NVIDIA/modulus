@@ -16,10 +16,9 @@
 
 """Tests for Mesh serialization round-trips (memmap and pickle).
 
-The tensordict memmap format does not serialize tensors with 0 elements. This means
-that point clouds (where cells has shape (0, 1)) lose their cells tensor on save/load,
-causing downstream failures in n_manifold_dims, repr, and any method that accesses cells.
-These tests verify that __post_init__ correctly restores empty cells tensors.
+Point clouds keep their cells as an empty tensor of shape (0, 1). These tests check
+that it survives a save and a load, so that n_manifold_dims, repr and every method
+that reads cells keep working.
 """
 
 import subprocess
@@ -301,11 +300,7 @@ class TestMemmapRoundTrip:
 
 
 class TestTorchSaveLoadRoundTrip:
-    """Tests for torch.save() / torch.load() (pickle) round-trip.
-
-    These should already work without the Mesh.load() fix, since pickle
-    preserves empty tensors. Included as regression tests.
-    """
+    """Tests for torch.save() / torch.load() (pickle) round-trip."""
 
     def test_regular_mesh(self, tmp_path):
         """Regular mesh survives torch.save/load round-trip."""

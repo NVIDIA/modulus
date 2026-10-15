@@ -754,10 +754,8 @@ class Kernel(Module):
 
                 basis_vectors = torch.stack(basis_vector_components, dim=-1)
 
-            ### Build per-field outputs in a single pass over the flat tensor.
-            # One immutable dict + one TensorDict construction (no setitem on
-            # the result), sidestepping pytorch/tensordict#1680 under
-            # torch.compile + torch.utils.checkpoint.
+            ### Build per-field outputs in a single pass over the flat tensor,
+            ### into one dict and then one TensorDict.
             n_vectors_in = len(vectors.keys(include_nested=True, leaves_only=True))
             coeffs_per_vector = 1 + 2 * (n_vectors_in - 1)  # r_hat + (theta, kappa) per non-r vector
 
