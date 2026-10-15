@@ -3,12 +3,20 @@ Tessellation
 
 .. currentmodule:: physicsnemo.mesh.tessellation
 
-Decompose non-simplicial cells into the simplices that the
-:class:`~physicsnemo.mesh.mesh.Mesh` data structure stores. Currently this
-provides triangulation of a *polygon soup* (:func:`triangulate`): a vectorized
-vertex-0 fan for convex polygons and `ear clipping
-<https://en.wikipedia.org/wiki/Polygon_triangulation>`_ for the rare non-convex
-ones.
+``physicsnemo.mesh.tessellation`` has two jobs:
+
+- :func:`triangulate` decomposes the polygons of a *polygon soup* into the
+  simplices that the :class:`~physicsnemo.mesh.mesh.Mesh` data structure
+  stores. It uses a vectorized vertex-0 fan for convex polygons and `ear
+  clipping <https://en.wikipedia.org/wiki/Polygon_triangulation>`_ for the
+  rare non-convex ones.
+- :func:`fill_interior` fills a closed boundary mesh with quality simplices
+  (see `Exact-Boundary Interior Filling`_ below).
+
+Each polygon must be simple (no self-intersections), with no repeated
+consecutive vertices or zero-length edges. :func:`triangulate` does not detect
+these cases, and the result is undefined. Ear clipping also assumes that a
+non-convex polygon is approximately planar.
 
 A *polygon soup* is a flat list of polygonal cells, each given only by its
 vertex ring, with no shared-edge connectivity between cells -- the form a
@@ -56,9 +64,6 @@ broadcast to the output identically in both paths using the returned
         points, polygons, cell_data={"pressure": torch.tensor([2.5])}
     )
 
-A :class:`~physicsnemo.mesh.mesh.Mesh` can also be constructed in one step with
-:meth:`~physicsnemo.mesh.mesh.Mesh.from_polygons`.
-
 Exact-Boundary Interior Filling
 -------------------------------
 
@@ -72,8 +77,19 @@ islands-inside-holes automatically through containment.
 The algorithm uses constrained Delaunay triangulation
 (Bowyer--Watson insertion with constrained-edge recovery, holes removed
 topologically by even-odd parity flood fill) followed by Ruppert's
-Delaunay refinement, so that every 2D output triangle provably satisfies
-the requested minimum-angle bound and, optionally, a maximum cell size.
+Delaunay refinement, so that every 2D output triangle satisfies the
+requested minimum angle and, optionally, a maximum cell size.
+
+The minimum-angle guarantee has these conditions:
+
+- Adjacent input segments must meet at 60 degrees or more. A sharper input
+  corner raises ``ValueError``. To fill such a boundary, pass
+  ``min_angle_degrees=0.0`` for an unrefined constrained triangulation, or
+  blunt the corner.
+- ``min_angle_degrees`` must be in :math:`[0, 33]`. The default is 30.
+- Ruppert's proof of termination covers bounds up to about 20.7 degrees.
+  Larger bounds, such as the default, terminate in practice. If refinement
+  exceeds its budget of inserted vertices, it raises ``RuntimeError``.
 
 Optional optimal-Delaunay-triangulation (ODT) smoothing, controlled by
 ``smooth_iterations``, moves each interior vertex to the area-weighted
@@ -81,8 +97,9 @@ average of its incident triangles' circumcenters (Chen and Xu 2004). This
 improves the *typical* angle while preserving both bounds. The
 exact-boundary contract provides three guarantees:
 
-- Every input vertex appears bit-identically in the output, in leading
-  rows and input order.
+- Every input vertex that an edge references appears bit-identically in
+  the output, in the leading rows and in input order. Vertices that no edge
+  references are dropped.
 - The pipeline only ever *subdivides* boundary facets and never moves
   them.
 - The entire process is deterministic.

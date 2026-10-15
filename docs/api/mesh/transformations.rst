@@ -39,10 +39,20 @@ Geometric Transformations
 
 .. currentmodule:: physicsnemo.mesh.transformations.geometric
 
-Linear and affine transformations on mesh geometry. Each function
-returns a new :class:`~physicsnemo.mesh.mesh.Mesh` with transformed point
-coordinates and appropriately invalidated caches. Cached quantities such as
-normals and areas are automatically recomputed on next access.
+Linear and affine transformations on mesh geometry. Each function returns a
+new :class:`~physicsnemo.mesh.mesh.Mesh` with transformed point coordinates
+and the same connectivity.
+
+By default, :func:`rotate`, :func:`scale`, and :func:`transform` leave
+``point_data``, ``cell_data``, and ``global_data`` unchanged. To transform
+vector and tensor fields with the mesh, pass ``transform_point_data``,
+``transform_cell_data``, or ``transform_global_data``: ``True`` transforms
+every field whose shape fits, and a ``dict`` of booleans selects fields by
+name (see :doc:`fields`). :func:`translate` does not change data.
+
+Topology caches carry over to the new mesh. Cached cell areas, normals, and
+centroids are updated from the matrix where possible. Other cached geometry,
+such as curvature, is recomputed on next access.
 
 All transformations are also available as methods on
 :class:`~physicsnemo.mesh.mesh.Mesh`.
@@ -92,6 +102,19 @@ The ``deform`` namespace provides six deformation families:
 
 Each operation is also available as a method on
 :class:`~physicsnemo.mesh.mesh.Mesh`.
+
+Every deformation preserves connectivity and attached point, cell, global, and
+domain data. These operations treat attached vector and tensor fields as
+Lagrangian data and do not push them forward. They discard geometry-dependent
+caches and recompute them lazily. They retain topology caches.
+
+.. warning::
+
+   Deformations do not detect or repair inverted, degenerate, or
+   self-intersecting output cells. Call
+   :meth:`~physicsnemo.mesh.mesh.Mesh.validate` or
+   :meth:`~physicsnemo.mesh.domain_mesh.DomainMesh.validate` explicitly when a
+   deformation could compromise validity.
 
 Dense displacement accepts a tensor or a point-data key (including a nested
 tuple key). The operation returns a new mesh without changing ``mesh.points``.
@@ -517,9 +540,11 @@ edge or vertex, adjacent faces can provide different normals. Use consistently
 oriented target faces and avoid placing offset-sensitive samples exactly on
 shared features.
 
-Torch provides the reference search. Warp accelerates nearest-face search on
-CPU and CUDA. Both backends replay the selected point-to-triangle projection
-with PyTorch in the input dtype.
+The source points and the target must be in 3D. Torch provides the reference
+search. By default (``implementation=None``), shrinkwrap searches with Torch
+on CPU and with Warp on CUDA when Warp is available.
+``implementation="warp"`` also runs on CPU. Both backends replay the selected
+point-to-triangle projection with PyTorch in the input dtype.
 Shrinkwrap is available on :class:`~physicsnemo.mesh.mesh.Mesh`, not
 :class:`~physicsnemo.mesh.domain_mesh.DomainMesh`, because one source mesh is
 projected onto one target surface.
@@ -544,7 +569,7 @@ previous example:
 .. code:: python
 
     candidate, admissible_envelope = source, panel_target
-    design_region = candidate.points[:, 2] > 0.1  # vertices above the limit
+    design_region = candidate.points[:, 2] > 0.0  # vertices above the z = 0 limit
     feasible = candidate.shrinkwrap(
         admissible_envelope,
         point_weights=design_region,
@@ -628,19 +653,6 @@ same pattern for lattice free-form deformation:
 The combined bounds must have positive range on every coordinate axis unless
 an explicit extent is supplied.
 
-Every deformation preserves connectivity and attached point, cell, global, and
-domain data. These operations treat attached vector and tensor fields as
-Lagrangian data and do not push them forward. They discard geometry-dependent
-caches and recompute them lazily. They retain topology caches.
-
-.. warning::
-
-   Deformations do not detect or repair inverted, degenerate, or
-   self-intersecting output cells. Call
-   :meth:`~physicsnemo.mesh.mesh.Mesh.validate` or
-   :meth:`~physicsnemo.mesh.domain_mesh.DomainMesh.validate` explicitly when a
-   deformation could compromise validity.
-
 For optimization-time geometric penalties on a fixed topology, see
 :doc:`deformation`.
 
@@ -672,14 +684,16 @@ Projections
     flat = project(in_3d, target_n_spatial_dims=2)  # drops z
     print(in_3d.n_spatial_dims, prism.n_manifold_dims, flat.n_spatial_dims)  # 3 3 2
 
-Spatial dimension manipulation -- changing the embedding dimension of a mesh
-without altering its manifold dimension.
+These functions change the spatial dimension of a mesh (:func:`embed`,
+:func:`project`), or extrude it into a mesh one manifold dimension higher
+(:func:`extrude`).
 
-- :func:`embed` -- add spatial dimensions (non-destructive; for example, 2D mesh to 3D
-  by appending zero coordinates)
-- :func:`extrude` -- sweep a manifold to create a mesh one dimension higher
-  (for example, a triangle mesh extruded to a prism mesh)
-- :func:`project` -- reduce spatial dimensions (lossy; drops coordinate axes)
+- :func:`embed`: add spatial dimensions without loss, for example from 2D to
+  3D by appending zero coordinates.
+- :func:`extrude`: sweep each cell along a vector into a prism, and split the
+  prism into simplices. A triangle mesh becomes a tetrahedral mesh.
+- :func:`project`: remove spatial dimensions by dropping coordinate axes.
+  This loses information.
 
 .. autofunction:: embed
 

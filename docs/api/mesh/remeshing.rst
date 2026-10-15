@@ -9,7 +9,7 @@ of output vertices, not triangles. Cleanup can produce slightly fewer
 vertices.
 
 Remeshing can barycentrically interpolate selected ``point_data`` onto the new
-vertices. A direct positive scalar tensor or an attached point-data field can
+vertices. Point-data fields that you do not select are dropped. A direct positive scalar tensor or an attached point-data field can
 also specify relative linear resolution within the fixed vertex budget. Cell
 data is discarded. Global data, point dtype, and device are preserved.
 
@@ -39,8 +39,8 @@ Transfer Point Data
 -------------------
 
 Set ``transfer_point_data`` to a key, a nested key path, or a list of keys and
-paths. ``True`` selects every point-data leaf. Selected fields must contain
-real floating-point tensors:
+paths. ``True`` selects every point-data leaf. Fields that you do not select
+are dropped. Selected fields must contain real floating-point tensors:
 
 .. code:: python
 
@@ -201,16 +201,13 @@ The checked-in ASV benchmark measures warmed, end-to-end GPU execution:
 
 Timing includes an explicit CUDA synchronization.
 
-On supported CUDA devices, remeshing can be up to 300× faster than a CPU
-baseline.
-
 .. code:: console
 
    ./benchmarks/run_benchmarks.sh -b remesh
 
-The figure below is a representative run of
-``docs/img/mesh/remeshing_performance.py`` on an NVIDIA RTX PRO 6000 Blackwell
-Server Edition MIG 1g.24GB partition using Warp 1.14.0. Absolute timings depend
+The figure below shows GPU runtime against input size. It is a
+representative run of ``docs/img/mesh/remeshing_performance.py`` on an NVIDIA
+RTX PRO 6000 Blackwell Server Edition MIG 1g.24GB partition using Warp 1.14.0. Absolute timings depend
 on hardware and software versions. Use the ASV benchmark above for measurements
 in another environment.
 
@@ -229,8 +226,10 @@ Behavior and Limitations
 * Barycentric point-data transfer supports real floating-point tensors. It
   preserves trailing component dimensions and the source field dtype.
   Dtypes smaller than ``float32`` accumulate in ``float32`` before conversion
-  back to the source dtype. Categorical integer, Boolean, and complex fields
-  are not interpolated.
+  back to the source dtype. Selecting an integer, Boolean, or complex field
+  raises ``TypeError``, also through ``transfer_point_data=True`` when the
+  mesh has such a field. On a mesh with categorical data, select the
+  floating-point fields explicitly.
 * Point-data transfer requires a valid closest source triangle for every
   output vertex. A surface feature that is numerically degenerate in the
   float32 Warp projection can still remesh geometrically, but field transfer
@@ -273,9 +272,10 @@ tessellation.
 See Also
 --------
 
-- :doc:`subdivision` to refine a mesh without new topology.
-- Tutorial: `Mesh Operations
-  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_4_operations.ipynb>`_
+- :doc:`subdivision` to refine a mesh by splitting its cells, keeping its
+  existing vertices.
+- Tutorial: `Quality, Validation, and Repair
+  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_7_quality_repair.ipynb>`_
 
 API Reference
 -------------
