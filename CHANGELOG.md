@@ -268,6 +268,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pca_axis2_x`, `pca_axis1_y`, ...). Before, the names listed one axis after
   the other. The feature schema version is now `v1.1`; guardrails saved with
   `v1.0` hold the same values in the same order and still load.
+- `OODGuard.score_geometry` documents the distance it returns: the mean
+  Euclidean (chord) distance between L2-normalised latents,
+  `sqrt(2 (1 - cos))`, which orders neighbours like the cosine distance but is
+  not equal to it.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only

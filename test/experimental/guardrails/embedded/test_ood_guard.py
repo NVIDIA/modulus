@@ -257,6 +257,25 @@ def test_score_geometry_returns_distances_and_orders_in_vs_ood(device):
     assert scores[1] > scores[0] + 1.0
 
 
+@pytest.mark.parametrize("device", _DEVICES)
+def test_score_geometry_is_mean_chord_distance(device):
+    """The score is the mean Euclidean (chord) distance between L2-normalised
+    latents, sqrt(2 (1 - cos theta)), not the mean cosine distance 1 - cos theta."""
+    gen = torch.Generator(device=device).manual_seed(7)
+    store = torch.randn(16, 4, device=device, generator=gen)
+    query = torch.randn(3, 4, device=device, generator=gen)
+    guard = OODGuard(buffer_size=16, geometry_embed_dim=4, knn_k=3).to(device)
+    guard.collect(geometry_latent=store)
+    scores = guard.score_geometry(query)
+
+    s = store / store.norm(dim=-1, keepdim=True)
+    q = query / query.norm(dim=-1, keepdim=True)
+    chord = torch.cdist(q, s).topk(3, dim=1, largest=False).values.mean(dim=1)
+    torch.testing.assert_close(scores, chord, atol=1e-5, rtol=1e-5)
+    cosine = (1.0 - q @ s.T).topk(3, dim=1, largest=False).values.mean(dim=1)
+    assert not torch.allclose(scores, cosine, atol=1e-3)
+
+
 def test_score_geometry_raises_when_buffer_empty():
     """Calling score before any ``collect`` is a usage error, not a silent NaN."""
     guard = OODGuard(buffer_size=8, geometry_embed_dim=4)

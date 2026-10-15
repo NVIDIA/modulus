@@ -205,7 +205,7 @@ class OODGuard(nn.Module):
         self,
         geometry_latent: Float[torch.Tensor, "batch dim"],
     ) -> Float[torch.Tensor, "batch"]:
-        """Return per-sample average kNN distance in the geometry latent space.
+        r"""Return per-sample average kNN distance in the geometry latent space.
 
         Same computation as the geometry surface of :meth:`check` but
         returns the raw distances without thresholding or warning
@@ -214,10 +214,15 @@ class OODGuard(nn.Module):
         score rather than a boolean verdict.
 
         Both the calibration buffer and the query are L2-normalised
-        prior to kNN, so distances are bounded in ``[0, 2]`` on the
-        unit hypersphere.  Higher values indicate samples whose
-        geometry latent is farther (in cosine distance) from the
-        nearest neighbours in the calibration buffer.
+        prior to kNN, and the kNN search uses Euclidean distances, so
+        each distance is the chord between unit vectors,
+        :math:`\lVert \hat{z} - \hat{z}_j \rVert = \sqrt{2 (1 - \cos\theta_j)}`,
+        bounded in ``[0, 2]`` on the unit hypersphere.  It orders the
+        neighbours like the cosine distance :math:`1 - \cos\theta_j`
+        but is not equal to it (for small angles it is close to
+        :math:`\theta_j` in radians).  Higher values indicate samples
+        whose geometry latent is farther from the nearest neighbours in
+        the calibration buffer.
 
         Parameters
         ----------
@@ -228,9 +233,10 @@ class OODGuard(nn.Module):
         Returns
         -------
         Tensor
-            Shape ``(B,)`` — per-sample mean cosine distance to the top
-            ``min(knn_k, n_valid)`` neighbours in the calibration buffer,
-            on the same device as ``geometry_latent``.
+            Shape ``(B,)`` — per-sample mean chord distance between the
+            L2-normalised query and its top ``min(knn_k, n_valid)``
+            neighbours in the calibration buffer, on the same device as
+            ``geometry_latent``.
 
         Raises
         ------
@@ -257,7 +263,7 @@ class OODGuard(nn.Module):
         # Upcast so cdist against the fp32 store works under AMP inputs.
         pooled = geometry_latent.detach().to(self.geo_embeddings.dtype)
         # Normalise both query and buffer to unit vectors so that knn returns
-        # cosine distances bounded in [0, 2] on the unit hypersphere.
+        # chord distances sqrt(2 (1 - cos)), bounded in [0, 2] on the unit hypersphere.
         z = pooled / (pooled.norm(dim=-1, keepdim=True) + 1e-8)
         store = self.geo_embeddings[:n_valid]
         store_norm = store / (store.norm(dim=-1, keepdim=True) + 1e-8)
