@@ -39,7 +39,10 @@ from physicsnemo.mesh.primitives.volumes import cube_volume
 from physicsnemo.mesh.repair import remove_degenerate_cells
 from physicsnemo.mesh.repair._cleaning import remove_duplicate_cells
 from physicsnemo.mesh.smoothing import smooth_laplacian
-from physicsnemo.mesh.validation.quality import _compute_simplex_altitudes
+from physicsnemo.mesh.validation.quality import (
+    _compute_min_simplex_altitudes,
+    compute_cell_edge_lengths,
+)
 from test.mesh.mesh.test_slicing_sync import _cuda_sync_budget
 
 requires_cuda = pytest.mark.skipif(
@@ -130,8 +133,8 @@ def test_remove_degenerate_cells_counts_and_keeps(device):
 
 
 @pytest.mark.parametrize("n_manifold_dims", [2, 3, 4])
-def test_simplex_altitudes_match_volume_over_facet(n_manifold_dims, device):
-    """Altitude opposite vertex k is n * volume / (measure of the facet without k)."""
+def test_min_simplex_altitude_matches_volume_over_facet(n_manifold_dims, device):
+    """The altitude opposite vertex k is n * volume / (measure of the facet without k)."""
     generator = torch.Generator().manual_seed(n_manifold_dims)
     n_verts = n_manifold_dims + 1
     points = torch.randn(10 * n_verts, n_manifold_dims, generator=generator).double()
@@ -139,14 +142,18 @@ def test_simplex_altitudes_match_volume_over_facet(n_manifold_dims, device):
         points=points.to(device),
         cells=torch.arange(10 * n_verts, device=device).reshape(10, n_verts),
     )
-    altitudes = _compute_simplex_altitudes(mesh, mesh.cell_areas)
+    min_altitudes = _compute_min_simplex_altitudes(
+        mesh, mesh.cell_areas, compute_cell_edge_lengths(mesh)
+    )
 
+    altitudes = []
     for k in range(n_verts):
         others = [i for i in range(n_verts) if i != k]
         facet = Mesh(points=mesh.points, cells=mesh.cells[:, others])
-        torch.testing.assert_close(
-            altitudes[:, k], n_manifold_dims * mesh.cell_areas / facet.cell_areas
-        )
+        altitudes.append(n_manifold_dims * mesh.cell_areas / facet.cell_areas)
+    torch.testing.assert_close(
+        min_altitudes, torch.stack(altitudes, dim=1).min(dim=1).values
+    )
 
 
 def test_exterior_derivative_1_matches_explicit_edge_orientation(device):
