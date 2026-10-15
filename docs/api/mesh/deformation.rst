@@ -235,8 +235,6 @@ See Also
 --------
 
 - :doc:`transformations` for the deformations that these energies regularize.
-- User Guide: `Meshes in ML Pipelines
-  <https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh/ml_integration.html>`_
 
 API Reference
 -------------

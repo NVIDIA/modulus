@@ -20,14 +20,17 @@ PhysicsNeMo-Mesh has three generation tools with distinct contracts:
      - Use When
    * - ``physicsnemo.mesh.tessellation.fill_interior``
      - closed boundary ``Mesh`` (2D today)
-     - volume ``Mesh``, exact boundary, guaranteed angles,
-       deterministic
+     - volume ``Mesh``, exact boundary, deterministic, a guaranteed
+       minimum angle (up to 33 degrees, for input corners of 60 degrees or
+       more; see :doc:`tessellation`)
      - the boundary discretization is the contract (coupling, per-boundary
        BCs, guaranteed worst-element quality)
    * - :func:`mesh_implicit_domain`
      - implicit function :math:`\varphi(x)` (SDF, level set, neural field)
      - volume ``Mesh`` in any dimension, boundary approximated to
-       :math:`O(h^2)`, GPU-native, differentiable refit
+       :math:`O(h^2)` where it is smooth (sharp corners are rounded at the
+       ``h`` scale unless passed as ``feature_points``), GPU-native,
+       differentiable refit
      - geometry is implicit, you need 3D/ND volumes, GPU scale, or
        gradients with regard to shape
    * - :func:`marching_cubes`
@@ -46,22 +49,27 @@ neural implicit fields), in *any spatial dimension*, entirely in PyTorch
 tensor ops on CPU or CUDA. The meshed set is ``{phi < 0}`` intersected
 with the bounding box. Where the domain reaches the box, the generator
 treats its faces as a boundary, so external-flow "box minus obstacle"
-domains work directly. Every
-optimization step is validity-gated, so it always returns a positively
-oriented mesh with a closed-manifold boundary. Difficult inputs degrade
-element quality (reported in diagnostics), but never prevent the mesh
-from being generated. A coverage guard raises an error, rather than
-silently dropping geometry, when the domain
-has features below the target edge length ``h`` or when coverage cannot
-be certified at all. The latter can happen, for example, if a neural field
-returns NaN inside the box when queried outside its training range. You can
-interpolate sharp corners exactly through ``feature_points``.
+domains work directly. Every optimization step is validity-gated, so when
+the function returns, the mesh is positively oriented and has a
+closed-manifold boundary. Difficult inputs lower element quality, which
+``full_output=True`` reports in a diagnostics dict, but do not by themselves
+stop generation. The function raises ``ValueError`` when no lattice cell fits
+inside the domain at this ``h``, or when the coverage guard trips. The
+coverage guard raises the error, rather than dropping geometry, when the
+domain has features below the target edge length ``h`` or when coverage
+cannot be certified at all. The latter can happen, for example, if a neural
+field returns NaN inside the box when queried outside its training range.
+Without ``feature_points``, sharp convex corners are rounded off at the
+``h`` scale. Pass the corners as ``feature_points`` to interpolate them
+exactly.
 
 :func:`refit_mesh_to_implicit` is the differentiable companion: it
 re-projects a mesh's boundary onto ``phi = 0`` with graph-preserving
 Newton steps at fixed topology, so gradients flow from mesh coordinates to
 shape parameters inside ``phi``. This enables meshing as a
-differentiable layer for shape optimization.
+differentiable layer for shape optimization. For a box-minus-obstacle mesh,
+pass the same box as ``bounds=``, so that the vertices on the box faces stay
+on them.
 
 .. code:: python
 
@@ -102,7 +110,10 @@ convenience:
 - :func:`sdf_difference` (CSG combinator)
 - :func:`project_to_zero_set` (Newton projection onto ``phi = 0``)
 
-Any callable with the signature ``phi(x: (..., d)) -> (...)`` also works.
+Any callable with the signature ``phi(x: (..., d)) -> (...)`` also works,
+if it is negative inside the domain and positive outside, differentiable
+(almost everywhere) under autograd, and has a nonzero gradient near
+``phi = 0``. It must not return NaN inside the bounds.
 
 Isosurface Extraction
 ---------------------
