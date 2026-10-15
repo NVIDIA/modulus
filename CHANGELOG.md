@@ -228,6 +228,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Readers on Lustre also no longer take write locks.
 - Moving or copying a mesh with cached adjacencies no longer synchronizes a
   CUDA device.
+- `BoundingBoxFilter` takes about half as long on CPU. On a GPU it
+  synchronizes once per coordinate key, instead of once per filtered tensor.
 
 ### Deprecated
 
