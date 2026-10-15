@@ -120,6 +120,14 @@ def test_unsupported_dtype_raises_before_writing(tmp_path):
     assert not (tmp_path / "mesh.zarr").exists()
 
 
+def test_dtype_check_ignores_default_device(tmp_path):
+    """A non-CPU default device does not make supported dtypes look unsupported."""
+    mesh = make_mesh()
+    with torch.device("meta"):
+        to_zarr(mesh, tmp_path / "mesh.zarr")
+    assert_meshes_equal(mesh, from_zarr(tmp_path / "mesh.zarr"))
+
+
 def test_non_mesh_store_raises(tmp_path):
     import zarr
 

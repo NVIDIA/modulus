@@ -332,6 +332,31 @@ class TestCellCentroidsPointCloud:
         ]
         np.testing.assert_allclose(mesh.points.numpy(), expected, atol=1e-12)
 
+    @pytest.mark.parametrize("as_unstructured", [False, True])
+    @pytest.mark.parametrize(
+        "dtype,x",
+        [(np.int64, 2**62), (np.float32, 2e38), (np.float64, 8e307)],
+    )
+    def test_variable_size_centroid_near_dtype_limit(self, as_unstructured, dtype, x):
+        """A polyline centroid is exact even when its vertex sum would overflow."""
+        pv_mesh = pv.PolyData(
+            np.array([[x, 0, 0], [x, 1, 0], [x, 2, 0]], dtype=dtype),
+            lines=[3, 0, 1, 2],
+            force_float=False,
+        )
+        if as_unstructured:
+            pv_mesh = pv_mesh.cast_to_unstructured_grid()
+
+        mesh = from_pyvista(
+            pv_mesh,
+            manifold_dim=0,
+            point_source="cell_centroids",
+            warn_on_lost_data=False,
+        )
+
+        expected = [[float(dtype(x)), 1.0, 0.0]]
+        np.testing.assert_allclose(mesh.points.numpy(), expected, rtol=1e-12)
+
 
 # ---------------------------------------------------------------------------
 # point_source="cell_centroids", manifold_dim=1 (dual graph)

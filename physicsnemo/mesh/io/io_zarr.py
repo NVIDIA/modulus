@@ -103,7 +103,7 @@ def to_zarr(
     # and leave a partial store behind. Reject it before writing anything.
     for key, value in td.items(include_nested=True, leaves_only=True):
         try:
-            torch.empty(0, dtype=value.dtype).numpy()
+            torch.empty(0, dtype=value.dtype, device="cpu").numpy()
         except TypeError:
             name = key if isinstance(key, str) else "/".join(key)
             raise TypeError(
