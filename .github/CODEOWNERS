@@ -167,8 +167,8 @@ physicsnemo/nn/module/pade.py @peterdsharpe
 physicsnemo/distributed/ @coreyjadams @negin513
 
 # Domain parallelism (ShardTensor, shard utilities)
-physicsnemo/domain_parallel/ @coreyjadams @negin513
-physicsnemo/domain_parallel/shard_utils/ @coreyjadams @negin513
+physicsnemo/domain_parallel/ @coreyjadams @negin513 @peterdsharpe
+physicsnemo/domain_parallel/shard_utils/ @coreyjadams @negin513 @peterdsharpe
 
 # FSDP2 utilities
 physicsnemo/distributed/fsdp2/ @negin513
