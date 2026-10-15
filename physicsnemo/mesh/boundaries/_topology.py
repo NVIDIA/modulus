@@ -533,9 +533,8 @@ def _check_3d_vertex_manifold(mesh: "Mesh") -> bool:
     is_degenerate = is_v.sum(dim=1) > 1
     del is_v
 
-    # Every column but v_col, built arithmetically on the device (as in
-    # _compute_simplex_altitudes): a lookup table copied from the host would
-    # synchronize the device.
+    # Every column but v_col, built arithmetically on the device: a lookup
+    # table copied from the host would synchronize the device.
     other = torch.arange(3, device=device)
     gather_cols = other + (other >= v_col.unsqueeze(1))  # (total, 3)
     del v_col
