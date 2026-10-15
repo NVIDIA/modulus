@@ -83,10 +83,13 @@ MESHES = {
 
 @pytest.mark.parametrize("name", MESHES)
 @pytest.mark.parametrize("defects", [False, True])
-def test_statistics_match_reference(name, defects, device):
+@pytest.mark.parametrize("cells_dtype", [torch.int64, torch.int32])
+def test_statistics_match_reference(name, defects, cells_dtype, device):
     mesh = MESHES[name](device)
     if defects:
         mesh = _with_defects(mesh)
+    mesh = Mesh(points=mesh.points, cells=mesh.cells.to(cells_dtype))
+    assert mesh.cells.dtype == cells_dtype  # Mesh keeps int32 connectivity
 
     stats = compute_mesh_statistics(mesh)
     expected = _reference_statistics(mesh)

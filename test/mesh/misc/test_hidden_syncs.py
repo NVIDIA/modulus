@@ -32,6 +32,7 @@ from physicsnemo.mesh import Mesh
 from physicsnemo.mesh.boundaries import extract_candidate_facets
 from physicsnemo.mesh.boundaries._topology import _check_3d_vertex_manifold
 from physicsnemo.mesh.calculus._exterior_derivative import exterior_derivative_1
+from physicsnemo.mesh.neighbors import Adjacency
 from physicsnemo.mesh.primitives.planar import structured_grid
 from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
 from physicsnemo.mesh.primitives.volumes import cube_volume
@@ -242,7 +243,7 @@ def test_smoothing_synchronizations_do_not_grow_with_iterations():
 
 @requires_cuda
 @pytest.mark.parametrize(
-    "subdivision, max_syncs", [("linear", 1), ("loop", 12), ("butterfly", 13)]
+    "subdivision, max_syncs", [("linear", 1), ("loop", 8), ("butterfly", 3)]
 )
 def test_subdivision_synchronizations_are_bounded(subdivision, max_syncs):
     """Subdivision synchronizes only for data-dependent sizes, not for small tables."""
@@ -259,3 +260,20 @@ def test_vertex_manifold_check_synchronizations_are_bounded():
     assert _check_3d_vertex_manifold(mesh)  # also caches the adjacency
     # The remaining syncs come from boolean masks, union-find and the result
     assert _count_cuda_syncs(lambda: _check_3d_vertex_manifold(mesh)) <= 10
+
+
+@requires_cuda
+def test_rebuilding_cached_adjacencies_is_sync_free():
+    """Moving or cloning a mesh rebuilds its cached ``Adjacency`` objects without
+    rerunning their validation, which reads offsets back to the host."""
+    adjacency = Adjacency(
+        offsets=torch.tensor([0, 2, 3], device="cuda"),
+        indices=torch.tensor([1, 2, 0], device="cuda"),
+    )
+    assert _count_cuda_syncs(adjacency.clone) == 0
+
+    mesh = MESHES["triangles_3d"]("cuda")
+    mesh.get_point_to_points_adjacency()
+    mesh.get_cell_to_cells_adjacency()
+    assert _count_cuda_syncs(mesh.clone) == 0
+    assert _count_cuda_syncs(lambda: mesh.to(torch.float64)) == 0

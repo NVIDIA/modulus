@@ -34,7 +34,7 @@ from jaxtyping import Float, Int
 from tensordict import TensorDict
 
 from physicsnemo.mesh.utilities._tolerances import safe_eps
-from physicsnemo.utils._index_tuple_ops import sort_index_tuples, unique_index_tuples
+from physicsnemo.utils._index_tuple_ops import sort_index_tuples_, unique_index_tuples
 
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh
@@ -210,6 +210,7 @@ def extract_candidate_facets(
     manifold_codimension : int, optional
         Codimension of the extracted mesh relative to parent.
 
+        - 0: The cells themselves (e.g., the edges of a 1D mesh)
         - 1: Extract (n-1)-facets (default, e.g., triangular faces from tets)
         - 2: Extract (n-2)-facets (e.g., edges from tets, vertices from triangles)
         - k: Extract (n-k)-facets
@@ -244,9 +245,9 @@ def extract_candidate_facets(
     n_vertices_per_subsimplex = n_vertices_per_cell - manifold_codimension
 
     ### Validate codimension
-    if manifold_codimension < 1:
+    if manifold_codimension < 0:
         raise ValueError(
-            f"{manifold_codimension=} must be >= 1. "
+            f"{manifold_codimension=} must be >= 0. "
             "Use codimension=1 to extract immediate boundary facets."
         )
     if n_vertices_per_subsimplex < 1:
@@ -277,8 +278,9 @@ def extract_candidate_facets(
     )
 
     ### Sort vertices within each sub-simplex to canonical form for deduplication
-    # Shape remains (n_cells, n_combinations, n_vertices_per_subsimplex)
-    candidate_facets = sort_index_tuples(candidate_facets)
+    # Shape remains (n_cells, n_combinations, n_vertices_per_subsimplex). The
+    # gather output is ours, so it is sorted in place.
+    candidate_facets = sort_index_tuples_(candidate_facets)
 
     ### Reshape to (n_cells * n_combinations, n_vertices_per_subsimplex)
     candidate_facets = candidate_facets.reshape(-1, n_vertices_per_subsimplex)
