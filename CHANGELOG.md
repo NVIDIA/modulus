@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Adds an experimental, independently implemented SMART operator with sampled
-  geometry encoding, reusable latent contexts, and chunked field decoding.
+- Adds an experimental, independently implemented SMART operator with opt-in
+  surface and volume support in the unified external aerodynamics recipe,
+  full CFD geometry, independent online field-query sampling, and chunked inference.
 
 - Adds standalone FLARE++ attention and model APIs, with input-conditioned
   dynamic routing, plus a ``GALE_FPP`` backend for using the same mixer inside
@@ -207,6 +208,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Unified external aerodynamics checkpoints now include gradient-scaler state,
+  capture the scheduler after its epoch update, and save the final epoch, so new
+  checkpoints resume with the intended learning-rate schedule.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only

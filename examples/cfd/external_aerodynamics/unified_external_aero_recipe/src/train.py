@@ -903,6 +903,7 @@ def main(cfg: DictConfig) -> None:
         "path": os.path.join(checkpoint_dir, cfg.run_id, "checkpoints"),
         "optimizer": optimizer,
         "scheduler": scheduler,
+        "scaler": scaler,
         "models": model,
     }
     loaded_epoch = load_checkpoint(device=device, **ckpt_args)
@@ -973,14 +974,18 @@ def main(cfg: DictConfig) -> None:
                     f"{table}\n"
                 )
 
-            if epoch % cfg.training.save_interval == 0 and is_rank0:
+            # Save the state that the next epoch will actually use, including
+            # its learning rate, so resumed training follows the same schedule.
+            if cfg.training.get("scheduler_update_mode", "epoch") == "epoch":
+                scheduler.step()
+
+            if is_rank0 and (
+                epoch % cfg.training.save_interval == 0 or epoch + 1 == num_epochs
+            ):
                 save_checkpoint(**ckpt_args, epoch=epoch + 1)
                 if normalizer is not None:
                     norm_path = os.path.join(ckpt_args["path"], "norm_stats.pt")
                     torch.save(normalizer.stats, norm_path)
-
-            if cfg.training.get("scheduler_update_mode", "epoch") == "epoch":
-                scheduler.step()
 
     if is_rank0:
         if train_writer is not None:
