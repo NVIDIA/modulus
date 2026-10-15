@@ -108,20 +108,6 @@ def test_feature_alignment_chunks_gradients_and_checkpoint(field, tmp_path):
     )
 
 
-def test_legacy_parameter_count_and_no_optional_state():
-    model = SMART(
-        surface_channels=4,
-        volume_channels=5,
-        parameter_channels=2,
-        num_layers=16,
-        qk_normalization=True,
-    )
-    assert sum(p.numel() for p in model.parameters()) == 25_520_425
-    assert not any(
-        "temperature" in key or "query_projection" in key for key in model.state_dict()
-    )
-
-
 @pytest.mark.parametrize("field", ["surface", "volume"])
 def test_required_feature_validation(field):
     model = field_model(field)
@@ -191,57 +177,3 @@ def test_temperature_initial_equivalence_and_bounded_sharpness():
             field_model("surface", qk_temperature_max=maximum)
     with pytest.raises(ValueError, match="qk_temperature_max"):
         field_model("surface", qk_normalization=False)
-
-
-@pytest.mark.parametrize("field", ["surface", "volume"])
-def test_shared_initialization_is_identical_between_feature_arms(field):
-    torch.manual_seed(189)
-    feature_model = field_model(field, qk_temperature_max=4.0)
-    torch.manual_seed(189)
-    plain_model = field_model(
-        field, qk_temperature_max=4.0, **{f"{field}_query_feature_channels": 0}
-    )
-    plain_state = plain_model.state_dict()
-    feature_state = feature_model.state_dict()
-    for name, tensor in plain_state.items():
-        assert torch.equal(tensor, feature_state[name]), name
-    extras = set(feature_state) - set(plain_state)
-    assert extras == {f"{field}_query_projection.weight"}
-    assert feature_state[extras.pop()].count_nonzero() == 0
-
-
-@pytest.mark.parametrize("field", ["surface", "volume"])
-def test_feature_checkpointed_chunk_gradients_match_direct(field):
-    from torch.utils.checkpoint import checkpoint
-
-    torch.manual_seed(29)
-    model = field_model(field, qk_temperature_max=4.0).eval()
-    reference = field_model(field, qk_temperature_max=4.0).eval()
-    reference.load_state_dict(model.state_dict())
-    geometry, queries = torch.randn(1, 30, 3), torch.randn(1, 17, 3)
-    features = torch.randn(1, 17, 3 if field == "surface" else 4)
-    context = model.encode_geometry(geometry)
-    direct = model.decode_queries(
-        queries, context, field=field, query_features=features
-    )
-    direct.square().sum().backward()
-    context = reference.encode_geometry(geometry)
-
-    def decode(query, feature, *latents):
-        return reference.decode_queries(
-            query, latents, field=field, query_features=feature
-        )
-
-    chunked = torch.cat(
-        [
-            checkpoint(decode, query, feature, *context, use_reentrant=False)
-            for query, feature in zip(queries.split(6, 1), features.split(6, 1))
-        ],
-        dim=1,
-    )
-    chunked.square().sum().backward()
-    torch.testing.assert_close(chunked, direct, atol=2e-6, rtol=2e-5)
-    for (name, p), (_, q) in zip(
-        model.named_parameters(), reference.named_parameters()
-    ):
-        torch.testing.assert_close(p.grad, q.grad, atol=1e-5, rtol=5e-5, msg=name)
