@@ -184,6 +184,7 @@ physicsnemo/datapipes/transforms/ @coreyjadams @negin513
 
 physicsnemo/datapipes/mesh_dataset.py @coreyjadams @negin513 @peterdsharpe
 physicsnemo/datapipes/readers/mesh.py @coreyjadams @negin513 @peterdsharpe
+physicsnemo/datapipes/transforms/geometric.py @coreyjadams @negin513 @peterdsharpe
 physicsnemo/datapipes/transforms/mesh/ @coreyjadams @negin513 @peterdsharpe
 
 physicsnemo/datapipes/cae/domino_datapipe.py  @coreyjadams
@@ -469,8 +470,10 @@ test/distributed/ @coreyjadams @negin513
 test/domain_parallel/ @coreyjadams @negin513
 test/datapipes/core/ @coreyjadams @negin513
 test/datapipes/ @coreyjadams @negin513
+test/datapipes/test_mesh_dataset*.py @coreyjadams @negin513 @peterdsharpe
 test/datapipes/readers/test_mesh_readers.py @coreyjadams @negin513 @peterdsharpe
 test/datapipes/transforms/test_*mesh*.py @coreyjadams @negin513 @peterdsharpe
+test/datapipes/transforms/test_geometric.py @coreyjadams @negin513 @peterdsharpe
 test/datapipes/transforms/test_nested_fields.py @coreyjadams @negin513 @peterdsharpe
 test/datapipes/transforms/test_set_global_field.py @coreyjadams @negin513 @peterdsharpe
 
