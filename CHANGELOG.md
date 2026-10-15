@@ -263,6 +263,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   differentiable with respect to the mesh vertices and the query points.
   Before, `backward` raised because the Warp op had no autograd formula. The
   hit points and hit faces carry no gradients.
+- `Mesh` and `DomainMesh` subclasses that add fields no longer need their own
+  `__init__` with tensordict 0.15, whose tensorclass subclasses inherit the
+  parent's `__init__`. The base `__init__` accepts and stores the fields that a
+  subclass declares, and still raises `TypeError` for any other keyword.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only
