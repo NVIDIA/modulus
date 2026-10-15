@@ -388,6 +388,19 @@ def test_mesh_lsq_gradient_ragged_neighborhoods_match_per_entity_lstsq(device: s
         torch.testing.assert_close(output[i].cpu(), expected)
 
 
+# Validate that the torch backend returns empty gradients for zero entities.
+@pytest.mark.parametrize("value_shape", [(), (2,), (2, 4)])
+def test_mesh_lsq_gradient_torch_no_entities(device: str, value_shape):
+    output = MeshLSQGradient.dispatch(
+        torch.empty(0, 3, device=device),
+        torch.empty(0, *value_shape, device=device),
+        torch.zeros(1, dtype=torch.int64, device=device),
+        torch.empty(0, dtype=torch.int64, device=device),
+        implementation="torch",
+    )
+    assert output.shape == (0, 3, *value_shape)
+
+
 # Validate warp backend input validation paths mirror torch behavior.
 @requires_module("warp")
 def test_mesh_lsq_gradient_error_handling_warp(device: str):

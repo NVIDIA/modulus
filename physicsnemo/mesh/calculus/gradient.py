@@ -172,8 +172,9 @@ def project_to_tangent_space(
     2. project the gradient,
        :math:`\nabla_\text{int} f = \nabla f - (\nabla f \cdot \hat{n}) \, \hat{n}`.
 
-    For higher codimension, PCA on a local neighborhood is used to estimate
-    the tangent space.
+    For higher codimension, each cell's gradient is projected onto the span of
+    that cell's edges (for a segment, its direction); at points, PCA on a local
+    neighborhood is used to estimate the tangent space.
     """
     if mesh.codimension == 0:
         # Manifold fills the space: intrinsic = extrinsic
@@ -219,8 +220,20 @@ def project_to_tangent_space(
 
         return grad_intrinsic
 
+    elif location == "cells":
+        ### Higher codimension at cells: project onto each cell's own span
+        cell_vertices = mesh.points[mesh.cells]  # (n_cells, n_verts, n_spatial_dims)
+        edge_vectors = cell_vertices[:, 1:] - cell_vertices[:, :1]
+        # Orthonormal tangent basis: (n_cells, n_spatial_dims, n_manifold_dims)
+        tangents, _ = torch.linalg.qr(edge_vectors.transpose(1, 2))
+        projector = tangents @ tangents.transpose(1, 2)  # (n_cells, n_s, n_s)
+        dtype = torch.promote_types(gradients.dtype, projector.dtype)
+        return torch.einsum(
+            "nij,nj...->ni...", projector.to(dtype), gradients.to(dtype)
+        )
+
     else:
-        ### Higher codimension: use PCA to estimate tangent space
+        ### Higher codimension at points: use PCA to estimate tangent space
         from physicsnemo.mesh.calculus._pca_tangent import (
             project_gradient_to_tangent_space_pca,
         )
