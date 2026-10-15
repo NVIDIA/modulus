@@ -75,13 +75,19 @@ def _draw_edges(axis, mesh, color, linewidth):
     )
 
 
-def _render(layers):
-    """Render PyVista layers off-screen and return the image."""
+def _render(dataset, color):
+    """Render a shaded PyVista dataset off-screen and return the image."""
 
     plotter = pv.Plotter(window_size=(900, 900))
     plotter.enable_anti_aliasing("ssaa")
-    for dataset, options in layers:
-        plotter.add_mesh(dataset, **options)
+    plotter.add_mesh(
+        dataset,
+        color=color,
+        show_edges=True,
+        edge_color=EDGE_COLOR,
+        line_width=0.6,
+        ambient=0.35,
+    )
     plotter.set_background("white")
     plotter.view_vector(VIEW_VECTOR, viewup=(0.0, 0.0, 1.0))
     plotter.reset_camera()
@@ -125,43 +131,13 @@ def main():
     # Cut the ball open: drop the tetrahedra in the octant that faces the camera.
     facing = (volume.cell_centroids * volume.points.new_tensor(VIEW_VECTOR) > 0).all(1)
     cut = to_pyvista(volume).extract_cells((~facing).nonzero().squeeze(1).numpy())
-    volume_axes[0].imshow(
-        _render(
-            [
-                (
-                    # Shrink each tetrahedron toward its centroid to show it.
-                    cut.shrink(0.8),
-                    {
-                        "color": MESH_COLOR,
-                        "show_edges": True,
-                        "edge_color": EDGE_COLOR,
-                        "line_width": 0.6,
-                        "ambient": 0.35,
-                    },
-                )
-            ]
-        )
-    )
+    # Shrink each tetrahedron toward its centroid to show it.
+    volume_axes[0].imshow(_render(cut.shrink(0.8), MESH_COLOR))
     volume_axes[0].set_title(
         f"lumpy_ball, cut open, tetrahedra shrunk\n{_label(volume, 'tetrahedra')}"
     )
 
-    volume_axes[1].imshow(
-        _render(
-            [
-                (
-                    to_pyvista(volume_boundary),
-                    {
-                        "color": BOUNDARY_COLOR,
-                        "show_edges": True,
-                        "edge_color": EDGE_COLOR,
-                        "line_width": 0.6,
-                        "ambient": 0.35,
-                    },
-                )
-            ]
-        )
-    )
+    volume_axes[1].imshow(_render(to_pyvista(volume_boundary), BOUNDARY_COLOR))
     volume_axes[1].set_title(
         f"get_boundary_mesh()\n{_label(volume_boundary, 'triangles')}"
     )
