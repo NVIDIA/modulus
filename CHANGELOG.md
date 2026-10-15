@@ -272,6 +272,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Euclidean (chord) distance between L2-normalised latents,
   `sqrt(2 (1 - cos))`, which orders neighbours like the cosine distance but is
   not equal to it.
+- `TorchGMM` no longer fails when a covariance is indefinite to single
+  precision (redundant features on very different scales, as the geometry
+  descriptors are), for example when a geometry guardrail fitted on GPU is
+  loaded on CPU. It then factorises in double precision with a jitter relative
+  to the mean variance and warns; results where single precision succeeds are
+  unchanged.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only
