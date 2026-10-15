@@ -397,6 +397,54 @@ class TestManifold3D:
         ### These share edges {1,3}, {1,4}, {1,2} respectively → connected
         assert mesh.is_manifold(check_level="full") is True
 
+    def test_degenerate_tet_does_not_raise(self, device):
+        """A tet with a repeated vertex does not break the edge-link check.
+
+        Some candidate edges of the degenerate tet have fewer than two non-edge
+        vertices, which used to make the edge-link check fail to reshape them.
+        """
+        from physicsnemo.mesh.boundaries._topology import (
+            _check_3d_edge_link_connectivity,
+        )
+
+        points = torch.rand(5, 3, device=device)
+        cells = torch.tensor([[0, 0, 1, 2], [1, 2, 3, 4]], device=device)
+        mesh = Mesh(points=points, cells=cells)
+
+        assert mesh.is_manifold(check_level="facets") is True
+        # The two tets meet only at edge {1, 2}, whose link is disconnected.
+        assert _check_3d_edge_link_connectivity(mesh) is False
+        assert mesh.is_manifold() is False
+
+    @pytest.mark.parametrize(
+        "cells",
+        [
+            [[0, 1, 2, 3], [0, 4, 5, 6]],  # pinch vertex
+            [[0, 1, 2, 3], [0, 1, 4, 5]],  # tets sharing only an edge
+            [[0, 1, 2, 3], [0, 1, 2, 4], [0, 1, 2, 5]],  # face shared by 3
+            [[0, 1, 2, 3], [0, 1, 2, 3], [3, 2, 1, 0]],  # duplicates
+            [[0, 0, 1, 2], [0, 1, 2, 3]],  # degenerate
+            [[0, 1, 2, 3], [1, 2, 3, 4], [2, 3, 4, 5]],  # manifold strip
+        ],
+    )
+    @pytest.mark.parametrize("dtype", [torch.int64, torch.int32])
+    def test_unpacked_sort_fallback_matches(self, cells, dtype, device, monkeypatch):
+        """The fallback for sort keys that could overflow gives the same result."""
+        import physicsnemo.mesh.boundaries._topology as topology_module
+
+        cells = torch.tensor(cells, dtype=dtype, device=device)
+        mesh = Mesh(points=torch.rand(7, 3, device=device), cells=cells)
+        checks = (
+            topology_module._check_3d_vertex_manifold,
+            topology_module._check_3d_edge_link_connectivity,
+        )
+        packed = [check(mesh) for check in checks]
+
+        monkeypatch.setattr(
+            topology_module, "_packed_tuple_capacity_fits", lambda *args: False
+        )
+        assert [check(mesh) for check in checks] == packed
+
 
 class TestManifold1D:
     """Test manifold checking for 1D meshes."""
