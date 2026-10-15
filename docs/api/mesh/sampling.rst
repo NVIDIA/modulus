@@ -26,13 +26,16 @@ Both are also ``Mesh`` methods:
 :meth:`~physicsnemo.mesh.mesh.Mesh.sample_data_at_points`.
 
 .. figure:: ../../img/mesh/sampling_interpolation.png
-   :alt: Random points on a surface mesh, each colored by the value of a
-         field that was interpolated to it from the mesh vertices.
+   :alt: Two views of a torus with a shared colorbar. Left: the surface shaded
+         by a field, with dark dots at the vertices. Right: a gray torus
+         covered with colored dots whose colors match the left view.
    :align: center
    :width: 100%
 
-   Random points sampled on a surface, colored by a field interpolated from
-   the vertices.
+   Left: a field :math:`f = 2xy + z` stored at the vertices of a coarse torus.
+   Right: 5000 points sampled uniformly by area with
+   :func:`sample_random_points_on_cells`, colored by the values that
+   :func:`sample_data_at_points` interpolates from the vertices.
 
 Example
 -------

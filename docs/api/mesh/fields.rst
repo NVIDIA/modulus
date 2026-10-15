@@ -15,17 +15,19 @@ it reads or writes, and check data against that declaration. A plain
 concatenation of channels loses this information.
 
 .. figure:: ../../img/mesh/fields_rank_transforms.png
-   :alt: A planar mesh with a scalar field as color, a vector field as arrows,
-         and a symmetric tensor field as ellipses, before and after a
-         30-degree rotation. The colors stay the same, the arrows rotate,
-         and the ellipses rotate with the mesh.
+   :alt: Two rows of three panels. Top: a square triangle mesh colored by
+         pressure, the same mesh with arrows that point mostly to the right,
+         and the same mesh with flat ellipses. Bottom: the mesh rotated by 30
+         degrees inside a dashed outline of the original square. The colors
+         stay on their vertices, and the arrows and ellipses tilt by 30
+         degrees.
    :align: center
    :width: 100%
 
-   A scalar, a vector, and a symmetric rank-2 tensor field on a planar mesh,
-   before and after a 30-degree rotation :math:`R`. The scalar does not
-   change, the vectors rotate as :math:`R v`, and the tensors rotate as
-   :math:`R T R^\top`.
+   Three fields declared with :class:`FieldSchema` on a planar mesh, before
+   and after ``mesh.rotate(math.radians(30), transform_point_data=True)``. The
+   pressure keeps its values, the velocity turns as :math:`v' = R v`, and the
+   symmetric stress turns as :math:`T' = R T R^\top`.
 
 Example
 -------

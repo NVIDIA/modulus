@@ -10,15 +10,16 @@ module with one ``load`` function. Its keyword arguments set the size and the
 resolution, and ``device`` sets where the tensors go.
 
 .. figure:: ../../img/mesh/primitives_gallery.png
-   :alt: A grid of example meshes, one column per family: curves, planar
-         meshes, surfaces, volumes, and procedural meshes. Each mesh is
-         labeled with its module path and its manifold and spatial
-         dimensions.
+   :alt: A grid of five columns and two rows, one column per family. Curves:
+         a helix and a spiral. Planar: an annulus and an L-shape. Surfaces: a
+         torus and a Moebius strip. Volumes: a cube and a single tetrahedron.
+         Procedural: a lumpy sphere and a lumpy ball cut open.
    :align: center
    :width: 100%
 
-   One or more primitives from each family, labeled with the module path and
-   with ``Mesh[n_manifold_dims, n_spatial_dims]``.
+   Two primitives from each family, labeled with the module path and with the
+   manifold and spatial dimensions. Each tetrahedron of the volume meshes is
+   shrunk so that it shows.
 
 Example
 -------

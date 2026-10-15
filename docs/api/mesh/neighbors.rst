@@ -25,16 +25,17 @@ entries. Use :meth:`Adjacency.to_list` for a Python list of lists, and
 a PyTorch Geometric ``edge_index``.
 
 .. figure:: ../../img/mesh/neighbors_adjacency.png
-   :alt: Four panels of one small planar triangle mesh. Each panel highlights
-         one query element and its neighbors: the points next to a point, the
-         cells around a point, the cells next to a cell, and the points of a
-         cell.
+   :alt: Four copies of a gray triangle mesh. Top left: a point joined to its
+         six neighbor points. Top right: the same point with its six
+         surrounding cells filled. Bottom left: a triangle and the three
+         triangles that share an edge with it. Bottom right: the same triangle
+         with its three vertices marked.
    :align: center
    :width: 100%
 
-   The four adjacency queries on one planar triangle mesh: point to points,
-   point to cells, cell to cells, and cell to points. Each panel highlights
-   one query element and its neighbors.
+   The four adjacency queries on one jittered triangle mesh. Each panel
+   highlights a query point or cell in orange and the neighbors returned for
+   it in blue.
 
 Example
 -------

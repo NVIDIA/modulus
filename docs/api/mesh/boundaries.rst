@@ -28,14 +28,17 @@ The most common operations are also ``Mesh`` methods:
 :meth:`~physicsnemo.mesh.mesh.Mesh.is_manifold`.
 
 .. figure:: ../../img/mesh/boundaries_facets.png
-   :alt: Left, a planar triangle mesh with its boundary edges highlighted and,
-         next to it, its full facet mesh of all edges. Right, a tetrahedral
-         mesh with its triangulated boundary surface.
+   :alt: Top row: a triangulated ring; the same ring, faded, with its outer
+         and inner circles drawn in thick orange; all of the ring's edges
+         drawn as lines. Bottom row: a ball cut open, with its tetrahedra
+         shrunk apart, and its triangulated boundary surface in orange.
    :align: center
    :width: 100%
 
-   A planar triangle mesh with its boundary mesh and its facet mesh, and a
-   tetrahedral mesh with its boundary surface.
+   Top: an annulus, its boundary mesh of 48 edges (the outer and inner
+   circles), and its facet mesh of all 168 edges. Bottom: a tetrahedral ball,
+   cut open with its tetrahedra shrunk, and its boundary surface of 320
+   triangles.
 
 Example
 -------

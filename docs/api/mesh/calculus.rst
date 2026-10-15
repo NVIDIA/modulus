@@ -27,15 +27,20 @@ On a curved surface or curve, an intrinsic gradient lies in the tangent space
 of the mesh, and an extrinsic gradient lies in the ambient space.
 
 .. figure:: ../../img/mesh/calculus_lsq_vs_dec.png
-   :alt: Left, maps of the gradient error of LSQ and DEC on a planar mesh,
-         with the largest errors along the boundary. Right, a log-log plot of
-         the gradient error of both methods against the mesh size.
+   :alt: Two square maps of the gradient error, one for LSQ and one for DEC,
+         dark inside with a bright rim on the boundary. Beside them, a log-log
+         plot of the error against the mesh spacing: four parallel lines (LSQ
+         and DEC, at interior and boundary vertices) next to a slope-1
+         reference line. The boundary lines lie about eight times higher than
+         the interior lines.
    :align: center
    :width: 100%
 
-   The error of the LSQ and DEC gradients of a smooth field: (a) error maps on
-   a planar mesh, which show the effect of the boundary, and (b) the error
-   against the mesh size.
+   Error of the LSQ and DEC vertex gradients of a smooth field on a jittered
+   grid. (a) Error maps at :math:`h = 1/16`: the error is largest on the
+   boundary. (b) RMS error against the mesh spacing: both methods converge at
+   first order on this grid, and the error at boundary vertices stays about 8
+   times larger. On a regular grid, the interior error falls at second order.
 
 Example
 -------

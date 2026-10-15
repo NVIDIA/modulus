@@ -31,13 +31,17 @@ Loop and Butterfly need a triangle mesh (``n_manifold_dims == 2``). All
 schemes carry ``point_data`` and ``cell_data`` to the refined mesh.
 
 .. figure:: ../../img/mesh/subdivision_schemes.png
-   :alt: One coarse closed triangle surface and, next to it, its linear, Loop,
-         and Butterfly subdivisions. The linear result keeps flat facets, and
-         the Loop and Butterfly results are smooth.
+   :alt: Four panels with an orange wireframe of a cube. A plain cube of 12
+         triangles; the same cube, finely triangulated; a sphere inside the
+         wireframe; a rounded, bulging box that passes through the cube's
+         corners.
    :align: center
    :width: 100%
 
-   A coarse closed surface and its linear, Loop, and Butterfly subdivisions.
+   A cube of 12 triangles and three levels of linear, Loop, and Butterfly
+   subdivision, which give 768 triangles each. Linear and Butterfly
+   subdivision keep the original vertices. Loop subdivision moves them and
+   shrinks the cube toward a smooth sphere.
 
 Example
 -------
