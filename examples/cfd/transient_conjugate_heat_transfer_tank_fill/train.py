@@ -261,14 +261,14 @@ def main(cfg: DictConfig) -> None:
 
     # Get the keys to read from each processed NPZ. The datapipe does not carry
     # the surface/volume valid masks, so masked_mse falls back to a plain MSE.
-    keys_to_read, keys_to_read_if_available = get_keys_to_read(cfg, model_type)
+    keys_to_read = get_keys_to_read(model_type)
 
     # Create train and val datasets
     train_dataset = create_domino_dataset(
         cfg,
         phase="train",
         keys_to_read=keys_to_read,
-        keys_to_read_if_available=keys_to_read_if_available,
+        keys_to_read_if_available={},
         vol_factors=volume_scaling,
         surf_factors=surface_scaling,
     )
@@ -276,7 +276,7 @@ def main(cfg: DictConfig) -> None:
         cfg,
         phase="val",
         keys_to_read=keys_to_read,
-        keys_to_read_if_available=keys_to_read_if_available,
+        keys_to_read_if_available={},
         vol_factors=volume_scaling,
         surf_factors=surface_scaling,
     )

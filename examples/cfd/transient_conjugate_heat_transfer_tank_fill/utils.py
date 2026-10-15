@@ -94,28 +94,20 @@ def infer_shapes(
     return surface_channels, volume_channels, future_steps
 
 
-def get_keys_to_read(
-    cfg: DictConfig, model_type: str
-) -> Tuple[List[str], Dict[str, torch.Tensor]]:
+def get_keys_to_read(model_type: str) -> List[str]:
     """Return the keys that ``create_domino_dataset`` reads from each NPZ.
 
-    Mirrors ``get_keys_to_read`` in the external aerodynamics DoMINO example.
-    The second return value holds optional keys, with the config's reference
-    values used for samples that lack them.
+    The global parameters must be among them. The datapipe never reads the keys
+    in ``keys_to_read_if_available`` from a file, but always uses their defaults.
     """
-    keys_to_read = ["stl_coordinates", "stl_centers", "stl_faces", "stl_areas"]
-
-    reference: List[float] = []
-    for param_cfg in cfg.variables.global_parameters.values():
-        if param_cfg.type == "vector":
-            reference.extend(param_cfg.reference)
-        else:
-            reference.append(param_cfg.reference)
-    keys_to_read_if_available = {
-        key: torch.tensor(reference, dtype=torch.float32).reshape(-1, 1)
-        for key in ("global_params_values", "global_params_reference")
-    }
-
+    keys_to_read = [
+        "stl_coordinates",
+        "stl_centers",
+        "stl_faces",
+        "stl_areas",
+        "global_params_values",
+        "global_params_reference",
+    ]
     if model_type in {"volume", "combined"}:
         keys_to_read += ["volume_mesh_centers", "volume_fields"]
     if model_type in {"surface", "combined"}:
@@ -125,7 +117,7 @@ def get_keys_to_read(
             "surface_areas",
             "surface_fields",
         ]
-    return keys_to_read, keys_to_read_if_available
+    return keys_to_read
 
 
 # -----------------------------------------------------------------------------
