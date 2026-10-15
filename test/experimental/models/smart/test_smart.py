@@ -23,7 +23,83 @@ import torch
 
 from physicsnemo import Module
 from physicsnemo.experimental.models.smart import SMART
-from test.common import compare_output, validate_checkpoint
+from test.common import (
+    validate_amp,
+    validate_checkpoint,
+    validate_combo_optims,
+    validate_cuda_graphs,
+    validate_forward_accuracy,
+    validate_jit,
+)
+
+_DEFAULT_CONFIG = dict(
+    surface_channels=1,
+    volume_channels=3,
+    parameter_channels=0,
+    hidden_dim=256,
+    num_heads=8,
+    num_layers=6,
+    num_latents=2048,
+    geometry_subsample=65536,
+    mlp_ratio=4,
+    share_weights=True,
+    eval_seed=0,
+    attention_precision=None,
+    qk_normalization=False,
+    attention_precision_scope="attention",
+    qk_temperature_max=None,
+    surface_query_feature_channels=0,
+    volume_query_feature_channels=0,
+)
+
+
+def _assert_model_attributes(model, config):
+    """Check constructor state and module sharing for new and restored models."""
+    expected = _DEFAULT_CONFIG | config
+    assert isinstance(model, Module)
+    for name, value in expected.items():
+        assert getattr(model, name) == value, name
+    assert len(model.geometry_attention) == expected["num_layers"]
+    assert len(model.decoder) == expected["num_layers"]
+    assert len(model.encoder_refinement) == expected["num_layers"] - 1
+    assert all(
+        (block is model.decoder[i]) == expected["share_weights"]
+        for i, block in enumerate(model.encoder_refinement)
+    )
+    assert model.meta.amp_cpu and model.meta.amp_gpu and model.meta.auto_grad
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        pytest.param({}, id="defaults"),
+        pytest.param(
+            dict(
+                surface_channels=4,
+                volume_channels=5,
+                parameter_channels=2,
+                hidden_dim=24,
+                num_heads=4,
+                num_layers=2,
+                num_latents=8,
+                geometry_subsample=16,
+                mlp_ratio=2,
+                share_weights=False,
+                eval_seed=7,
+                attention_precision="bfloat16",
+                qk_normalization=True,
+                attention_precision_scope="decoder_sdpa",
+                qk_temperature_max=4.0,
+                surface_query_feature_channels=3,
+                volume_query_feature_channels=4,
+            ),
+            id="custom",
+        ),
+    ],
+)
+def test_smart_constructor(config):
+    """Verify default and custom public attributes per MOD-008a."""
+    _assert_model_attributes(SMART(**config), config)
 
 
 @pytest.fixture(autouse=True)
@@ -306,19 +382,67 @@ def test_checkpoint_precision_override_preserves_architecture(tmp_path, scope):
 
 
 @pytest.mark.parametrize("case", ["shared", "unshared"])
-def test_smart_forward_accuracy(case, device):
-    """Compare against frozen weights/inputs using the common accuracy comparator."""
-    data = torch.load(
-        Path(__file__).parent / "data" / f"{case}.pth",
-        map_location=device,
-        weights_only=True,
+@pytest.mark.parametrize("source", ["constructor", "checkpoint"])
+def test_smart_forward_accuracy(case, source, device):
+    """Check frozen forward/encoder/decoder values and .mdlus loading (MOD-008b/c)."""
+    root = Path(__file__).parent / "data"
+    data = torch.load(root / f"{case}.pth", map_location=device, weights_only=True)
+    if source == "checkpoint":
+        model = Module.from_checkpoint(root / f"{case}.mdlus")
+    else:
+        model = SMART(**data["config"])
+        model.load(root / f"{case}.mdlus")
+    model = model.to(device).eval()
+    _assert_model_attributes(model, data["config"])
+    inputs = data["inputs"]
+    arguments = tuple(
+        inputs[key]
+        for key in ("geometry", "surface_queries", "volume_queries", "parameters")
     )
-    model = SMART(**data["config"]).to(device).eval()
-    model.load_state_dict(data["weights"])
+    assert validate_forward_accuracy(
+        model,
+        arguments,
+        atol=3e-6,
+        rtol=3e-5,
+        file_name=f"experimental/models/smart/data/{case}_output.pth",
+    )
+    expected = torch.load(
+        root / f"{case}_output.pth", map_location=device, weights_only=True
+    )
     with torch.no_grad():
-        assert compare_output(
-            model(**data["inputs"]), data["outputs"], atol=3e-6, rtol=3e-5
-        )
+        contexts = model.encode_geometry(inputs["geometry"], inputs["parameters"])
+        torch.testing.assert_close(contexts, data["contexts"], atol=3e-6, rtol=3e-5)
+        for index, field in enumerate(("surface", "volume")):
+            prediction = model.decode_queries(
+                inputs[f"{field}_queries"],
+                data["contexts"],
+                inputs["parameters"],
+                field=field,
+            )
+            torch.testing.assert_close(
+                prediction, expected[index], atol=3e-6, rtol=3e-5
+            )
+
+
+@pytest.mark.parametrize("optimization", ["amp", "combo", "jit", "cuda_graphs"])
+def test_smart_optimizations(device, optimization):
+    """Exercise the standard model optimization helpers where supported."""
+    model = small_model(parameter_channels=2).to(device)
+    if optimization in ("jit", "cuda_graphs") and not getattr(model.meta, optimization):
+        pytest.skip(f"SMART does not advertise {optimization} support")
+    inputs = (
+        torch.randn(2, 40, 3, device=device),
+        torch.randn(2, 13, 3, device=device),
+        torch.randn(2, 19, 3, device=device),
+        torch.randn(2, 2, device=device),
+    )
+    validators = dict(
+        amp=validate_amp,
+        combo=validate_combo_optims,
+        jit=validate_jit,
+        cuda_graphs=validate_cuda_graphs,
+    )
+    assert validators[optimization](model, inputs)
 
 
 def test_compiled_decoder(device):
