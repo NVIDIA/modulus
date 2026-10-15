@@ -272,6 +272,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `__init__` with tensordict 0.15, whose tensorclass subclasses inherit the
   parent's `__init__`. The base `__init__` accepts and stores the fields that a
   subclass declares, and still raises `TypeError` for any other keyword.
+- A mesh saved with cached adjacencies now loads in a new Python process.
+  Before, `Mesh.load` raised unless `physicsnemo.mesh.neighbors` was already
+  imported.
 - `DefaultCollator` with a `stack_dim` past the batch dimensions of the
   samples stacks each tensor with `torch.stack`, without TensorDict behaviour
   that 0.15 deprecates. The batch's `batch_size` now matches its tensors, and

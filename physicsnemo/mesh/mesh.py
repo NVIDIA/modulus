@@ -47,6 +47,10 @@ from physicsnemo.mesh.calculus import (
 )
 from physicsnemo.mesh.geometry._cell_areas import compute_cell_areas
 from physicsnemo.mesh.geometry._cell_normals import compute_cell_normals
+
+### Imported at run time, not only for type checking: `Mesh.load` must find
+### this class to rebuild the adjacencies cached in a saved mesh.
+from physicsnemo.mesh.neighbors._adjacency import Adjacency
 from physicsnemo.mesh.remeshing import remesh
 from physicsnemo.mesh.transformations.deform import (
     displace,
@@ -73,9 +77,6 @@ from physicsnemo.nn.functional import safe_normalize
 ### has more than this many points per cell-vertex entry, in which case it
 ### binary-searches the kept ids instead (see slice_points for the measurement).
 _SEARCH_REMAP_RATIO = 64
-
-if TYPE_CHECKING:
-    from physicsnemo.mesh.neighbors._adjacency import Adjacency
 
 
 # A field on a `Mesh` is "associated with" either points (e.g. a per-vertex

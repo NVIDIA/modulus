@@ -22,6 +22,9 @@ causing downstream failures in n_manifold_dims, repr, and any method that access
 These tests verify that __post_init__ correctly restores empty cells tensors.
 """
 
+import subprocess
+import sys
+
 import torch
 from tensordict import TensorClass, TensorDict
 
@@ -194,6 +197,30 @@ class TestMemmapRoundTrip:
         loaded = Mesh.load(tmp_path / "pc.pt")
 
         assert loaded.n_cells == 0
+
+    def test_cached_adjacency_loads_in_a_fresh_process(self, tmp_path):
+        """A mesh saved with a cached adjacency loads in a new interpreter.
+
+        Loading rebuilds the cache, so TensorDict must find the ``Adjacency``
+        class even when nothing has imported ``physicsnemo.mesh.neighbors``.
+        """
+        mesh = two_triangles_2d.load()
+        adjacency = mesh.get_point_to_points_adjacency()
+        path = tmp_path / "mesh.pmsh"
+        mesh.save(path)
+        script = (
+            "from physicsnemo.mesh import Mesh\n"
+            f"adjacency = Mesh.load({str(path)!r}).get_point_to_points_adjacency()\n"
+            f"assert adjacency.offsets.tolist() == {adjacency.offsets.tolist()}\n"
+            f"assert adjacency.indices.tolist() == {adjacency.indices.tolist()}\n"
+        )
+        result = subprocess.run(  # noqa: S603 - interpreter/script are test constants
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
 
     def test_repr_after_load(self, tmp_path):
         """repr does not raise for a point cloud after memmap round-trip."""
