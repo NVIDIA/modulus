@@ -26,6 +26,7 @@ import torch
 from jaxtyping import Float
 
 from physicsnemo.mesh.utilities._tolerances import safe_eps
+from physicsnemo.utils._small_linalg import batched_lstsq
 
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh
@@ -130,7 +131,9 @@ def compute_point_gradient_lsq_intrinsic(
         tangent_basis = tangent_bases[
             point_indices
         ]  # (n_group, n_spatial_dims, n_manifold_dims)
-        A_tangent = torch.einsum("gns,gsm->gnm", A_ambient, tangent_basis)
+        # Broadcast-and-sum contractions: batched matmuls of these tiny matrices
+        # (as einsum would dispatch) are much slower on GPUs.
+        A_tangent = (A_ambient.unsqueeze(-1) * tangent_basis.unsqueeze(1)).sum(dim=-2)
 
         ### Function differences
         b = point_values[neighbors_flat] - point_values[point_indices].unsqueeze(1)
@@ -142,16 +145,20 @@ def compute_point_gradient_lsq_intrinsic(
         ### Apply sqrt-weights to tangent-space system
         sqrt_w = weights.sqrt().unsqueeze(-1)  # (n_group, n_neighbors, 1)
         A_tangent_weighted = sqrt_w * A_tangent
+        # Only the weighted system is needed from here on
+        del batch, neighbors_flat, A_ambient, A_tangent, distances, weights
 
         ### Solve batched least-squares in tangent space
         if is_scalar:
             b_weighted = sqrt_w.squeeze(-1) * b
-            grad_tangent = torch.linalg.lstsq(
-                A_tangent_weighted, b_weighted.unsqueeze(-1), rcond=None
-            ).solution.squeeze(-1)  # (n_group, n_manifold_dims)
+            del b, sqrt_w
+            grad_tangent = batched_lstsq(
+                A_tangent_weighted, b_weighted.unsqueeze(-1)
+            ).squeeze(-1)  # (n_group, n_manifold_dims)
+            del A_tangent_weighted, b_weighted
 
             # Map back to ambient coordinates
-            grad_ambient = torch.einsum("gsm,gm->gs", tangent_basis, grad_tangent)
+            grad_ambient = (tangent_basis * grad_tangent.unsqueeze(1)).sum(dim=-1)
             gradients[point_indices] = grad_ambient
         else:
             # Tensor field: flatten extra dims, solve, map back
@@ -159,12 +166,16 @@ def compute_point_gradient_lsq_intrinsic(
             b_weighted = value_weights * b
             orig_shape = b.shape[2:]
             b_flat = b_weighted.reshape(n_group, n_neighbors, -1)
+            del b, sqrt_w, value_weights, b_weighted
 
-            grad_tangent = torch.linalg.lstsq(
-                A_tangent_weighted, b_flat, rcond=None
-            ).solution  # (n_group, n_manifold_dims, n_components)
+            grad_tangent = batched_lstsq(
+                A_tangent_weighted, b_flat
+            )  # (n_group, n_manifold_dims, n_components)
+            del A_tangent_weighted, b_flat
 
-            grad_ambient = torch.bmm(tangent_basis, grad_tangent)
+            grad_ambient = (
+                tangent_basis.unsqueeze(-1) * grad_tangent.unsqueeze(1)
+            ).sum(dim=-2)
             grad_ambient_reshaped = grad_ambient.reshape(
                 n_group, n_spatial_dims, *orig_shape
             )
