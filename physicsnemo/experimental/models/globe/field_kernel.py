@@ -1243,26 +1243,11 @@ class BarnesHutKernel(Kernel):
         duplicated forward/checkpoint plumbing across the four phases
         and keeps the gradient-checkpointing policy in one place.
 
-        The wrap fires in **both** training and eval, not just training,
-        for two reasons:
-
-        1. Memory savings (the original purpose).  In eval no autograd
-           tape is active (``train.py`` wraps validation in
-           ``torch.no_grad()``), so ``checkpoint(use_reentrant=False)``
-           degenerates to a near-no-op forward call - no recompute, no
-           extra memory, no extra compute.
-        2. Workaround for a Dynamo+CUDA TensorDict bug.  When the same
-           ``_gather_and_evaluate`` body is inlined into the parent
-           graph (i.e. without the checkpoint wrapper), FakeTensor
-           tracing fails to propagate ``TensorDict.batch_size`` through
-           ``(vectors * vectors).sum(dim=-1)``: leaf tensors get
-           reduced to 1D but the TD still reports its 2D pre-reduction
-           batch size, and any downstream op that consults
-           ``batch_size`` (``.unsqueeze(-1)``, ``concatenate_leaves``'s
-           reshape) trips on the inconsistency.  Wrapping the call in
-           ``checkpoint`` gives Dynamo a fresh sub-tracer scope that
-           tracks the post-reduction batch size correctly, so the
-           identical eager-mode-correct body now also traces correctly.
+        The wrap fires in eval as well as in training. In eval no autograd
+        tape is active (``train.py`` wraps validation in
+        ``torch.no_grad()``), so ``checkpoint(use_reentrant=False)``
+        degenerates to a near-no-op forward call - no recompute, no
+        extra memory, no extra compute.
         """
         if self.use_gradient_checkpointing:
             return checkpoint(
