@@ -72,7 +72,7 @@ islands-inside-holes automatically through containment.
 The algorithm uses constrained Delaunay triangulation
 (Bowyer--Watson insertion with constrained-edge recovery, holes removed
 topologically by even-odd parity flood fill) followed by Ruppert's
-Delaunay refinement, so that every 2D output triangle *provably* satisfies
+Delaunay refinement, so that every 2D output triangle provably satisfies
 the requested minimum-angle bound and, optionally, a maximum cell size.
 
 Optional optimal-Delaunay-triangulation (ODT) smoothing, controlled by

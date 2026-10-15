@@ -88,8 +88,8 @@ differentiable layer for shape optimization.
     print(r.grad)  # about 8
 
 The refit does not gate its Newton steps, so that it stays differentiable. It
-warns when the projection inverts cells. On this coarse mesh, it inverts a
-few cells near the inner sphere.
+warns when the projection inverts cells. On this coarse mesh, it warns that
+about 2% of the cells inverted, most of them near the outer sphere.
 
 The following signed-distance building blocks are provided for
 convenience:

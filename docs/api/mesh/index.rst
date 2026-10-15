@@ -5,7 +5,7 @@ PhysicsNeMo Mesh
 
 PhysicsNeMo-Mesh (``physicsnemo.mesh``) is a PyTorch library for simplicial
 meshes in any dimension. A simplex is a point, edge, triangle, tetrahedron, or
-its higher-dimensional analogue. One :class:`~physicsnemo.mesh.mesh.Mesh` type
+its higher-dimensional analog. One :class:`~physicsnemo.mesh.mesh.Mesh` type
 holds point clouds, curves, surfaces, and volumes, together with tensor fields
 of any rank on its points, its cells, and the mesh as a whole. Operations run
 on CPU or GPU, and most of them are differentiable with

@@ -31,16 +31,17 @@ of the mesh, and an extrinsic gradient lies in the ambient space.
          dark inside with a bright rim on the boundary. Beside them, a log-log
          plot of the error against the mesh spacing: four parallel lines (LSQ
          and DEC, at interior and boundary vertices) next to a slope-1
-         reference line. The boundary lines lie about eight times higher than
-         the interior lines.
+         reference line. The boundary lines lie five to eight times higher
+         than the interior lines.
    :align: center
    :width: 100%
 
    Error of the LSQ and DEC vertex gradients of a smooth field on a jittered
    grid. (a) Error maps at :math:`h = 1/16`: the error is largest on the
    boundary. (b) RMS error against the mesh spacing: both methods converge at
-   first order on this grid, and the error at boundary vertices stays about 8
-   times larger. On a regular grid, the interior error falls at second order.
+   first order on this grid, and the error at boundary vertices stays five to
+   eight times larger. On a regular grid, the interior error falls at second
+   order.
 
 Example
 -------
@@ -76,7 +77,8 @@ Choosing a Method
 - Use :meth:`~physicsnemo.mesh.mesh.Mesh.compute_point_derivatives` or
   :meth:`~physicsnemo.mesh.mesh.Mesh.compute_cell_derivatives` to add
   gradients of named fields to the mesh data. ``method="lsq"`` is the
-  default, and ``method="dec"`` selects DEC.
+  default. ``method="dec"`` selects DEC, for point derivatives only:
+  ``compute_cell_derivatives`` raises ``NotImplementedError`` for it.
 - Use the ``compute_*`` functions for a tensor result without changing the
   mesh.
 - For the Laplacian, use :func:`compute_laplacian_points_dec`. LSQ has no

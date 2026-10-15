@@ -29,7 +29,8 @@ Example
 ``relaxation_factor`` sets how far each point moves toward the average in one
 iteration. ``n_iter`` sets the number of iterations. Many iterations shrink a
 closed surface: 500 iterations with ``relaxation_factor=0.1`` reduce the mean
-radius of a unit icosahedral sphere to about 0.57. To change the connectivity,
+radius of ``sphere_icosahedral.load(subdivisions=3)``, a unit sphere, to about
+0.57. Coarser meshes shrink faster. To change the connectivity,
 use :doc:`remeshing` or :doc:`subdivision`.
 
 Summary

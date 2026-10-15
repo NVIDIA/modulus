@@ -12,7 +12,7 @@ resolution, and ``device`` sets where the tensors go.
 .. figure:: ../../img/mesh/primitives_gallery.png
    :alt: A grid of five columns and two rows, one column per family. Curves:
          a helix and a spiral. Planar: an annulus and an L-shape. Surfaces: a
-         torus and a Moebius strip. Volumes: a cube and a single tetrahedron.
+         torus and a Möbius strip. Volumes: a cube and a single tetrahedron.
          Procedural: a lumpy sphere and a lumpy ball cut open.
    :align: center
    :width: 100%
@@ -221,7 +221,7 @@ Volumes
 Procedural Meshes
 ^^^^^^^^^^^^^^^^^
 
-``physicsnemo.mesh.primitives.procedural``: Meshes with seeded random perturbations, for tests that need irregular geometry. Each ``load`` function takes a ``seed`` argument.
+``physicsnemo.mesh.primitives.procedural``: Meshes with seeded random perturbations, for tests that need irregular geometry. Each ``load`` function takes a ``seed`` argument. The helper module ``procedural.noise`` provides the Perlin noise they use (``perlin_noise_1d``, ``perlin_noise_2d``, ``perlin_noise_3d``, ``perlin_noise_nd``).
 
 .. list-table::
    :header-rows: 1
