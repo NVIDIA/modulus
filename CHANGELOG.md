@@ -259,9 +259,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `GLOBE` accepts `boundary_meshes` as a TensorDict, as the DrivAerML example
-  passes them; every forward pass of that example failed.
-- The GLOBE examples' requirements no longer downgrade TensorDict, PyVista,
-  and Matplotlib below the versions PhysicsNeMo requires.
+  passes them. Before, every forward pass of that example failed.
+- The GLOBE examples' requirements no longer downgrade PyVista and Matplotlib
+  below the versions PhysicsNeMo requires.
 - `signed_distance_field`, in `physicsnemo.nn.functional` and
   `physicsnemo.mesh.spatial`, supports backpropagation: the signed distance is
   differentiable with respect to the mesh vertices and the query points.
