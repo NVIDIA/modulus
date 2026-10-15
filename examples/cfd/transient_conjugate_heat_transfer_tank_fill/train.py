@@ -35,6 +35,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 
 from physicsnemo.datapipes.cae.domino_datapipe import create_domino_dataset
+from physicsnemo.distributed import fused_all_reduce
 from physicsnemo.distributed.manager import DistributedManager
 from physicsnemo.models.domino.model import DoMINO
 from physicsnemo.models.domino.utils.utils import dict_to_device
@@ -48,6 +49,17 @@ from utils import (
     load_scaling,
     masked_mse,
 )
+
+
+def average_over_ranks(
+    totals: Dict[str, float], num_batches: int, device: torch.device
+) -> Dict[str, float]:
+    """Average the summed per-batch metrics over the batches of all ranks."""
+    sums = torch.tensor(
+        [*totals.values(), num_batches], dtype=torch.float64, device=device
+    )
+    *values, count = fused_all_reduce(sums).tolist()
+    return {key: value / max(1.0, count) for key, value in zip(totals, values)}
 
 
 def train_one_epoch(
@@ -124,9 +136,7 @@ def train_one_epoch(
             )
 
     # Return the average loss for each metric
-    for key in totals:
-        totals[key] = totals[key] / max(1, num_batches)
-    return totals
+    return average_over_ranks(totals, num_batches, device)
 
 
 @torch.no_grad()
@@ -175,9 +185,7 @@ def evaluate(
         totals["loss_volume"] += loss_volume.item()
         num_batches += 1
 
-    for key in totals:
-        totals[key] = totals[key] / max(1, num_batches)
-    return totals
+    return average_over_ranks(totals, num_batches, device)
 
 
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
