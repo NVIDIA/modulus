@@ -1,11 +1,11 @@
 # PhysicsNeMo-Mesh Primitives
 
 `physicsnemo.mesh.primitives` is a collection of canonical meshes for
-tutorials, testing, and experimentation. Each mesh is generated at runtime by a
-`load()` function. The modules are grouped by family and by dimensional
-configuration: the manifold dimension of the cells, and the dimension of the
-space they live in (written `2D→3D` for a surface in 3D). For the API
-reference, see the
+tutorials, testing, and experimentation. Each mesh module generates its mesh
+at runtime with a `load()` function. The modules are grouped by family and by
+dimensional configuration: the manifold dimension of the cells, and the
+dimension of the space they live in (written `2D→3D` for a surface in 3D).
+For the API reference, see the
 [primitives page](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/primitives.html).
 
 The examples on this page run in order: the first block defines the names that
@@ -72,7 +72,7 @@ Curves embedded in 1D, 2D, and 3D spaces.
 | `helix_3d` | 1D→3D | Helical curve in 3D | Open, constant curvature |
 | `circle_3d` | 1D→3D | Circle in 3D (any orientation) | Closed |
 | `trefoil_knot_3d` | 1D→3D | Trefoil knot in 3D | Closed, knotted |
-| `spline_3d` | 1D→3D | Smooth spline from PyVista | Open |
+| `spline_3d` | 1D→3D | PyVista's `load_spline` curve, built without PyVista | Open |
 
 ### planar/ - 2D Manifolds in 2D Space
 
@@ -210,7 +210,7 @@ The primitives cover these dimensional configurations:
 ### Basic Loading
 
 ```python
-# Every primitive module has a load() function
+# Every mesh module has a load() function
 mesh = primitives.surfaces.sphere_icosahedral.load(device="cpu")
 ```
 
@@ -255,7 +255,8 @@ lumpy = primitives.procedural.lumpy_sphere.load(noise_amplitude=0.1, seed=42)
 ## Design Principles
 
 1. One file per mesh: each mesh type is in its own module.
-2. Consistent interface: every module has a `load()` function.
+2. Consistent interface: every mesh module has a `load()` function. (The
+   `text` module and `procedural.noise` provide functions instead.)
 3. Runtime generation: no stored mesh files (PyVista caches its own
    downloads).
 4. Parametric: most meshes accept resolution and size parameters.

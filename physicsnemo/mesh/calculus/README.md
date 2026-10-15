@@ -240,11 +240,14 @@ Properties:
 - Exact for constant and linear fields on flat meshes (codimension 0),
   including at boundary vertices.
 - First-order accurate, $O(h)$, for smooth fields.
-- Supports intrinsic (tangent-space) gradients for curves in 2D or 3D and
-  surfaces in 3D.
+- Supports intrinsic (tangent-space) gradients for curves and surfaces in any
+  spatial dimension. Codimension-1 meshes (curves in 2D, surfaces in 3D) use
+  the vertex normals; higher codimensions use a PCA estimate of the tangent
+  space.
 - Works for scalar and tensor fields: a field of shape `(n_points, ...)` gives
   a gradient of shape `(n_points, n_spatial_dims, ...)`.
-- Requires `n_spatial_dims <= 3`.
+- Extrinsic LSQ (the default, `intrinsic=False`) requires
+  `n_spatial_dims <= 3`.
 
 ### Divergence
 
@@ -503,9 +506,11 @@ assert torch.allclose(
 
 The continuous identities $\nabla \times \nabla f = 0$ and
 $\nabla \cdot (\nabla \times v) = 0$ hold for LSQ operators only
-approximately. They hold to rounding error for linear fields. For quadratic
-fields on `cube_volume`, the residuals are at rounding level far from the
-boundary, and 0.35 to 0.36 at vertices near it.
+approximately. They hold to rounding error for linear fields. For the
+quadratic fields below on `cube_volume.load(subdivisions=4)`, a 5 x 5 x 5
+grid of vertices, the residuals are at rounding level only at the center
+vertex. They are about 0.06 to 0.10 one layer in from the boundary, and 0.35
+to 0.36 at the boundary.
 
 ```python
 from physicsnemo.mesh.calculus import (
@@ -544,8 +549,8 @@ dimensions; "-" means the call raises an error.
 <!-- markdownlint-disable MD013 -->
 | Operator | $n = 1$ | $n = 2$ | $n = 3$ | $n \geq 4$ |
 | -------- | ------- | ------- | ------- | ---------- |
-| Gradient, divergence (LSQ) | $d \leq 3$ | $d \leq 3$ | $d = 3$ | - |
-| Gradient (LSQ, `intrinsic=True`) | $d \leq 3$ | $d \leq 3$ | $d = 3$ | - |
+| Gradient (extrinsic) and divergence (LSQ) | $d \leq 3$ | $d \leq 3$ | $d = 3$ | - |
+| Gradient (LSQ, `intrinsic=True`) | any $d$ | any $d$ | $d = 3$ | - |
 | Curl (LSQ) | $d = 3$ | $d = 3$ | $d = 3$ | - |
 | Gradient (DEC) | any $d$ | $d \leq 3$ | $d = 3$ | - |
 | Divergence (DEC) | any $d$ | any $d$ | any $d$ | any $d$ |
@@ -556,10 +561,11 @@ dimensions; "-" means the call raises an error.
 
 \*Dual volumes use the barycentric approximation for $n \geq 3$.
 
-The LSQ operators require $d \leq 3$. The DEC gradient needs barycentric
-gradients, which exist for segments in any $d$, triangles in $d \leq 3$, and
-tetrahedra in $d = 3$. The DEC Laplacian uses the FEM cotangent weights in
-every dimension.
+The extrinsic LSQ operators require $d \leq 3$. The intrinsic LSQ gradient
+fits in the tangent space instead, so curves and surfaces work in any $d$.
+The DEC gradient needs barycentric gradients, which exist for segments in any
+$d$, triangles in $d \leq 3$, and tetrahedra in $d = 3$. The DEC Laplacian
+uses the FEM cotangent weights in every dimension.
 
 ---
 
@@ -585,7 +591,9 @@ Use LSQ when:
 Both methods:
 
 - Are first-order accurate, $O(h)$, for gradients of smooth fields.
-- Work on irregular meshes.
+- Compute gradients on irregular meshes. (On irregular meshes, the pointwise
+  error of DEC divergence and of the DEC Laplacian does not shrink as the
+  mesh refines.)
 - Are fully vectorized.
 - Run on the GPU.
 
