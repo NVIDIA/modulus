@@ -1,6 +1,39 @@
 Transformations and Projections
 ===============================
 
+This page covers three groups of functions that change the coordinates of a
+mesh and keep its connectivity:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Module
+     - Functions
+   * - ``physicsnemo.mesh.transformations``
+     - :func:`~physicsnemo.mesh.transformations.geometric.translate`,
+       :func:`~physicsnemo.mesh.transformations.geometric.rotate`,
+       :func:`~physicsnemo.mesh.transformations.geometric.scale`,
+       :func:`~physicsnemo.mesh.transformations.geometric.transform`,
+       :func:`~physicsnemo.mesh.transformations.geometric.rotation_matrix`,
+       :func:`~physicsnemo.mesh.transformations.geometric.scale_matrix`
+   * - ``physicsnemo.mesh.transformations.deform``
+     - :func:`~physicsnemo.mesh.transformations.deform.displace`,
+       :func:`~physicsnemo.mesh.transformations.deform.sobolev_deform`,
+       :func:`~physicsnemo.mesh.transformations.deform.morph`,
+       :func:`~physicsnemo.mesh.transformations.deform.radial_basis_function_deform`,
+       :func:`~physicsnemo.mesh.transformations.deform.free_form_deform`,
+       :func:`~physicsnemo.mesh.transformations.deform.shrinkwrap`
+   * - ``physicsnemo.mesh.projections``
+     - :func:`~physicsnemo.mesh.projections.embed`,
+       :func:`~physicsnemo.mesh.projections.extrude`,
+       :func:`~physicsnemo.mesh.projections.project`
+
+Each function is also a ``Mesh`` method, except the projections and the two
+matrix builders. See :doc:`deformation` for penalty energies that keep a
+deformation well shaped, and the tutorial `Mesh Operations
+<https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_4_operations.ipynb>`_.
+
 Geometric Transformations
 -------------------------
 
@@ -359,7 +392,7 @@ uses its six axis-extreme vertices as controls.
     )
 
 ``smoothing=0.0`` interpolates the controls up to solver precision. A positive
-smoothing value adds diagonal regularization. This deliberately relaxes
+smoothing value adds diagonal regularization. This relaxes
 interpolation accuracy.
 
 Both evaluation backends use PyTorch for the dense coefficient solve. The Warp
@@ -447,18 +480,29 @@ normals. ``point_weights`` can fix selected vertices or apply a partial
 projection. ``max_distance`` leaves vertices unchanged when no target surface
 is close enough.
 
-The following call is the central operation in the curved-panel example:
+The following example projects a lifted sheet onto a flat target and keeps
+one edge of the sheet fixed:
 
 .. code:: python
 
+    from physicsnemo.mesh.primitives.surfaces import plane
+
+    panel_target = plane.load(size=2.0, subdivisions=10)  # the z = 0 plane
+    source = plane.load(size=2.0, subdivisions=8)
+    lift = 0.2 * (1.0 - source.points[:, 0].square())
+    source = source.with_points(source.points + lift[:, None] * source.points.new_tensor([0.0, 0.0, 1.0]))
+
+    movable = source.points[:, 0] > -0.9  # the edge at x = -1 stays fixed
     conformed = source.shrinkwrap(
         panel_target,
         point_weights=movable,
         max_distance=0.34,
     )
+    print(conformed.points[movable, 2].abs().max())  # tensor(0.): on the target
 
-The example constructs a swept triangle panel and adds a smooth springback
-error to form the source sheet. The boolean ``movable`` mask keeps its green
+The figure shows the same call on a curved panel.
+The figure's example constructs a swept triangle panel and adds a smooth
+springback error to form the source sheet. The boolean ``movable`` mask keeps its green
 root attachment strip fixed. The movable vertices lie on the target surface.
 Color shows how far each source vertex moved.
 
@@ -494,9 +538,13 @@ In shape optimization, an otherwise acceptable design iterate can locally
 cross an admissible clearance surface. This example constructs a closed
 triangulated low-profile enclosure with an inset lid and chamfered walls. A
 boolean mask selects only the vertices above a horizontal clearance plane.
+The central call has this form, here with the sheet and plane from the
+previous example:
 
 .. code:: python
 
+    candidate, admissible_envelope = source, panel_target
+    design_region = candidate.points[:, 2] > 0.1  # vertices above the limit
     feasible = candidate.shrinkwrap(
         admissible_envelope,
         point_weights=design_region,
@@ -613,6 +661,17 @@ Projections
 
 .. currentmodule:: physicsnemo.mesh.projections
 
+.. code:: python
+
+    from physicsnemo.mesh.primitives.planar import unit_square
+    from physicsnemo.mesh.projections import embed, extrude, project
+
+    square = unit_square.load(subdivisions=2)  # triangles in 2D
+    in_3d = embed(square, target_n_spatial_dims=3)  # z = 0
+    prism = extrude(in_3d, vector=[0.0, 0.0, 1.0])  # tetrahedra in 3D
+    flat = project(in_3d, target_n_spatial_dims=2)  # drops z
+    print(in_3d.n_spatial_dims, prism.n_manifold_dims, flat.n_spatial_dims)  # 3 3 2
+
 Spatial dimension manipulation -- changing the embedding dimension of a mesh
 without altering its manifold dimension.
 
@@ -622,6 +681,8 @@ without altering its manifold dimension.
   (for example, a triangle mesh extruded to a prism mesh)
 - :func:`project` -- reduce spatial dimensions (lossy; drops coordinate axes)
 
-.. automodule:: physicsnemo.mesh.projections
-   :members:
-   :show-inheritance:
+.. autofunction:: embed
+
+.. autofunction:: extrude
+
+.. autofunction:: project

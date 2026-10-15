@@ -1,51 +1,132 @@
 Boundaries and Topology
-========================
+=======================
 
 .. currentmodule:: physicsnemo.mesh.boundaries
 
-This module provides three groups of functionality:
+``physicsnemo.mesh.boundaries`` finds the boundary of a mesh, extracts its
+facets, and checks its topology. A facet is a face of a cell with one
+dimension less than the cell: the facets of a triangle are its three edges,
+and the facets of a tetrahedron are its four triangles. A boundary facet
+belongs to exactly one cell. An interior facet is shared by two cells.
 
-**Boundary detection**
-    Identify which vertices, edges, or cells lie on the boundary of a mesh.
-    A boundary facet is one that appears in exactly one cell (interior facets
-    are shared by two cells).
+The module has three groups of functions:
 
-**Facet extraction**
-    Extract the (n-1)-dimensional sub-simplices (facets) from an n-dimensional
-    mesh. For a triangle mesh, facets are edges; for a tetrahedral mesh, facets
-    are triangles. The extraction pipeline deduplicates facets and can aggregate
-    per-cell data onto the resulting facet mesh.
+- Boundary detection: the points, edges, or cells on the boundary.
+- Facet extraction: a new mesh of the facets, with data aggregated from the
+  parent cells.
+- Topology checks: whether a mesh is
+  `watertight <https://en.wikipedia.org/wiki/Watertight_(3D_modeling)>`_
+  (it has no boundary facets) or
+  `manifold <https://en.wikipedia.org/wiki/Manifold>`_ (it looks locally
+  like Euclidean space, so that, for example, each facet belongs to one or
+  two cells).
 
-**Topology checking**
-    Test whether a mesh is
-    `watertight <https://en.wikipedia.org/wiki/Watertight_(3D_modeling)>`_
-    (no boundary facets) or
-    `manifold <https://en.wikipedia.org/wiki/Manifold>`_
-    (every facet is shared by at most two cells).
+The most common operations are also ``Mesh`` methods:
+:meth:`~physicsnemo.mesh.mesh.Mesh.get_boundary_mesh`,
+:meth:`~physicsnemo.mesh.mesh.Mesh.get_facet_mesh`,
+:meth:`~physicsnemo.mesh.mesh.Mesh.is_watertight`, and
+:meth:`~physicsnemo.mesh.mesh.Mesh.is_manifold`.
 
-These are also accessible as methods on :class:`~physicsnemo.mesh.mesh.Mesh`:
-``get_boundary_mesh()``, ``get_facet_mesh()``, ``is_watertight()``,
-``is_manifold()``.
+.. figure:: ../../img/mesh/boundaries_facets.png
+   :alt: Left, a planar triangle mesh with its boundary edges highlighted and,
+         next to it, its full facet mesh of all edges. Right, a tetrahedral
+         mesh with its triangulated boundary surface.
+   :align: center
+   :width: 100%
+
+   A planar triangle mesh with its boundary mesh and its facet mesh, and a
+   tetrahedral mesh with its boundary surface.
+
+Example
+-------
 
 .. code:: python
 
-    from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
+    from physicsnemo.mesh.boundaries import get_boundary_edges, get_boundary_vertices
+    from physicsnemo.mesh.primitives.planar import unit_square
+    from physicsnemo.mesh.primitives.volumes import cube_volume
 
-    mesh = sphere_icosahedral.load(subdivisions=2)
+    square = unit_square.load(subdivisions=2)  # 25 points, 32 triangles
+    print(get_boundary_vertices(square).sum().item())  # 16 boundary points
+    print(get_boundary_edges(square).shape)  # torch.Size([16, 2])
 
-    # Topology checks
-    print(mesh.is_watertight())  # True for a closed sphere
-    print(mesh.is_manifold())    # True
+    boundary = square.get_boundary_mesh()  # 16 boundary edges
+    edges = square.get_facet_mesh()  # all 56 edges
+    print(square.is_watertight(), square.is_manifold())  # False True
 
-    # Extract boundary (empty for a closed mesh)
-    boundary = mesh.get_boundary_mesh()
+    # The boundary of a tetrahedral mesh is a closed triangle surface.
+    cube = cube_volume.load(subdivisions=2)
+    surface = cube.get_boundary_mesh()
+    print(surface.n_manifold_dims, surface.n_spatial_dims)  # 2 3
+    print(surface.is_watertight())  # True
 
-    # Extract all edges (facets of a triangle mesh)
-    edge_mesh = mesh.get_facet_mesh()
+The boundary mesh and the facet mesh keep every point of the parent mesh, so
+their point indices match the parent's. By default, each facet takes the
+mean of the ``cell_data`` of its parent cells. Set ``data_aggregation`` to
+``"area_weighted"`` or ``"inverse_distance"`` for other weights, or set
+``data_source="points"`` to carry ``point_data`` instead.
+
+Choosing a Function
+-------------------
+
+- For a mesh of the boundary, use ``mesh.get_boundary_mesh()``. For a mesh of
+  all facets, use ``mesh.get_facet_mesh()``. With ``target_counts``, the facet
+  mesh can keep only the boundary (``"boundary"``), shared (``"shared"``), or
+  interior (``"interior"``) facets. With ``manifold_codimension=2``, it
+  gives the edges of a tetrahedral mesh.
+- For a mask, use :func:`get_boundary_vertices` or :func:`get_boundary_cells`.
+  :func:`get_boundary_edges` returns point index pairs.
+- :func:`extract_candidate_facets`, :func:`categorize_facets_by_count`,
+  :func:`compute_aggregation_weights`, :func:`deduplicate_and_aggregate_facets`,
+  and :func:`extract_facet_mesh_data` are the steps of facet extraction. Use
+  them only to build a custom extraction.
+
+Summary
+-------
+
+.. autosummary::
+   :nosignatures:
+
+   get_boundary_vertices
+   get_boundary_edges
+   get_boundary_cells
+   is_watertight
+   is_manifold
+   extract_facet_mesh_data
+   extract_candidate_facets
+   categorize_facets_by_count
+   compute_aggregation_weights
+   deduplicate_and_aggregate_facets
+
+See Also
+--------
+
+- :doc:`neighbors` for adjacency between points and cells.
+- :doc:`repair` for hole filling and orientation fixes.
+- Tutorials: `Mesh Operations
+  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_4_operations.ipynb>`_
+  and `Quality, Validation, and Repair
+  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_7_quality_repair.ipynb>`_
 
 API Reference
 -------------
 
-.. automodule:: physicsnemo.mesh.boundaries
-   :members:
-   :show-inheritance:
+.. autofunction:: get_boundary_vertices
+
+.. autofunction:: get_boundary_edges
+
+.. autofunction:: get_boundary_cells
+
+.. autofunction:: is_watertight
+
+.. autofunction:: is_manifold
+
+.. autofunction:: extract_facet_mesh_data
+
+.. autofunction:: extract_candidate_facets
+
+.. autofunction:: categorize_facets_by_count
+
+.. autofunction:: compute_aggregation_weights
+
+.. autofunction:: deduplicate_and_aggregate_facets
