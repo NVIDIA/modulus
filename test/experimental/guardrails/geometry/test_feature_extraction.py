@@ -136,6 +136,31 @@ def test_extract_features_various_shapes(shape):
     assert not np.allclose(features, 0.0)
 
 
+def test_pca_axis_feature_names_match_values():
+    """Test that the features named ``pca_axis1_*`` and ``pca_axis2_*`` are the first two principal axes."""
+    # A 4 x 2 x 1 box rotated by 30 degrees about z, then 20 degrees about x: its principal
+    # axes are the rotated x and y axes.
+    pv_mesh = pv.Cube(x_length=4.0, y_length=2.0, z_length=1.0).triangulate()
+    pv_mesh = pv_mesh.rotate_z(30.0, inplace=False).rotate_x(20.0, inplace=False)
+    features = extract_features(from_pyvista(pv_mesh))
+
+    a, b = np.radians(30.0), np.radians(20.0)
+    rot_z = np.array(
+        [[np.cos(a), -np.sin(a), 0.0], [np.sin(a), np.cos(a), 0.0], [0.0, 0.0, 1.0]]
+    )
+    rot_x = np.array(
+        [[1.0, 0.0, 0.0], [0.0, np.cos(b), -np.sin(b)], [0.0, np.sin(b), np.cos(b)]]
+    )
+    rotation = rot_x @ rot_z
+    for i in (1, 2):
+        axis = np.array(
+            [features[FEATURE_NAMES.index(f"pca_axis{i}_{c}")] for c in "xyz"]
+        )
+        # Unit vector along the i-th rotated coordinate axis (the sign is fixed by the extractor).
+        assert np.isclose(np.linalg.norm(axis), 1.0, atol=1e-5)
+        assert np.isclose(abs(axis @ rotation[:, i - 1]), 1.0, atol=1e-5)
+
+
 def test_feature_hash_deterministic():
     """Test that feature hash is deterministic."""
     names = ["feat1", "feat2", "feat3"]

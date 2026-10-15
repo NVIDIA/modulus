@@ -375,8 +375,9 @@ class LatentNoveltyQueryStrategy(QueryStrategy):
     At each round we (a) calibrate a fresh :class:`OODGuard` on the
     *currently labeled* training pool by collecting per-sample reduced
     embeddings (the same vector the GP head consumes), then (b) score
-    every unlabeled sample by its average kNN cosine distance to that
-    calibration buffer and rank by descending novelty.  The intuition
+    every unlabeled sample by its average kNN distance to that
+    calibration buffer (the chord between L2-normalised latents, see
+    :meth:`OODGuard.score_geometry`) and rank by descending novelty.  The intuition
     is that the most informative geometries to label next are those the
     model has not seen anything close to yet.
 

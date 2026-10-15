@@ -308,3 +308,31 @@ def test_density_model_get_set_state():
     scores1 = model_pce.score(X_test)
     scores2 = new_model_pce.score(X_test)
     np.testing.assert_allclose(scores1.cpu().numpy(), scores2.cpu().numpy(), rtol=1e-5)
+
+
+def test_gmm_rank_deficient_features_on_cpu():
+    """Test GMM fit and reload on CPU for redundant features at a large scale.
+
+    Such covariances (as for the 22 geometry descriptors, of which only 16 are
+    independent) can be indefinite to single precision, so that both single-
+    precision factorisations fail; the model must still fit and load, with a
+    warning.
+    """
+    rng = np.random.RandomState(0)
+    base = rng.randn(400, 4) * np.array([3e4, 5e3, 2e2, 10.0])
+    X = np.hstack([base, base @ rng.randn(4, 4)])  # 8 features of rank 4
+
+    model = GeometryDensityModel(
+        method="gmm", gmm_components=1, random_state=0, device="cpu"
+    )
+    with pytest.warns(UserWarning, match="not positive definite"):
+        model.fit(X)
+    scores = model.score(X[:10]).cpu().numpy()
+    assert np.isfinite(scores).all()
+
+    reloaded = GeometryDensityModel(
+        method="gmm", gmm_components=1, random_state=0, device="cpu"
+    )
+    with pytest.warns(UserWarning, match="not positive definite"):
+        reloaded.set_state(model.get_state(), device="cpu")
+    np.testing.assert_allclose(reloaded.score(X[:10]).cpu().numpy(), scores, rtol=1e-5)

@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -128,34 +130,95 @@ class TorchGMM(nn.Module):
         ).unsqueeze(0) * self.reg_covar
 
     def _compute_precision_cholesky(self) -> torch.Tensor:
-        """
+        r"""
         Compute Cholesky decomposition of precision matrices.
+
+        Each covariance is factorised as is, then with ``1e-3`` added to its
+        diagonal. If both fail (a covariance of redundant features on very
+        different scales can be indefinite to single precision, and whether the
+        factorisation detects it depends on the device), it is factorised in
+        double precision with a jitter proportional to its mean variance, ten
+        times larger per attempt, and a warning is issued.
 
         Returns
         -------
         torch.Tensor
-            Cholesky factors of shape (n_components, n_features, n_features).
+            Cholesky factors of shape :math:`(K, D, D)`.
+
+        Raises
+        ------
+        RuntimeError
+            If a covariance is not positive definite even with a jitter of
+            ``1e-2`` times its mean variance.
         """
         n_components, n_features, _ = self.covariances_.shape
         precisions_chol = torch.zeros_like(self.covariances_)
-        
+        eye = torch.eye(n_features, device=self.device)
+
         for k in range(n_components):
             cov = self.covariances_[k]
             # Compute Cholesky of covariance, then invert
-            try:
-                cov_chol = torch.linalg.cholesky(cov)
-                precisions_chol[k] = torch.linalg.solve_triangular(
-                    cov_chol, torch.eye(n_features, device=self.device), upper=False
-                ).T
-            except RuntimeError:
+            cov_chol, info = torch.linalg.cholesky_ex(cov)
+            if int(info) != 0:
                 # Fallback: add more regularization
-                cov_reg = cov + torch.eye(n_features, device=self.device) * 1e-3
-                cov_chol = torch.linalg.cholesky(cov_reg)
-                precisions_chol[k] = torch.linalg.solve_triangular(
-                    cov_chol, torch.eye(n_features, device=self.device), upper=False
-                ).T
-        
+                cov_chol, info = torch.linalg.cholesky_ex(cov + eye * 1e-3)
+            if int(info) != 0:
+                cov_chol = self._jittered_cholesky(cov, k).to(cov.dtype)
+            precisions_chol[k] = torch.linalg.solve_triangular(
+                cov_chol, eye, upper=False
+            ).T
+
         return precisions_chol
+
+    @staticmethod
+    def _jittered_cholesky(cov: torch.Tensor, component: int) -> torch.Tensor:
+        r"""
+        Cholesky factor of a covariance that is not positive definite.
+
+        Parameters
+        ----------
+        cov : torch.Tensor
+            Covariance of shape :math:`(D, D)`.
+        component : int
+            Index of the mixture component, for the error message.
+
+        Returns
+        -------
+        torch.Tensor
+            Lower Cholesky factor of :math:`\Sigma + \epsilon I` in double
+            precision, of shape :math:`(D, D)`, where :math:`\epsilon` is the
+            smallest jitter tried that makes the factorisation succeed.
+
+        Raises
+        ------
+        RuntimeError
+            If the factorisation fails even with :math:`\epsilon` = ``1e-2``
+            times the mean variance.
+        """
+        cov64 = cov.to(torch.float64)
+        eye64 = torch.eye(cov.shape[0], device=cov.device, dtype=torch.float64)
+        # Jitter relative to the mean variance, so that it does not depend on the units
+        scale = float(torch.diagonal(cov64).abs().mean()) or 1.0
+        jitter = 1e-10 * scale
+        while jitter <= 1e-2 * scale:
+            cov_chol, info = torch.linalg.cholesky_ex(cov64 + jitter * eye64)
+            if int(info) == 0:
+                warnings.warn(
+                    "TorchGMM: a covariance is not positive definite in single "
+                    "precision (redundant features or features on very different "
+                    "scales); it was factorised in double precision with a jitter "
+                    "relative to its mean variance. Scores, and percentiles against "
+                    "reference scores computed on another device, can differ from "
+                    "those on that device; refit on the device the model is used "
+                    "on, or standardise the features or use a larger reg_covar.",
+                    stacklevel=3,
+                )
+                return cov_chol
+            jitter *= 10.0
+        raise RuntimeError(
+            f"Covariance of GMM component {component} is not positive definite, "
+            f"even with a jitter of 1e-2 times its mean variance"
+        )
 
     def _estimate_log_prob(self, X: torch.Tensor) -> torch.Tensor:
         """

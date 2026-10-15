@@ -26,18 +26,19 @@ from physicsnemo.mesh import Mesh as PhysicsNeMoMesh
 from .mesh_validation import validate_mesh
 
 #: Feature schema version identifier
-FEATURE_VERSION = "v1.0"
+FEATURE_VERSION = "v1.1"
 
 #: Ordered list of feature names defining the schema
 FEATURE_NAMES = [
     "centroid_x",
     "centroid_y",
     "centroid_z",
+    # The first two principal axes, stored component by component
     "pca_axis1_x",
-    "pca_axis1_y",
-    "pca_axis1_z",
     "pca_axis2_x",
+    "pca_axis1_y",
     "pca_axis2_y",
+    "pca_axis1_z",
     "pca_axis2_z",
     "pca_eig1",
     "pca_eig2",
@@ -53,6 +54,22 @@ FEATURE_NAMES = [
     "area_xz",
     "area_yz",
 ]
+
+#: Earlier schema versions whose feature vectors hold the same values in the same
+#: order as :data:`FEATURE_NAMES`, with their feature names. ``"v1.0"`` labelled the
+#: six principal-axis components as if they were stored axis by axis.
+COMPATIBLE_FEATURE_NAMES = {
+    "v1.0": FEATURE_NAMES[:3]
+    + [
+        "pca_axis1_x",
+        "pca_axis1_y",
+        "pca_axis1_z",
+        "pca_axis2_x",
+        "pca_axis2_y",
+        "pca_axis2_z",
+    ]
+    + FEATURE_NAMES[9:],
+}
 
 
 def feature_hash(names: list[str]) -> str:
@@ -146,7 +163,9 @@ def extract_features(mesh: PhysicsNeMoMesh, return_tensor: bool = False, skip_va
 
     1. **Validation**: Checks mesh integrity (see :func:`validate_mesh`)
     2. **Centroid**: Mean position of all vertices :math:`\mathbf{c} = \frac{1}{N}\sum_{i=1}^{N} \mathbf{v}_i`
-    3. **PCA**: Principal component analysis via SVD on centered vertices
+    3. **PCA**: Principal component analysis via SVD on centered vertices; the
+       first two axes are stored component by component (``pca_axis1_x``,
+       ``pca_axis2_x``, ``pca_axis1_y``, ...)
     4. **Eigenvalues**: Variance along principal axes :math:`\lambda_1 \geq \lambda_2 \geq \lambda_3`
     5. **Bounding Box**: Axis-aligned extents :math:`[\Delta x, \Delta y, \Delta z]`
     6. **Second Moments**: Variance per axis :math:`\sigma^2_x, \sigma^2_y, \sigma^2_z`
@@ -192,7 +211,9 @@ def extract_features(mesh: PhysicsNeMoMesh, return_tensor: bool = False, skip_va
         if eigvecs[0, i] < 0:
             eigvecs[:, i] *= -1
 
-    # Extract first two principal axes (6 components total)
+    # Extract first two principal axes (6 components total). The axes are the columns of
+    # eigvecs, so the row-major flattening interleaves them: (e1_x, e2_x, e1_y, e2_y, e1_z, e2_z),
+    # the order of FEATURE_NAMES.
     pca_axes = eigvecs[:, :2].reshape(-1)  # Shape: (6,)
     pca_vals = eigvals[:3]  # Shape: (3,)
 

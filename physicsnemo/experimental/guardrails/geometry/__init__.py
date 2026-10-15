@@ -17,6 +17,7 @@
 from .density_model import GeometryDensityModel
 from .density_pce import TorchPCEDensityModel
 from .feature_extraction import (
+    COMPATIBLE_FEATURE_NAMES,
     FEATURE_NAMES,
     FEATURE_VERSION,
     extract_features,
@@ -38,4 +39,5 @@ __all__ = [
     "feature_hash",
     "FEATURE_NAMES",
     "FEATURE_VERSION",
+    "COMPATIBLE_FEATURE_NAMES",
 ]

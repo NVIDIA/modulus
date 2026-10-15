@@ -194,7 +194,7 @@ The guardrail extracts **22 non-invariant geometric features** from each mesh:
 | Feature Category | Description | Count |
 | ----------------- | ------------- | ------- |
 | Centroid | 3D position of geometry center | 3 |
-| PCA Axes | First two principal component directions | 6 |
+| PCA Axes | First two principal component directions, stored component by component | 6 |
 | PCA Eigenvalues | Variance along principal axes | 3 |
 | Bounding Box | Axis-aligned extents (width, height, depth) | 3 |
 | Second Moments | Variance per coordinate axis | 3 |
