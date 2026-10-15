@@ -147,8 +147,8 @@ Properties:
 
 - Preserves averages between primal and dual cells (see equation below).
 - $\star\star\alpha = (-1)^{k(n-k)} \alpha$.
-- Uses circumcentric (Voronoi) dual cells, not barycentric ones, in 1D and
-  2D.
+- Uses circumcentric (Voronoi) dual cells in 1D and 2D, with mixed areas for
+  obtuse triangles, and a barycentric approximation in 3D and higher.
 
 $$
 \frac{\langle \alpha, \sigma\rangle}{|\sigma|}
