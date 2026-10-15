@@ -254,9 +254,36 @@ Behavior and Limitations
   error for the application.
 * The optional ``max_iterations`` argument defaults to four centroid updates.
 
+Summary
+-------
+
+.. autosummary::
+   :nosignatures:
+
+   remesh
+   partition_cells
+   CellPartition
+
+:func:`partition_cells` assigns each cell of a mesh to its nearest seed
+point, by centroid distance, and returns a :class:`CellPartition` with the
+area, normal, and centroid of each cluster. It runs in PyTorch without Warp,
+and it is one step of Lloyd's algorithm for a centroidal Voronoi
+tessellation.
+
+See Also
+--------
+
+- :doc:`subdivision` to refine a mesh without new topology.
+- Tutorial: `Mesh Operations
+  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_4_operations.ipynb>`_
+
 API Reference
 -------------
 
-.. automodule:: physicsnemo.mesh.remeshing
+.. autofunction:: remesh
+
+.. autofunction:: partition_cells
+
+.. autoclass:: CellPartition
    :members:
    :show-inheritance:

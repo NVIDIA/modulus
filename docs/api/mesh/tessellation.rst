@@ -119,9 +119,31 @@ its SDF, refer to :func:`physicsnemo.mesh.generate.mesh_implicit_domain`.
 :func:`polygon_interior_point` is a companion utility returning a point
 strictly inside a simple polygon.
 
+Summary
+-------
+
+.. autosummary::
+   :nosignatures:
+
+   triangulate
+   fill_interior
+   polygon_interior_point
+
+See Also
+--------
+
+- :doc:`generate` for meshes of implicit domains, in any dimension.
+- :doc:`io` to load polygon meshes from files.
+- Tutorials: `Loading, Converting, and Saving Meshes
+  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_2_io_interop.ipynb>`_
+  and `Primitives and Mesh Generation
+  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_3_primitives_generation.ipynb>`_
+
 API Reference
 -------------
 
-.. automodule:: physicsnemo.mesh.tessellation
-   :members:
-   :show-inheritance:
+.. autofunction:: triangulate
+
+.. autofunction:: fill_interior
+
+.. autofunction:: polygon_interior_point
