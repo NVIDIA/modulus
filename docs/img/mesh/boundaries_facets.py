@@ -40,7 +40,7 @@ FAINT_COLOR = "#eef2f5"
 FAINT_EDGE = "#c5ccd1"
 BOUNDARY_COLOR = "#d55e00"
 FACET_COLOR = "#0072b2"
-CAMERA = [(3.4, -4.4, 2.6), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+VIEW_VECTOR = (1.0, -1.4, 0.9)
 
 plt.rcParams.update({"font.size": 13})
 
@@ -82,7 +82,8 @@ def _render(layers):
     for dataset, options in layers:
         plotter.add_mesh(dataset, **options)
     plotter.set_background("white")
-    plotter.camera_position = CAMERA
+    plotter.view_vector(VIEW_VECTOR, viewup=(0.0, 0.0, 1.0))
+    plotter.reset_camera()
     image = plotter.screenshot(return_img=True)
     plotter.close()
     return image
@@ -95,7 +96,7 @@ def main():
     planar_boundary = planar.get_boundary_mesh()
     planar_facets = planar.get_facet_mesh()
 
-    volume = lumpy_ball.load(n_shells=3, subdivisions=2, seed=0)
+    volume = lumpy_ball.load(noise_amplitude=0.2, seed=0)
     volume_boundary = volume.get_boundary_mesh()
 
     figure = plt.figure(figsize=(13.0, 10.4))
@@ -119,10 +120,9 @@ def main():
         axis.set_aspect("equal")
         axis.set_axis_off()
 
-    # Cut the ball open: keep the tetrahedra whose centroid has y > 0.
-    cut = to_pyvista(volume).extract_cells(
-        (volume.cell_centroids[:, 1] > 0.0).nonzero().squeeze(1).numpy()
-    )
+    # Cut the ball open: drop the tetrahedra in the octant that faces the camera.
+    facing = (volume.cell_centroids * volume.points.new_tensor(VIEW_VECTOR) > 0).all(1)
+    cut = to_pyvista(volume).extract_cells((~facing).nonzero().squeeze(1).numpy())
     volume_axes[0].imshow(
         _render(
             [
@@ -133,6 +133,7 @@ def main():
                         "show_edges": True,
                         "edge_color": EDGE_COLOR,
                         "line_width": 0.6,
+                        "ambient": 0.35,
                     },
                 )
             ]
@@ -152,7 +153,7 @@ def main():
                         "show_edges": True,
                         "edge_color": EDGE_COLOR,
                         "line_width": 0.6,
-                        "ambient": 0.2,
+                        "ambient": 0.35,
                     },
                 )
             ]

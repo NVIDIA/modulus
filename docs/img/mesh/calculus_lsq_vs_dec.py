@@ -73,16 +73,15 @@ def _gradient_errors(n):
 def main():
     """Generate the documentation image."""
 
-    figure = plt.figure(figsize=(14.0, 4.9))
-    grid = figure.add_gridspec(1, 4, width_ratios=(1.0, 1.0, 0.06, 1.25), wspace=0.12)
-    map_axes = [figure.add_subplot(grid[0, i]) for i in range(2)]
-    colorbar_axis = figure.add_subplot(grid[0, 2])
-    convergence_axis = figure.add_subplot(grid[0, 3])
+    figure, axes = plt.subplots(
+        1, 3, figsize=(14.0, 5.4), gridspec_kw={"width_ratios": (1.0, 1.0, 1.15)}
+    )
+    map_axes, convergence_axis = axes[:2], axes[2]
 
     mesh, _, errors = _gradient_errors(MAP_RESOLUTION)
     points = mesh.points.numpy()
     triangulation = Triangulation(points[:, 0], points[:, 1], mesh.cells.numpy())
-    norm = LogNorm(1.0e-3, 1.0e-1, clip=True)
+    norm = LogNorm(1.0e-3, 2.0e-1, clip=True)
     for axis, (method, (label, _)) in zip(map_axes, METHODS.items(), strict=True):
         image = axis.tripcolor(
             triangulation,
@@ -94,9 +93,10 @@ def main():
         axis.triplot(triangulation, color="white", linewidth=0.3, alpha=0.5)
         axis.set_title(f"(a) {label} gradient error")
         axis.set_aspect("equal")
-        axis.set_xticks([])
-        axis.set_yticks([])
-    colorbar = figure.colorbar(image, cax=colorbar_axis)
+        axis.set_axis_off()
+    colorbar = figure.colorbar(
+        image, ax=map_axes, orientation="horizontal", fraction=0.05, pad=0.04
+    )
     colorbar.set_label(r"$|\nabla_h f - \nabla f|$")
 
     sizes = [1.0 / (n - 1) for n in RESOLUTIONS]
@@ -115,7 +115,7 @@ def main():
             color=color,
             linestyle="--" if part else "-",
             marker="s" if part else "o",
-            label=f"{label}, {'boundary' if part else 'interior'} vertices",
+            label=f"{label}, {'boundary' if part else 'interior'}",
         )
     reference = [0.5 * curves["lsq", 1][0] * h / sizes[0] for h in sizes]
     convergence_axis.loglog(
@@ -125,11 +125,13 @@ def main():
     convergence_axis.set_ylabel("RMS gradient error")
     convergence_axis.set_title("(b) error against mesh size")
     convergence_axis.grid(True, which="both", alpha=0.3)
-    convergence_axis.legend(fontsize=11, loc="lower right")
+    convergence_axis.set_ylim(5.0e-4, 1.0)
+    convergence_axis.legend(fontsize=11.5, loc="upper left")
 
     figure.suptitle(
         r"Gradient of $f(x, y) = \sin 2x \, \cos y + y^2$ on a jittered grid",
         fontsize=15,
+        y=1.02,
     )
     figure.savefig(OUTPUT, dpi=160, facecolor="white", bbox_inches="tight")
     plt.close(figure)

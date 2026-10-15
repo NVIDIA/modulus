@@ -39,7 +39,7 @@ EDGE_COLOR = "#9aa5ad"
 FACE_COLOR = "#eef2f5"
 VECTOR_COLOR = "#0072b2"
 TENSOR_COLOR = "#d55e00"
-LIMIT = 0.8
+LIMIT = 0.92
 SQUARE = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
 
 plt.rcParams.update({"font.size": 13})
@@ -130,13 +130,13 @@ def main():
         float(mesh.point_data["pressure"].max()),
     )
     titles = (
-        f"pressure  {schema['pressure']}\n" r"unchanged: $p' = p$",
-        f"velocity  {schema['velocity']}\n" r"rotated: $v' = R\,v$",
-        f"stress  {schema['stress']}\n" r"rotated: $T' = R\,T\,R^{\mathsf{T}}$",
+        f"pressure\n{schema['pressure']}\n" r"unchanged: $p' = p$",
+        f"velocity\n{schema['velocity']}\n" r"rotated: $v' = R\,v$",
+        f"stress\n{schema['stress']}\n" r"rotated: $T' = R\,T\,R^{\mathsf{T}}$",
     )
     rows = (("Original", mesh), ("Rotated by 30°", rotated))
 
-    figure, axes = plt.subplots(2, 3, figsize=(13.0, 9.6))
+    figure, axes = plt.subplots(2, 3, figsize=(12.0, 9.4))
     for row, (row_label, panel_mesh) in enumerate(rows):
         points = panel_mesh.points
         data = panel_mesh.point_data
@@ -155,8 +155,17 @@ def main():
             zorder=3,
         )
         _draw_mesh(axes[row, 2], panel_mesh)
-        _draw_ellipses(axes[row, 2], points, data["stress"], scale=0.08)
-        axes[row, 0].set_ylabel(row_label, fontsize=16, labelpad=10)
+        _draw_ellipses(axes[row, 2], points, data["stress"], scale=0.09)
+        axes[row, 0].text(
+            -0.06,
+            0.5,
+            row_label,
+            transform=axes[row, 0].transAxes,
+            rotation=90,
+            ha="right",
+            va="center",
+            fontsize=16,
+        )
         for axis in axes[row]:
             if row == 1:
                 axis.add_patch(
@@ -171,16 +180,20 @@ def main():
             axis.set_xlim(-LIMIT, LIMIT)
             axis.set_ylim(-LIMIT, LIMIT)
             axis.set_aspect("equal")
-            axis.set_xticks([])
-            axis.set_yticks([])
+            axis.set_axis_off()
     for axis, title in zip(axes[0], titles, strict=True):
         axis.set_title(title, fontsize=14)
 
     colorbar = figure.colorbar(
-        image, ax=axes[:, 0], location="left", shrink=0.6, pad=0.12
+        image,
+        cax=axes[1, 0].inset_axes([0.15, -0.06, 0.7, 0.04]),
+        orientation="horizontal",
     )
     colorbar.set_label("pressure")
-    figure.savefig(OUTPUT, dpi=160, facecolor="white", bbox_inches="tight")
+    figure.subplots_adjust(
+        left=0.05, right=0.99, bottom=0.08, top=0.88, wspace=0.04, hspace=0.06
+    )
+    figure.savefig(OUTPUT, dpi=160, facecolor="white")
     plt.close(figure)
     print(f"Saved {OUTPUT}")
 

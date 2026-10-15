@@ -77,16 +77,15 @@ def main():
     cells = mesh.cells.numpy()
     center = mesh.points.new_tensor([0.5, 0.5])
     query_point = int(torch.linalg.vector_norm(mesh.points - center, dim=1).argmin())
-    query_cell = int(
-        torch.linalg.vector_norm(mesh.cell_centroids - center, dim=1).argmin()
-    )
 
     point_neighbors = mesh.get_point_to_points_adjacency().to_list()[query_point]
     point_cells = mesh.get_point_to_cells_adjacency().to_list()[query_point]
+    # Query the largest cell around the query point, so that it is easy to see.
+    query_cell = point_cells[int(mesh.cell_areas[point_cells].argmax())]
     cell_neighbors = mesh.get_cell_to_cells_adjacency().to_list()[query_cell]
     cell_points = mesh.get_cell_to_points_adjacency().to_list()[query_cell]
 
-    figure, axes = plt.subplots(2, 2, figsize=(11.0, 11.6))
+    figure, axes = plt.subplots(2, 2, figsize=(10.4, 11.4))
     axes = axes.ravel()
     for axis in axes:
         _draw_cells(axis, points, cells, FACE_COLOR)
@@ -150,7 +149,9 @@ def main():
         frameon=False,
         fontsize=14,
     )
-    figure.subplots_adjust(left=0.02, right=0.98, bottom=0.07, top=0.92, hspace=0.3)
+    figure.subplots_adjust(
+        left=0.02, right=0.98, bottom=0.07, top=0.92, wspace=0.08, hspace=0.3
+    )
     figure.savefig(OUTPUT, dpi=160, facecolor="white")
     plt.close(figure)
     print(f"Saved {OUTPUT}")

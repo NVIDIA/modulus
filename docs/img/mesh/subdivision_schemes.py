@@ -43,7 +43,11 @@ plt.rcParams.update({"font.size": 13})
 def _render(mesh, coarse):
     """Render a surface with the coarse cube's edges and vertices on top."""
 
-    cage = to_pyvista(coarse).extract_all_edges()
+    # Draw edges and vertices as geometry: off-screen OpenGL ignores line widths.
+    cage = to_pyvista(coarse).extract_all_edges().tube(radius=0.012)
+    corners = pv.PolyData(coarse.points.numpy()).glyph(
+        geom=pv.Sphere(radius=0.035), scale=False, orient=False
+    )
     plotter = pv.Plotter(window_size=(800, 800))
     plotter.enable_anti_aliasing("ssaa")
     plotter.add_mesh(
@@ -52,16 +56,11 @@ def _render(mesh, coarse):
         show_edges=True,
         edge_color=EDGE_COLOR,
         line_width=0.6,
-        ambient=0.25,
-        diffuse=0.75,
+        ambient=0.35,
+        diffuse=0.7,
     )
-    plotter.add_mesh(cage, color=CAGE_COLOR, line_width=3.0)
-    plotter.add_mesh(
-        pv.PolyData(cage.points),
-        color=CAGE_COLOR,
-        point_size=16,
-        render_points_as_spheres=True,
-    )
+    plotter.add_mesh(cage, color=CAGE_COLOR)
+    plotter.add_mesh(corners, color=CAGE_COLOR)
     plotter.set_background("white")
     plotter.camera_position = [(2.2, -2.9, 1.9), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
     plotter.camera.zoom(1.05)
@@ -74,7 +73,7 @@ def main():
     """Generate the documentation image."""
 
     coarse = cube_surface.load()
-    panels = [("Coarse cube_surface", "", coarse)]
+    panels = [("cube_surface", f"{coarse.n_cells} triangles", coarse)]
     for scheme, kind in (
         ("linear", "interpolating, flat"),
         ("loop", "approximating, smooth"),
@@ -82,18 +81,18 @@ def main():
     ):
         mesh = coarse.subdivide(levels=LEVELS, filter=scheme)
         panels.append((f'filter="{scheme}"', kind, mesh))
+    n_cells = panels[-1][2].n_cells
 
     figure, axes = plt.subplots(1, 4, figsize=(14.0, 4.4))
     for axis, (title, kind, mesh) in zip(axes, panels, strict=True):
         axis.imshow(_render(mesh, coarse))
-        subtitle = f"{mesh.n_cells} triangles" + (f", {kind}" if kind else "")
-        axis.set_title(f"{title}\n{subtitle}")
+        axis.set_title(f"{title}\n{kind}")
         axis.set_axis_off()
     figure.text(
         0.5,
         0.02,
-        f"subdivide(levels={LEVELS}, filter=...) on the 12-triangle cube; "
-        "orange: the coarse cube's edges and vertices",
+        f"subdivide(levels={LEVELS}, filter=...) turns {coarse.n_cells} triangles "
+        f"into {n_cells}. Orange: the edges and vertices of the coarse cube.",
         ha="center",
         fontsize=13,
     )

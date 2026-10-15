@@ -52,11 +52,11 @@ GALLERY = {
     ],
     "volumes": [
         ("volumes.cube_volume", volumes.cube_volume.load(subdivisions=4)),
-        ("volumes.sphere_volume", volumes.sphere_volume.load(resolution=12)),
+        ("volumes.tetrahedron_volume", volumes.tetrahedron_volume.load()),
     ],
     "procedural": [
         ("procedural.lumpy_sphere", procedural.lumpy_sphere.load(subdivisions=3)),
-        ("procedural.perturbed_grid", procedural.perturbed_grid.load(n_x=9, n_y=9)),
+        ("procedural.lumpy_ball", procedural.lumpy_ball.load()),
     ],
 }
 
@@ -70,13 +70,12 @@ def _render(mesh):
     plotter = pv.Plotter(window_size=(700, 700))
     plotter.enable_anti_aliasing("ssaa")
     if mesh.n_manifold_dims == 1:
-        plotter.add_mesh(
-            dataset, color=CURVE_COLOR, line_width=6, render_lines_as_tubes=True
-        )
+        plotter.add_mesh(dataset.tube(radius=0.012 * dataset.length), color=CURVE_COLOR)
     else:
-        if mesh.n_manifold_dims == 3:
-            # Keep the cells behind a plane through the center, to show the inside.
-            keep = mesh.cell_centroids[:, 1] > mesh.points[:, 1].mean()
+        if mesh.n_manifold_dims == 3 and mesh.n_cells > 1:
+            # Drop the cells on the camera's side of the center, to show the inside.
+            offsets = mesh.cell_centroids - mesh.points.mean(dim=0)
+            keep = offsets @ mesh.points.new_tensor(VIEW_VECTOR) < 0.0
             dataset = dataset.extract_cells(keep.nonzero().squeeze(1).numpy())
         plotter.add_mesh(
             dataset,
@@ -93,7 +92,7 @@ def _render(mesh):
     else:
         plotter.view_vector(VIEW_VECTOR, viewup=(0.0, 0.0, 1.0))
     plotter.reset_camera()
-    plotter.camera.zoom(1.2)
+    plotter.camera.zoom(1.05)
     image = plotter.screenshot(return_img=True)
     plotter.close()
     return image
@@ -115,15 +114,14 @@ def main():
             axis.set_axis_off()
         axes[0, column].annotate(
             family,
-            xy=(0.5, 1.32),
+            xy=(0.5, 1.3),
             xycoords="axes fraction",
             ha="center",
             fontsize=16,
             fontweight="bold",
         )
-    figure.suptitle("physicsnemo.mesh.primitives", fontsize=17, y=0.995)
     figure.subplots_adjust(
-        left=0.01, right=0.99, bottom=0.01, top=0.84, wspace=0.06, hspace=0.25
+        left=0.01, right=0.99, bottom=0.01, top=0.86, wspace=0.06, hspace=0.25
     )
     figure.savefig(OUTPUT, dpi=160, facecolor="white")
     plt.close(figure)

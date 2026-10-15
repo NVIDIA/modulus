@@ -36,9 +36,16 @@ OUTPUT = Path(__file__).parent / "sampling_interpolation.png"
 N_SAMPLES = 5000
 CMAP = "viridis"
 EDGE_COLOR = "#304050"
-CAMERA = [(0.0, -3.0, 2.6), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+VIEW_VECTOR = (0.0, -1.0, 0.9)
 
 plt.rcParams.update({"font.size": 13})
+
+
+def _dots(points, radius):
+    """Draw points as small spheres: off-screen OpenGL ignores point sizes."""
+
+    sphere = pv.Sphere(radius=radius, theta_resolution=8, phi_resolution=8)
+    return points.glyph(geom=sphere, scale=False, orient=False)
 
 
 def _render(layers):
@@ -49,8 +56,9 @@ def _render(layers):
     for dataset, options in layers:
         plotter.add_mesh(dataset, show_scalar_bar=False, **options)
     plotter.set_background("white")
-    plotter.camera_position = CAMERA
-    plotter.camera.zoom(1.25)
+    plotter.view_vector(VIEW_VECTOR, viewup=(0.0, 0.0, 1.0))
+    plotter.reset_camera()
+    plotter.camera.zoom(1.3)
     image = plotter.screenshot(return_img=True)
     plotter.close()
     return image
@@ -96,27 +104,17 @@ def main():
                 },
             ),
             (
-                pv.PolyData(mesh.points.numpy()),
-                {
-                    "color": EDGE_COLOR,
-                    "point_size": 9,
-                    "render_points_as_spheres": True,
-                },
+                _dots(pv.PolyData(mesh.points.numpy()), radius=0.022),
+                {"color": EDGE_COLOR},
             ),
         ]
     )
     sample_image = _render(
         [
-            (surface, {"color": "#d9dee2", "ambient": 0.3}),
+            (surface, {"color": "#d9dee2"}),
             (
-                cloud,
-                {
-                    "scalars": "f",
-                    "cmap": CMAP,
-                    "clim": clim,
-                    "point_size": 7,
-                    "render_points_as_spheres": True,
-                },
+                _dots(cloud, radius=0.016),
+                {"scalars": "f", "cmap": CMAP, "clim": clim},
             ),
         ]
     )
