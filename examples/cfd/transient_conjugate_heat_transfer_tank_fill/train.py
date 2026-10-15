@@ -43,6 +43,7 @@ from physicsnemo.utils.logging import PythonLogger, RankZeroLoggingWrapper
 
 from utils import (
     count_global_features,
+    get_keys_to_read,
     infer_shapes,
     load_scaling,
     masked_mse,
@@ -258,26 +259,24 @@ def main(cfg: DictConfig) -> None:
         log_dir.mkdir(parents=True, exist_ok=True)
         writer = SummaryWriter(str(log_dir))
 
-    # Get surface and volume variable names
-    surface_names = (
-        list(cfg.variables.surface.solution.keys()) if include_surface else []
-    )
-    volume_names = list(cfg.variables.volume.solution.keys()) if include_volume else []
+    # Get the keys to read from each processed NPZ. The datapipe does not carry
+    # the surface/volume valid masks, so masked_mse falls back to a plain MSE.
+    keys_to_read, keys_to_read_if_available = get_keys_to_read(cfg, model_type)
 
     # Create train and val datasets
     train_dataset = create_domino_dataset(
         cfg,
         phase="train",
-        volume_variable_names=volume_names,
-        surface_variable_names=surface_names,
+        keys_to_read=keys_to_read,
+        keys_to_read_if_available=keys_to_read_if_available,
         vol_factors=volume_scaling,
         surf_factors=surface_scaling,
     )
     val_dataset = create_domino_dataset(
         cfg,
         phase="val",
-        volume_variable_names=volume_names,
-        surface_variable_names=surface_names,
+        keys_to_read=keys_to_read,
+        keys_to_read_if_available=keys_to_read_if_available,
         vol_factors=volume_scaling,
         surf_factors=surface_scaling,
     )
