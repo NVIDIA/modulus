@@ -317,6 +317,9 @@ def main(cfg: DictConfig) -> None:
             output_device=dist.device if device.type == "cuda" else None,
             broadcast_buffers=dist.broadcast_buffers,
             find_unused_parameters=dist.find_unused_parameters,
+            # As in the DoMINO example: DoMINO leaves the same parameters
+            # unused in every step, which DDP accepts only with a static graph.
+            static_graph=True,
         )
 
     # Initialize optimizer, scheduler, and gradient scaler
