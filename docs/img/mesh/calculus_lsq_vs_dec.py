@@ -91,7 +91,7 @@ def main():
             norm=norm,
             shading="gouraud",
         )
-        axis.set_title(f"(a) {label} gradient error")
+        axis.set_title(f"(a) {label} error, h = 1/{MAP_RESOLUTION - 1}")
         axis.set_aspect("equal")
         axis.set_axis_off()
     colorbar = figure.colorbar(

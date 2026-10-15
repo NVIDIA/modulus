@@ -143,7 +143,7 @@ def main():
         )
     )
     volume_axes[0].set_title(
-        f"lumpy_ball, cut open to show the inside\n{_label(volume, 'tetrahedra')}"
+        f"lumpy_ball, cut open, tetrahedra shrunk\n{_label(volume, 'tetrahedra')}"
     )
 
     volume_axes[1].imshow(

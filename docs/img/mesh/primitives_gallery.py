@@ -74,10 +74,12 @@ def _render(mesh):
         plotter.add_mesh(dataset.tube(radius=0.012 * dataset.length), color=CURVE_COLOR)
     else:
         if mesh.n_manifold_dims == 3 and mesh.n_cells > 1:
-            # Drop the cells on the camera's side of the center, to show the inside.
+            # Drop the cells on the camera's side of the center and shrink the
+            # rest toward their centroids, to show the tetrahedra inside.
             offsets = mesh.cell_centroids - mesh.points.mean(dim=0)
             keep = offsets @ mesh.points.new_tensor(VIEW_VECTOR) < 0.0
             dataset = dataset.extract_cells(keep.nonzero().squeeze(1).numpy())
+            dataset = dataset.shrink(0.8)
         plotter.add_mesh(
             dataset,
             color=MESH_COLOR,
