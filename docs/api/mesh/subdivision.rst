@@ -3,57 +3,84 @@ Subdivision
 
 .. currentmodule:: physicsnemo.mesh.subdivision
 
-Mesh subdivision refines a mesh by splitting each n-simplex into
-:math:`2^n` child simplices (for example, each triangle becomes four triangles).
-New vertices are inserted at or near edge midpoints, and existing data
-is interpolated onto the refined mesh.
+``physicsnemo.mesh.subdivision`` refines a mesh by splitting each n-simplex
+into :math:`2^n` child simplices: each edge becomes two edges, each triangle
+four triangles, and each tetrahedron eight tetrahedra. New points go at or
+near the edge midpoints. There are three schemes:
 
-Three schemes are available:
+Linear (midpoint)
+    New points go at the exact edge midpoints. This scheme is interpolating:
+    the original points keep their positions. It is the fastest scheme and
+    the only one for every manifold dimension. It does not smooth, so each
+    original cell stays visible as a flat facet of the refined mesh.
 
-**Linear** (midpoint)
-    New vertices are placed at exact edge midpoints. This is an `interpolating`
-    scheme, in that the original vertices can be found, without repositioning,
-    in the subdivided mesh. This scheme is also the fastest and most
-    dimensionally-generic of the provided schemes. However, it does not provide
-    any smoothing. This can result in visible `meta-facets` in the subdivided
-    mesh, each of which corresponds to an original cell of the parent mesh.
+Loop (`Loop, 1987 <https://www.microsoft.com/en-us/research/publication/smooth-subdivision-surfaces-based-on-triangles/>`_)
+    A weighted average that depends on the valence (number of neighbors) of
+    each point gives smooth limit surfaces. This scheme is approximating: it
+    also moves the original points, so on a convex surface the refined mesh
+    lies inside the coarse one. It is the standard choice for a smooth surface
+    from a coarse triangle mesh.
 
-**Loop** (`Loop, 1987 <https://www.microsoft.com/en-us/research/publication/smooth-subdivision-surfaces-based-on-triangles/>`_)
-    Valence-based weighted averaging produces :math:`C^2`-smooth limit surfaces.
-    This is an `approximating` scheme, in that the original vertices are
-    repositioned. Hence, the subdivided mesh will not contain the original
-    vertices. This scheme is the standard choice for generating smooth surfaces
-    from coarse meshes.
+Butterfly (`Zorin et al., 1996 <https://cims.nyu.edu/gcl/papers/zorin1996ism.pdf>`_)
+    A weighted stencil gives smooth surfaces and keeps the original points
+    fixed (interpolating). Use it when the refined mesh must pass through the
+    original points. Because it cannot move the original points, it is less
+    robust than Loop on irregular meshes.
 
-**Butterfly** (`Zorin et al., 1996 <https://cims.nyu.edu/gcl/papers/zorin1996ism.pdf>`_)
-    Weighted stencil subdivision that is interpolating (original vertices stay
-    fixed) while still producing smooth surfaces. In practice, this reduced
-    geometric flexibility compared to the Loop scheme can result in less robust
-    performance across varying mesh topologies. Preferred when exact
-    interpolation of existing data is required.
+Loop and Butterfly need a triangle mesh (``n_manifold_dims == 2``). All
+schemes carry ``point_data`` and ``cell_data`` to the refined mesh.
 
-All schemes propagate ``point_data`` and ``cell_data`` to the refined mesh
-via appropriate interpolation.
+.. figure:: ../../img/mesh/subdivision_schemes.png
+   :alt: One coarse closed triangle surface and, next to it, its linear, Loop,
+         and Butterfly subdivisions. The linear result keeps flat facets, and
+         the Loop and Butterfly results are smooth.
+   :align: center
+   :width: 100%
+
+   A coarse closed surface and its linear, Loop, and Butterfly subdivisions.
+
+Example
+-------
 
 .. code:: python
 
     from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
+    from physicsnemo.mesh.subdivision import subdivide_butterfly, subdivide_linear, subdivide_loop
 
-    mesh = sphere_icosahedral.load(subdivisions=0)
+    mesh = sphere_icosahedral.load(subdivisions=0)  # an icosahedron: 12 points, 20 triangles
 
-    # Via standalone functions
-    from physicsnemo.mesh.subdivision import subdivide_linear, subdivide_loop
-    refined = subdivide_linear(mesh)
+    # One level of each scheme: 42 points, 80 triangles
+    linear = subdivide_linear(mesh)
     smooth = subdivide_loop(mesh)
+    interpolated = subdivide_butterfly(mesh)
+    print(linear.n_points, linear.n_cells)  # 42 80
 
-    # Via the Mesh method
-    refined = mesh.subdivide(levels=2, filter="linear")
-    smooth = mesh.subdivide(levels=2, filter="loop")
-    interp = mesh.subdivide(levels=2, filter="butterfly")
+    # The Mesh method applies several levels.
+    refined = mesh.subdivide(levels=2, filter="loop")
+    print(refined.n_cells)  # 320
+
+Summary
+-------
+
+.. autosummary::
+   :nosignatures:
+
+   subdivide_linear
+   subdivide_loop
+   subdivide_butterfly
+
+See Also
+--------
+
+- :doc:`remeshing` for a new mesh with a target number of points.
+- Tutorial: `Mesh Operations
+  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_4_operations.ipynb>`_
 
 API Reference
 -------------
 
-.. automodule:: physicsnemo.mesh.subdivision
-   :members:
-   :show-inheritance:
+.. autofunction:: subdivide_linear
+
+.. autofunction:: subdivide_loop
+
+.. autofunction:: subdivide_butterfly
