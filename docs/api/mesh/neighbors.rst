@@ -3,43 +3,114 @@ Neighbors and Adjacency
 
 .. currentmodule:: physicsnemo.mesh.neighbors
 
-This module computes topological adjacency relationships between mesh
-elements. Rather than using spatial proximity, it indicates the mesh connectivity for which points/cells are connected to which other
-points/cells.
+``physicsnemo.mesh.neighbors`` computes which points and cells of a mesh are
+connected to which others. These queries use the connectivity in
+``mesh.cells``, not distances. For queries by distance, see :doc:`spatial`.
 
-Four adjacency types are supported:
+There are four adjacency queries:
 
-- **Point-to-points**: which vertices share an edge (graph neighbors)
-- **Point-to-cells**: which cells contain a given vertex (the vertex star)
-- **Cell-to-cells**: which cells share a facet
-- **Cell-to-points**: which vertices belong to a given cell
+- Point to points: the points that share an edge with each point (the mesh
+  graph).
+- Point to cells: the cells that contain each point (the star of the point).
+- Cell to cells: the cells that share a facet with each cell. Set
+  ``adjacency_codimension=2`` to also count cells that share only an edge of
+  a tetrahedral mesh, or only a vertex of a triangle mesh.
+- Cell to points: the points of each cell.
 
-All adjacency relationships are returned as :class:`Adjacency` objects, which
-encode ragged arrays using an ``(indices, offsets)`` pair. This is the same
-sparse format used by PyTorch Geometric's ``edge_index`` and is efficient for
-GPU computation. For debugging or interoperability, call ``.to_list()`` to
-convert to a Python list of lists.
+Each query returns an :class:`Adjacency`, a ragged array in compressed sparse
+row (CSR) form. The neighbors of source ``i`` are
+``indices[offsets[i]:offsets[i + 1]]``. ``offsets`` has ``n_sources + 1``
+entries. Use :meth:`Adjacency.to_list` for a Python list of lists, and
+:meth:`Adjacency.expand_to_pairs` for ``(source, target)`` pairs, the form of
+a PyTorch Geometric ``edge_index``.
+
+.. figure:: ../../img/mesh/neighbors_adjacency.png
+   :alt: Four panels of one small planar triangle mesh. Each panel highlights
+         one query element and its neighbors: the points next to a point, the
+         cells around a point, the cells next to a cell, and the points of a
+         cell.
+   :align: center
+   :width: 100%
+
+   The four adjacency queries on one planar triangle mesh: point to points,
+   point to cells, cell to cells, and cell to points. Each panel highlights
+   one query element and its neighbors.
+
+Example
+-------
 
 .. code:: python
 
-    from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
+    from physicsnemo.mesh.primitives.planar import unit_square
 
-    mesh = sphere_icosahedral.load(subdivisions=2)
+    mesh = unit_square.load(subdivisions=1)  # 9 points, 8 triangles
+    print(mesh.cells[0].tolist())  # [0, 1, 3]
 
-    # Compute adjacency (also available as Mesh methods)
     p2p = mesh.get_point_to_points_adjacency()
-    c2c = mesh.get_cell_to_cells_adjacency()
+    print(p2p.offsets.tolist())  # [0, 2, 6, 9, 13, 19, 23, 26, 30, 32]
+    print(p2p.to_list()[4])  # [1, 2, 3, 5, 6, 7]: the center point
 
-    # Inspect the ragged structure
-    print(p2p.indices.shape)   # (total_neighbor_pairs,)
-    print(p2p.offsets.shape)   # (n_points + 1,)
+    print(mesh.get_point_to_cells_adjacency().to_list()[4])  # [1, 2, 3, 4, 5, 6]
+    print(mesh.get_cell_to_cells_adjacency().to_list()[0])  # [1]
+    print(mesh.get_cell_to_points_adjacency().to_list()[0])  # [0, 1, 3]
 
-    # Convert to list-of-lists for inspection
-    neighbors_of_vertex_0 = p2p.to_list()[0]
+    # Ragged arrays as (source, target) pairs, for example to build a graph.
+    sources, targets = p2p.expand_to_pairs()
+    print(sources.shape, p2p.n_total_neighbors)  # torch.Size([32]) 32
+
+``offsets`` are always ``int64``. ``indices`` of the point-to-points and
+cell-to-points queries have the dtype of ``mesh.cells``, so an ``int32`` mesh
+gives ``int32`` indices. The other two queries give ``int64`` indices.
+
+The same queries are functions in this module, such as
+:func:`get_point_to_points_adjacency`. The ``Mesh`` methods cache their
+result, and the cache stays valid through geometric transformations.
+
+Choosing a Function
+-------------------
+
+- For a graph of the mesh, use point to points. For a graph of the cells,
+  such as the input of a graph neural network on cells, use cell to cells.
+  ``mesh.to_edge_graph()`` and ``mesh.to_dual_graph()`` return the same
+  graphs as ``Mesh`` objects of edges.
+- Use point to cells to gather cell values at a point, and cell to points to
+  gather point values at a cell.
+- Use :func:`build_adjacency_from_pairs` to build an :class:`Adjacency` from
+  your own ``(source, target)`` pairs.
+
+Summary
+-------
+
+.. autosummary::
+   :nosignatures:
+
+   Adjacency
+   get_point_to_points_adjacency
+   get_point_to_cells_adjacency
+   get_cell_to_cells_adjacency
+   get_cell_to_points_adjacency
+   build_adjacency_from_pairs
+
+See Also
+--------
+
+- :doc:`boundaries` for facets and boundaries.
+- Tutorial: `Neighbors, Adjacency, and Spatial Queries
+  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_6_neighbors_spatial.ipynb>`_
 
 API Reference
 -------------
 
-.. automodule:: physicsnemo.mesh.neighbors
+.. autoclass:: Adjacency
    :members:
    :show-inheritance:
+
+.. autofunction:: get_point_to_points_adjacency
+
+.. autofunction:: get_point_to_cells_adjacency
+
+.. autofunction:: get_cell_to_cells_adjacency
+
+.. autofunction:: get_cell_to_points_adjacency
+
+.. autofunction:: build_adjacency_from_pairs
