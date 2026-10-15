@@ -327,8 +327,18 @@ class BVH(TensorClass):
 
     Examples
     --------
+    >>> import torch
+    >>> from physicsnemo.mesh import Mesh
+    >>> mesh = Mesh(
+    ...     points=torch.tensor(
+    ...         [[0.0, 0.0], [2.0, 0.0], [0.0, 2.0], [2.0, 2.0], [4.0, 0.0]]
+    ...     ),
+    ...     cells=torch.tensor([[0, 1, 2], [1, 4, 3]]),
+    ... )
     >>> bvh = BVH.from_mesh(mesh)
-    >>> candidates = bvh.find_candidate_cells(query_points)
+    >>> query_points = torch.tensor([[0.5, 0.5], [3.5, 0.2], [9.0, 9.0]])
+    >>> bvh.find_candidate_cells(query_points).to_list()
+    [[0], [1], []]
     """
 
     node_aabb_min: Float[torch.Tensor, "n_nodes n_spatial_dims"]

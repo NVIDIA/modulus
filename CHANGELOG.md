@@ -89,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GLOBE's `BarnesHutKernel` needs less memory to train: an 80k-face DrivAerML
   training step no longer runs out of memory.
 - Refresh core, optional, development, and container dependency versions.
-  Require PyTorch 2.13 or newer and TensorDict 0.14.2 or newer;
+  Require PyTorch 2.13 or newer;
   use PyTorch 2.13's CUDA 12.9 wheels for the CUDA 12 backend. NATTEN
   extras select PyTorch 2.13 to match their prebuilt kernels. Python support remains
   3.11 through 3.14.
@@ -131,6 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bincount`, and adjacencies carry their device, so cached adjacencies are
   reused without revalidation. Cell adjacency and the dual graph are 1.4-1.6x
   faster with 30% less peak memory, and synchronize CUDA 5 times instead of 38.
+- Mesh adjacencies, facet extraction, manifold checks and `fix_orientation`
+  use up to 3x less peak memory, with unchanged results.
 - `physicsnemo.mesh.Mesh`, `DomainMesh`, `Adjacency`, `BVH`, `ClusterTree`,
   `DualInteractionPlan`, and `SourceAggregates` now inherit directly from
   `TensorClass` instead of using the `@tensorclass` decorator. Existing
@@ -181,6 +183,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cell_data._measure_weights` to `cell_data._effective_measure` and remove any
   subsequent multiplication by geometric areas.
 
+- LSQ point gradients on large surface meshes are about 2x faster on GPU, and
+  LSQ gradients (`Mesh` and `physicsnemo.nn.functional.mesh_lsq_gradient`)
+  synchronize the GPU much less often. LSQ and DEC derivatives also need less
+  peak memory.
+
 - `Mesh.slice_points` picks its cell-remapping algorithm by mesh shape: the
   full-mesh lookup table as before, or a binary search over the kept ids when the
   mesh has far more points than cell-vertex entries (a reader keeping a block of
@@ -220,6 +227,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `compute_mesh_statistics` reads all statistics in one device-to-host
   transfer instead of about 20 `.item()` calls.
+- `MeshReader` and `DomainMeshReader` map sample files copy-on-write, so
+  editing a loaded sample in place no longer changes the dataset on disk.
+  Readers on Lustre also no longer take write locks.
+- Moving or copying a mesh with cached adjacencies no longer synchronizes a
+  CUDA device.
+- `BoundingBoxFilter` takes about half as long on CPU. On a GPU it
+  synchronizes once per coordinate key, instead of once per filtered tensor.
 
 ### Deprecated
 
@@ -255,6 +269,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `signed_distance_field`, in `physicsnemo.nn.functional` and
+  `physicsnemo.mesh.spatial`, supports backpropagation: the signed distance is
+  differentiable with respect to the mesh vertices and the query points.
+  Before, `backward` raised because the Warp op had no autograd formula. The
+  hit points and hit faces carry no gradients.
+- `Mesh` and `DomainMesh` subclasses that add fields no longer need their own
+  `__init__` with tensordict 0.15, whose tensorclass subclasses inherit the
+  parent's `__init__`. The base `__init__` accepts and stores the fields that a
+  subclass declares, and still raises `TypeError` for any other keyword.
+- A mesh saved with cached adjacencies now loads in a new Python process.
+  Before, `Mesh.load` raised unless `physicsnemo.mesh.neighbors` was already
+  imported.
+- `DefaultCollator` with a `stack_dim` past the batch dimensions of the
+  samples stacks each tensor with `torch.stack`, without TensorDict behaviour
+  that 0.15 deprecates. The batch's `batch_size` now matches its tensors, and
+  samples with non-tensor data no longer fail to collate.
+- The API reference again shows the docstrings of `Mesh`, `DomainMesh` and the
+  other tensorclasses in `physicsnemo.mesh`. TensorDict 0.14 replaced them
+  with generated signatures.
+- The GLOBE examples no longer pin TensorDict 0.12, which conflicted with
+  PhysicsNeMo's own requirement.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only
@@ -279,10 +314,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on every rank using rank 0's file lookup.
 - `fix_orientation` no longer leaves opposite windings across sharp creases,
   such as the edges of a cube.
+- `Mesh.is_manifold()` no longer raises on a tetrahedral mesh with a
+  degenerate cell.
 - Mesh slicing reuses integer indices across connectivity, fields, and caches
   to avoid repeated CUDA synchronization for the same boolean mask.
   Point slicing skips mask processing when the output has no cells because
   the input has no cells or the point selection is empty.
+- DEC gradients (`gradient(method="dec")`) of tetrahedral meshes read triangle
+  faces as edges and were wrong at most vertices, and on 1D meshes they raised.
+  They now use the edges of every cell and are exact for linear fields on
+  segments, triangles and tetrahedra. `to_edge_graph()` works on 1D meshes, and
+  `get_facet_mesh(manifold_codimension=0)` returns the deduplicated cells.
 - Meshes from `slice_cells` and `subdivide` get their own data containers, so
   adding or removing a field on them no longer changes the source mesh.
 - Triangle areas use direct area components and a rescaled norm, preserving
@@ -370,6 +412,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
+- Requires TensorDict 0.15 (`tensordict[zarr]>=0.15.0,<0.16.0`). Building,
+  copying and moving small meshes takes 20-50% less time on CPU.
 - Drops `onnx`, `torchvision` and `pandas` from the required dependencies.
   `pandas` is now optional via `datapipes-extras` or `model-extras`.
 

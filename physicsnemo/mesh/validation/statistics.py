@@ -86,12 +86,14 @@ def compute_mesh_statistics(
 
     areas = mesh.cell_areas
 
-    ### Count the vertices used by any cell: the distinct values of the sorted
-    # connectivity. Like torch.unique, this counts out-of-range indices too, but
-    # its output has a fixed size, so it needs no device synchronization.
-    used_vertices = mesh.cells.flatten().sort().values
-    n_used = 1 + (used_vertices[1:] != used_vertices[:-1]).sum()
-    del used_vertices  # one index per cell vertex; free it before the quality metrics
+    ### Count the vertices used by any cell. Unlike torch.unique, a mask over the
+    # points has a fixed size, so this needs no device synchronization. The
+    # .long() is for int32 cells, since index_fill_ takes only int64 indices.
+    n_used = (
+        torch.zeros(mesh.n_points, dtype=torch.bool, device=mesh.cells.device)
+        .index_fill_(0, mesh.cells.flatten().long(), True)
+        .sum()
+    )
 
     ### Compute quality metrics (includes edge lengths internally)
     # compute_quality_metrics already computes min/max edge lengths per cell,

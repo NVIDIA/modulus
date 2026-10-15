@@ -76,7 +76,7 @@ def sharp(
     Parameters
     ----------
     mesh : Mesh
-        Simplicial mesh (2D or 3D).
+        Simplicial mesh of segments, triangles, or tetrahedra.
     edge_1form : torch.Tensor
         1-form values on edges, shape ``(n_edges,)`` or ``(n_edges, ...)``.
     edges : torch.Tensor
@@ -128,9 +128,11 @@ def sharp(
     ### Build mapping from edges to cells containing them
     from physicsnemo.mesh.boundaries import extract_candidate_facets
 
+    # The edges of each cell are its facets of codimension n_manifold_dims - 1
+    # (for a 1D mesh, the cell itself)
     candidate_edges, parent_cells = extract_candidate_facets(
         mesh.cells,
-        manifold_codimension=1,
+        manifold_codimension=mesh.n_manifold_dims - 1,
     )
 
     ### Match candidates to input edges to get 1-form values
@@ -149,6 +151,10 @@ def sharp(
     matched_edge_indices = edge_indices_for_candidates[matched_mask]  # Which input edge
     matched_cell_indices = parent_cells[matched_mask]  # Which cell
     matched_candidate_edges = candidate_edges[matched_mask]  # (n_matched, 2)
+    del candidate_edges, parent_cells, edge_indices_for_candidates
+    del matches, matched_mask
+    # Built once: the same for both endpoints
+    cells_expanded = mesh.cells[matched_cell_indices]  # (n_matched, n_verts_per_cell)
 
     ### For each matched triple, process both vertices of the edge
     # We'll create contributions for v0 and v1 separately
@@ -162,17 +168,15 @@ def sharp(
 
         ### Find local indices in cells
         # For each matched triple, find where vertex appears in cell
-        cells_expanded = mesh.cells[
-            matched_cell_indices
-        ]  # (n_matched, n_verts_per_cell)
-
         # Find local index of current vertex
         local_v_mask = cells_expanded == vertex_indices.unsqueeze(1)
         local_v_idx = torch.argmax(local_v_mask.int(), dim=1)  # (n_matched,)
+        del local_v_mask
 
         # Find local index of other vertex
         local_other_mask = cells_expanded == other_vertex_indices.unsqueeze(1)
         local_other_idx = torch.argmax(local_other_mask.int(), dim=1)  # (n_matched,)
+        del local_other_mask
 
         ### Get weights: |⋆v ∩ cell| / |⋆v|
         pair_indices = matched_cell_indices * (mesh.n_manifold_dims + 1) + local_v_idx
