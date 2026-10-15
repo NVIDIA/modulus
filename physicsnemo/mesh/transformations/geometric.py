@@ -448,11 +448,14 @@ def _is_similarity_transform(matrix: torch.Tensor, atol: float = 1e-6) -> bool:
     under them, so the inverse-transpose cache propagation of point normals is exact.
     Shears and non-uniform scales fail this test.
 
-    The test compares :math:`M^\top M / c` with :math:`I`, so its tolerance is
-    independent of the overall scale. The zero map (:math:`c = 0`) passes, as a
-    uniform scale by zero; maps with non-finite entries fail.
+    The test divides :math:`M` by its largest absolute entry, then compares
+    :math:`M^\top M / c` with :math:`I`, so its outcome is independent of the
+    overall scale. The zero map (:math:`c = 0`) passes, as a uniform scale by
+    zero; maps with non-finite entries fail.
     """
     n = matrix.shape[-1]
+    peak = matrix.abs().amax()
+    matrix = matrix / torch.where(peak > 0, peak, 1)
     gram = matrix.T @ matrix
     scale = gram.diagonal(dim1=-2, dim2=-1).mean()
     nonzero = scale != 0
@@ -492,7 +495,8 @@ def _scale_assumptions(
     if isinstance(factor, numbers.Real):
         return abs(math.prod([factor] * n_spatial_dims)) > 1e-10, True
     values = [float(f) for f in factor]
-    squares = [v * v for v in values]
+    peak = max(abs(v) for v in values)
+    squares = [(v / peak) * (v / peak) if peak > 0 else v * v for v in values]
     mean = sum(squares) / len(squares)
     is_similarity = mean == 0 or all(abs(s / mean - 1) <= 1e-6 + 1e-5 for s in squares)
     return abs(math.prod(values)) > 1e-10, is_similarity

@@ -443,6 +443,31 @@ class TestDataInheritance:
             assert EFFECTIVE_MEASURE_KEY not in facets.cell_data
             torch.testing.assert_close(facets.integrate(torch.ones(3)), perimeter)
 
+    def test_codimension_zero_keeps_explicit_measures(self):
+        """Extraction that keeps the manifold dimension keeps explicit measures."""
+        from physicsnemo.mesh.calculus.measure import set_cell_measures
+
+        ### A 3-4-5 triangle (area 6) and a length-3 edge, measured as 18 and 9
+        triangle = Mesh(
+            points=torch.tensor([[0.0, 0.0], [3.0, 0.0], [0.0, 4.0]]),
+            cells=torch.tensor([[0, 1, 2]]),
+        )
+        set_cell_measures(triangle, torch.tensor([18.0]))
+        edge = Mesh(
+            points=torch.tensor([[0.0, 0.0], [3.0, 0.0]]),
+            cells=torch.tensor([[0, 1]]),
+        )
+        set_cell_measures(edge, torch.tensor([9.0]))
+
+        for extracted, expected in (
+            (triangle.get_facet_mesh(manifold_codimension=0), 18.0),
+            (edge.to_edge_graph(), 9.0),
+        ):
+            torch.testing.assert_close(
+                extracted.integrate(torch.ones(extracted.n_cells)),
+                torch.tensor(expected),
+            )
+
 
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""

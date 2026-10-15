@@ -81,6 +81,7 @@ def _assert_same_mesh(actual: Mesh, expected: Mesh) -> None:
         ([2.0, -2.0, 2.0], (True, True)),  # a reflection is still a similarity
         ([1.0, 0.0, 1.0], (False, False)),
         ([1e-3, 1.5e-3, 1e-3], (True, False)),  # small, but 50% anisotropic
+        ([1e-200, 1.5e-200, 1e-200], (False, False)),  # its squares underflow to 0
         (1e160, (True, True)),  # |det| overflows to inf
         ([1e160, 1e-160, 1.0], (True, False)),  # 1e160 ** 2 overflows to inf
         (torch.tensor(2.0), (None, True)),
@@ -102,7 +103,13 @@ def test_scale_matches_runtime_tests(factor, device):
 
 
 @pytest.mark.parametrize(
-    "factor", [[1e160, 1e-160, 1.0], [1e200, 1e200, 1e-200], [1e-200, 1e-200, 1e-200]]
+    "factor",
+    [
+        [1e160, 1e-160, 1.0],
+        [1e200, 1e200, 1e-200],
+        [1e-200, 1e-200, 1e-200],
+        [1e-200, 1.5e-200, 1e-200],
+    ],
 )
 def test_extreme_scale_assumptions_match_runtime_tests(factor):
     """Factors whose products overflow or underflow in float64 decide alike."""
@@ -207,6 +214,10 @@ def test_similarity_test_is_independent_of_overall_scale(device):
         torch.testing.assert_close(moved.point_normals, fresh.point_normals)
         with pytest.raises(ValueError, match="support geometry"):
             transform(cloud, k * stretch)
+    # Near the dtype's limits, where the Gram matrix itself underflows
+    for dtype, k in ((torch.float32, 1e-22), (torch.float64, 1e-200)):
+        assert _is_similarity_transform((k * rotation).to(dtype))
+        assert not _is_similarity_transform((k * stretch).to(dtype))
     assert _is_similarity_transform(torch.zeros(3, 3, device=device))
     assert not _is_similarity_transform(torch.full((3, 3), torch.inf, device=device))
 
