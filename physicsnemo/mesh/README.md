@@ -1,117 +1,146 @@
 # PhysicsNeMo-Mesh
 
-**GPU-Accelerated Mesh Processing for Physical Simulation and Scientific Visualization
-in Any Dimension**
+GPU-accelerated mesh processing for physical simulation and scientific
+visualization, in any dimension.
 
-*"It's not just a bag of triangles -- it's a **fast** bag of triangles!"*
+## Documentation
+
+- [User Guide](https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh.html):
+  concepts, and how to choose between methods.
+- [API reference](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/index.html):
+  one page per submodule, with examples.
+- [Tutorials](../../examples/minimal/mesh/): executed notebooks, from a first
+  mesh to an ML pipeline (see [Tutorials](#tutorials) below).
 
 ---
 
 ## What is PhysicsNeMo-Mesh?
 
-**The word "mesh" means different things to different communities:**
+The word "mesh" means different things to different communities:
 
-- **[CFD](https://en.wikipedia.org/wiki/Computational_fluid_dynamics)/
-  [FEM](https://en.wikipedia.org/wiki/Finite_element_method) engineers**
-  think "volume mesh" (3D tetrahedra filling a 3D domain)
-- **Graphics programmers** think "surface mesh" (2D triangles in 3D space)
-- **Computer vision researchers** think "point cloud" (0D vertices in 3D space)
-- **Robotics engineers** think "curves" (1D edges in 2D or 3D space)
+- [CFD](https://en.wikipedia.org/wiki/Computational_fluid_dynamics) and
+  [FEM](https://en.wikipedia.org/wiki/Finite_element_method) engineers
+  think "volume mesh" (3D tetrahedra filling a 3D domain).
+- Graphics programmers think "surface mesh" (2D triangles in 3D space).
+- Computer vision researchers think "point cloud" (0D vertices in 3D space).
+- Robotics engineers think "curves" (1D edges in 2D or 3D space).
 
-**PhysicsNeMo-Mesh handles all of these** in a unified, dimensionally-generic framework.
-More precisely, PhysicsNeMo-Mesh operates on **arbitrary-dimensional
+PhysicsNeMo-Mesh handles all of these with one dimension-generic data
+structure. Formally, PhysicsNeMo-Mesh operates on
+arbitrary-dimensional
 [pure simplicial complexes](https://en.wikipedia.org/wiki/Simplicial_complex)
 embedded in arbitrary-dimensional
-[Euclidean spaces](https://en.wikipedia.org/wiki/Euclidean_space)**.
+[Euclidean spaces](https://en.wikipedia.org/wiki/Euclidean_space).
+Two numbers describe each mesh: the manifold dimension (the dimension of its
+cells) and the spatial dimension (the dimension of the space that holds its
+points).
 
 This means you can work with:
 
 - 2D triangles in 2D space (planar meshes for 2D simulations)
-- 2D triangles in 3D space (surface meshes for graphics/CFD)
-- 3D tetrahedra in 3D space (volume meshes for FEM/CFD)
+- 2D triangles in 3D space (surface meshes for graphics and CFD)
+- 3D tetrahedra in 3D space (volume meshes for FEM and CFD)
 - 1D edges in 3D space (curve meshes for path planning)
 - Any other $n$-dimensional manifold in $m$-dimensional space (where $n \leq m$)
 
-all with the same API. PhysicsNeMo-Mesh's API design takes heavy inspiration from
-[PyVista](https://pyvista.org/), but it is designed to be a) end-to-end
-GPU-accelerated, b) dimensionally generic, c) autograd-differentiable where possible,
-d) allow arbitrary-rank tensor fields as data, and e) support nested field data.
-PhysicsNeMo-Mesh is extremely fast and lightweight, depending only on
-[PyTorch](https://pytorch.org/) and [TensorDict](https://github.com/pytorch/tensordict)
-(an official PyTorch data structure).
+all with the same API. The API design takes inspiration from
+[PyVista](https://pyvista.org/), with five differences: PhysicsNeMo-Mesh is
+GPU-accelerated end to end, dimension-generic, differentiable with autograd
+where possible, accepts tensor fields of any rank as data, and supports
+nested field data. The core data structure depends on
+[PyTorch](https://pytorch.org/) and
+[TensorDict](https://github.com/pytorch/tensordict) (an official PyTorch data
+structure). Some operations use [Warp](https://github.com/NVIDIA/warp), and
+the optional `mesh-extras` (matplotlib, PyVista, VTK) add plotting and file
+I/O.
 
-The only restriction: **meshes must be simplicial** (composed of
+The one restriction: meshes must be simplicial. They consist of
 [points](https://en.wikipedia.org/wiki/Point_(geometry)),
 [line segments](https://en.wikipedia.org/wiki/Line_segment),
 [triangles](https://en.wikipedia.org/wiki/Triangle),
 [tetrahedra](https://en.wikipedia.org/wiki/Tetrahedron), and higher-dimensional
-[n-simplices](https://en.wikipedia.org/wiki/Simplex)). This enables a plethora of
-rigorous differential geometry + discrete calculus computations, as well as significant
-performance benefits.
+[n-simplices](https://en.wikipedia.org/wiki/Simplex). This restriction makes
+discrete differential geometry and discrete calculus possible on every mesh,
+and it makes the operations fast to vectorize.
 
 ---
 
 ## Key Features
 
-**Core Capabilities:**
+Core capabilities:
 
-- **GPU-Accelerated**: All operations vectorized with [PyTorch](https://pytorch.org/),
-  run natively on [CUDA](https://developer.nvidia.com/cuda-toolkit)
-- **Dimensionally Generic**: Works with n-D manifolds embedded in m-D spaces
-- **TensorDict Integration**: Structured data management with
-  [TensorDict](https://github.com/pytorch/tensordict) and automatic device handling
-- **Differentiable**: Most features offer seamless integration with
-  [PyTorch autograd](https://pytorch.org/docs/stable/autograd.html)
+- GPU acceleration: most operations are vectorized with
+  [PyTorch](https://pytorch.org/) and run natively on
+  [CUDA](https://developer.nvidia.com/cuda-toolkit).
+- Dimension-generic: works with n-D manifolds embedded in m-D spaces.
+- TensorDict integration: point, cell, and global data are
+  [TensorDicts](https://github.com/pytorch/tensordict) that move with the mesh
+  between devices.
+- Field schemas: `RankSpec` and `FieldSchema` declare how each named field
+  transforms under rotations and reflections (its tensor rank, symmetry, and
+  parity), so that a model can declare and check its inputs.
+- Simulation domains: `DomainMesh` holds an interior mesh with named boundary
+  meshes.
+- Differentiable: most operations support
+  [PyTorch autograd](https://pytorch.org/docs/stable/autograd.html).
 
-**Mathematical Operations:**
+Mathematical operations:
 
-- **Discrete Calculus**: [Gradient](https://en.wikipedia.org/wiki/Gradient),
+- Discrete calculus: [gradient](https://en.wikipedia.org/wiki/Gradient),
   [divergence](https://en.wikipedia.org/wiki/Divergence),
-  [curl](https://en.wikipedia.org/wiki/Curl_(mathematics)),
-  [Laplace-Beltrami operator](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator)
-  (Note: these are all the core ingredients required for a high-performance manifold
-  PDE solver for many PDEs of industrial interest.)
-  - Both [DEC](https://en.wikipedia.org/wiki/Discrete_exterior_calculus) (Discrete
-    Exterior Calculus) and LSQ (Least-Squares) methods
-  - Intrinsic (tangent space) and extrinsic (ambient space) derivatives
-- **Differential Geometry**: [Gaussian curvature](https://en.wikipedia.org/wiki/Gaussian_curvature),
+  [curl](https://en.wikipedia.org/wiki/Curl_(mathematics)), the
+  [Laplace-Beltrami operator](https://en.wikipedia.org/wiki/Laplace%E2%80%93Beltrami_operator),
+  and integration. These are the core ingredients of a manifold PDE solver
+  for many PDEs of industrial interest.
+  - Both [DEC](https://en.wikipedia.org/wiki/Discrete_exterior_calculus)
+    (Discrete Exterior Calculus) and LSQ (weighted least-squares) methods.
+  - Intrinsic (tangent space) and extrinsic (ambient space) derivatives.
+- Differential geometry:
+  [Gaussian curvature](https://en.wikipedia.org/wiki/Gaussian_curvature),
   [mean curvature](https://en.wikipedia.org/wiki/Mean_curvature),
   [normals](https://en.wikipedia.org/wiki/Normal_(geometry)),
-  [tangent spaces](https://en.wikipedia.org/wiki/Tangent_space)
-- **Curvature Analysis**: [Angle defect](https://en.wikipedia.org/wiki/Angular_defect)
-  (intrinsic) and [cotangent Laplacian](https://en.wikipedia.org/wiki/Discrete_Laplace_operator)
-  (extrinsic) methods
+  [tangent spaces](https://en.wikipedia.org/wiki/Tangent_space).
+- Curvature analysis: [angle defect](https://en.wikipedia.org/wiki/Angular_defect)
+  (intrinsic) and
+  [cotangent Laplacian](https://en.wikipedia.org/wiki/Discrete_Laplace_operator)
+  (extrinsic) methods.
 
-**Mesh Operations:**
+Mesh operations:
 
-- **Subdivision**: Linear, [Loop](https://en.wikipedia.org/wiki/Loop_subdivision_surface)
-  ($C^2$), and [Butterfly](https://en.wikipedia.org/wiki/Butterfly_subdivision_surface)
-  (interpolating) schemes
-- **Smoothing**: [Laplacian smoothing](https://en.wikipedia.org/wiki/Laplacian_smoothing)
-  with feature preservation
-- **Remeshing**: Warp-based uniform and field-controlled remeshing on CPU and
-  CUDA, with barycentric point-data transfer
-- **Repair**: Remove duplicates, fix orientation, fill holes, clean topology
-- **Deformation**: Dense point displacement, Sobolev-filtered deformation,
+- Subdivision: linear,
+  [Loop](https://en.wikipedia.org/wiki/Loop_subdivision_surface)
+  (approximating), and
+  [Butterfly](https://en.wikipedia.org/wiki/Butterfly_subdivision_surface)
+  (interpolating) schemes.
+- Smoothing: [Laplacian smoothing](https://en.wikipedia.org/wiki/Laplacian_smoothing)
+  with optional feature preservation.
+- Remeshing: Warp-based uniform and field-controlled remeshing on CPU and
+  CUDA, with barycentric point-data transfer.
+- Repair: remove duplicates, fix orientation, fill holes, clean topology.
+- Deformation: dense point displacement, Sobolev-filtered deformation,
   sparse compact control-point deformation, global radial-basis deformation,
-  lattice free-form deformation, and nearest-surface shrinkwrap
-- **Deformation Energies**: Differentiable strain, local and total measure,
+  lattice free-form deformation, and nearest-surface shrinkwrap.
+- Deformation energies: differentiable strain, local and total measure,
   inversion, triangle-hinge bending, and enclosed-volume penalties for
-  fixed-topology optimization
-- **Tessellation**: Triangulate polygon soups into simplicial meshes (convex
-  fan + [ear clipping](https://en.wikipedia.org/wiki/Polygon_triangulation) for
-  non-convex polygons); also `Mesh.from_polygons`
+  fixed-topology optimization.
+- Tessellation: triangulate polygon soups into simplicial meshes (convex
+  fan, and [ear clipping](https://en.wikipedia.org/wiki/Polygon_triangulation)
+  for non-convex polygons); also `Mesh.from_polygons`. `fill_interior` fills
+  a closed boundary with quality triangles.
+- Generation: marching cubes, and volume meshes of implicit domains defined
+  by signed distance functions.
 
-**Analysis Tools:**
+Analysis tools:
 
-- **Topology**: Boundary detection,
-  [watertight](https://en.wikipedia.org/wiki/Watertight_(3D_modeling))/
-  [manifold](https://en.wikipedia.org/wiki/Manifold) checking
-- **Neighbors**: Point-to-point, point-to-cell, cell-to-cell, cell-to-point adjacency,
-  computed and stored efficiently
-- **Quality Metrics**: Aspect ratio, edge lengths, angles, quality scores
-- **Spatial Queries**: [BVH](https://en.wikipedia.org/wiki/Bounding_volume_hierarchy)-accelerated
-  point containment and nearest-cell search
+- Topology: boundary detection, and
+  [watertight](https://en.wikipedia.org/wiki/Watertight_(3D_modeling)) and
+  [manifold](https://en.wikipedia.org/wiki/Manifold) checks.
+- Neighbors: point-to-points, point-to-cells, cell-to-cells, and cell-to-points
+  adjacency, stored in a compact ragged format.
+- Quality metrics: aspect ratio, edge lengths, angles, quality scores.
+- Spatial queries:
+  [BVH](https://en.wikipedia.org/wiki/Bounding_volume_hierarchy)-accelerated
+  point containment, nearest-cell search, and signed distance fields.
 
 ---
 
@@ -126,20 +155,17 @@ from physicsnemo.mesh import Mesh
 # Create a triangle mesh in 2D
 points = torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.5, 1.0]])
 
-# Indicates that points 0, 1, and 2 form a cell (in 2D, a triangle)
+# Points 0, 1, and 2 form one cell (in 2D, a triangle)
 cells = torch.tensor([[0, 1, 2]])
 
 mesh = Mesh(points=points, cells=cells)
 print(mesh)
 ```
 
-**Output:** (dimensionality is inferred from `points` and `cells` shapes)
+Output (the dimensions come from the shapes of `points` and `cells`):
 
 ```text
-Mesh(manifold_dim=2, spatial_dim=2, n_points=3, n_cells=1)
-    point_data : {}
-    cell_data  : {}
-    global_data: {}
+Mesh[n_manifold_dims=2, n_spatial_dims=2](n_points=3, n_cells=1)
 ```
 
 ### Adding Data to a Mesh
@@ -159,13 +185,12 @@ mesh.cell_data["reynolds_stress"] = torch.tensor([[[2.1, 0.3], [0.3, 1.8]]])
 print(mesh)
 ```
 
-**Output:** (data fields show the trailing dimensions)
+Output (each data field shows its trailing dimensions):
 
 ```text
-Mesh(manifold_dim=2, spatial_dim=2, n_points=3, n_cells=1)
-    point_data : {temperature: (), velocity: (2,)}
-    cell_data  : {pressure: (), reynolds_stress: (2, 2)}
-    global_data: {}
+Mesh[n_manifold_dims=2, n_spatial_dims=2](n_points=3, n_cells=1)
+    point_data: {temperature: (), velocity: (2,)}
+    cell_data : {pressure: (), reynolds_stress: (2, 2)}
 ```
 
 ### Loading a Real Mesh
@@ -186,17 +211,14 @@ mesh = load()
 print(mesh)
 ```
 
-**Output:**
+Output:
 
 ```text
-Mesh(manifold_dim=2, spatial_dim=3, n_points=1335, n_cells=2452)
-    point_data : {}
-    cell_data  : {}
-    global_data: {}
+Mesh[n_manifold_dims=2, n_spatial_dims=3](n_points=1335, n_cells=2452, device=cpu)
 ```
 
-This is a **2D surface mesh** (triangles) embedded in **3D space** - a typical
-graphics/CAD mesh.
+This is a 2D surface mesh (triangles) embedded in 3D space: a typical
+graphics or CAD mesh.
 
 Then, with `mesh.draw()`, you can visualize the mesh:
 
@@ -204,8 +226,9 @@ Then, with `mesh.draw()`, you can visualize the mesh:
 
 ### Computing Curvature
 
-Starting with the airplane mesh, we can compute its surface
-[Gaussian curvature](https://en.wikipedia.org/wiki/Gaussian_curvature):
+Starting with the airplane mesh, compute its
+[Gaussian curvature](https://en.wikipedia.org/wiki/Gaussian_curvature) on a
+smoother, refined surface:
 
 ```python
 mesh = mesh.subdivide(levels=2, filter="loop")
@@ -213,14 +236,14 @@ mesh.point_data["gaussian_curvature"] = mesh.gaussian_curvature_vertices
 mesh.draw(
     point_scalars="gaussian_curvature",
     show_edges=False,
-    ...
+    cmap="coolwarm",
 )
 ```
 
 ![Gaussian Curvature](../../docs/img/mesh/airplane_gaussian_curvature.png)
 
-*Warmer colors indicate positive Gaussian curvature (convex regions), cooler colors
-indicate negative Gaussian curvature (concave regions).*
+*Warm colors show positive Gaussian curvature (dome-like regions); cool
+colors show negative Gaussian curvature (saddle-like regions).*
 
 Or, compute the [mean curvature](https://en.wikipedia.org/wiki/Mean_curvature):
 
@@ -229,36 +252,47 @@ mesh.point_data["mean_curvature"] = mesh.mean_curvature_vertices
 mesh.draw(
     point_scalars="mean_curvature",
     show_edges=False,
-    ...
+    cmap="coolwarm",
 )
 ```
 
 ![Mean Curvature](../../docs/img/mesh/airplane_mean_curvature.png)
 
-*Warmer colors indicate positive mean curvature (convex regions), cooler colors
-indicate negative mean curvature (concave regions).*
+*Warm colors show positive mean curvature (convex regions, with outward
+normals); cool colors show negative mean curvature (concave regions).*
+
+The scripts `docs/img/mesh/airplane_gaussian_curvature.py` and
+`airplane_mean_curvature.py` render these figures. They also smooth the
+curvature fields and clip the color range.
 
 ### Computing Field Derivatives
 
 ```python
-# Create scalar field: T = x + 2y
+# Create a scalar field: T = x + 2y
 mesh.point_data["temperature"] = mesh.points[:, 0] + 2 * mesh.points[:, 1]
 
-# Compute gradient using least-squares reconstruction
-mesh_with_grad = mesh.compute_point_derivatives(keys="temperature", method="lsq")
+# Compute the gradient with least-squares reconstruction, in ambient space
+mesh_with_grad = mesh.compute_point_derivatives(
+    keys="temperature", method="lsq", gradient_type="extrinsic"
+)
 grad_T = mesh_with_grad.point_data["temperature_gradient"]
 
-print(f"Gradient shape: {grad_T.shape}")  # (n_points, n_spatial_dims)
-print(f"grad T = {grad_T[0]}")  # tensor([1.0000, 2.0000])
+print(f"Gradient shape: {grad_T.shape}")  # torch.Size([20058, 3])
+print(f"grad T = {grad_T[0].round(decimals=3)}")  # tensor([1., 2., 0.])
 ```
+
+The default, `gradient_type="intrinsic"`, projects the gradient onto the
+tangent plane of the surface instead.
 
 ### Moving to GPU
 
 ```python
-# Move entire mesh and all data to GPU
-mesh_gpu = mesh.to("cuda")
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Compute on GPU
+# Move the entire mesh and all its data to the device
+mesh_gpu = mesh.to(device)
+
+# Compute on the device
 K_gpu = mesh_gpu.gaussian_curvature_vertices
 
 # Move back to CPU
@@ -269,7 +303,7 @@ mesh_cpu = mesh_gpu.to("cpu")
 
 ## Feature Matrix
 
-Comprehensive overview of PhysicsNeMo-Mesh capabilities:
+An overview of PhysicsNeMo-Mesh capabilities:
 
 <!-- markdownlint-disable MD013 -->
 | Feature | Status | Notes |
@@ -277,23 +311,26 @@ Comprehensive overview of PhysicsNeMo-Mesh capabilities:
 | **Core Operations** | | |
 | Mesh creation & manipulation | ✅ | n-dimensional simplicial meshes |
 | Point/cell/global data | ✅ | TensorDict-based (including nested data) |
+| Field rank declarations | ✅ | `RankSpec`, `FieldSchema` |
+| Simulation domains | ✅ | `DomainMesh`: interior mesh plus named boundaries |
 | GPU acceleration | ✅ | Full CUDA support |
-| Merge multiple meshes | ✅ | |
+| Merge multiple meshes | ✅ | `Mesh.merge` |
 | Device management (CPU/GPU) | ✅ | |
 | **Calculus** | | |
 | Gradient/Jacobian (LSQ) | ✅ | Weighted least-squares reconstruction |
 | Gradient/Jacobian (DEC) | ✅ | Via [sharp operator](https://en.wikipedia.org/wiki/Musical_isomorphism) |
-| Divergence (LSQ) | ✅ | Component-wise gradients |
+| Divergence (LSQ) | ✅ | Trace of the LSQ Jacobian |
 | Divergence (DEC) | ✅ | Explicit dual volume formula |
 | Curl (LSQ, 3D only) | ✅ | Antisymmetric [Jacobian](https://en.wikipedia.org/wiki/Jacobian_matrix_and_determinant) |
 | Laplace-Beltrami (DEC) | ✅ | Cotangent Laplacian (`physicsnemo.mesh.calculus.compute_laplacian_points_dec`) |
 | Intrinsic derivatives | ✅ | Tangent space projection |
 | Extrinsic derivatives | ✅ | Ambient space |
+| Integration | ✅ | Cell (P0) and point (P1) quadrature, fluxes, moments |
 | **Geometry** | | |
 | Cell centroids | ✅ | Arithmetic mean of vertices |
 | Cell areas/volumes | ✅ | [Gram determinant](https://en.wikipedia.org/wiki/Gramian_matrix) method |
-| Cell normals | ✅ | [Generalized cross product](https://en.wikipedia.org/wiki/Cross_product#Generalizations) |
-| Point normals | ✅ | Area-weighted from adjacent cells |
+| Cell normals | ✅ | [Generalized cross product](https://en.wikipedia.org/wiki/Cross_product#Generalizations) (codimension 1 only) |
+| Point normals | ✅ | Angle-area-weighted average of adjacent cell normals (default) |
 | Facet extraction | ✅ | Extract all (n-1)-dimensional simplices |
 | Boundary detection and extraction | ✅ | Extract only the boundary (n-1)-dimensional simplices |
 | **Curvature** | | |
@@ -302,33 +339,38 @@ Comprehensive overview of PhysicsNeMo-Mesh capabilities:
 | Mean curvature | ✅ | [Cotangent Laplacian](https://en.wikipedia.org/wiki/Discrete_Laplace_operator#Mesh_Laplacians) |
 | **Subdivision** | | |
 | Linear | ✅ | Midpoint subdivision |
-| Loop | ✅ | $C^2$ smooth, approximating |
+| Loop | ✅ | Approximating; $C^2$ at regular vertices |
 | Butterfly | ✅ | Interpolating |
 | **Smoothing** | | |
-| Laplacian smoothing | ✅ | |
+| Laplacian smoothing | ✅ | Optional feature and boundary preservation |
 | **Remeshing** | | |
 | Uniform remeshing | ✅ | Warp (CPU and CUDA) |
 | Resolution-field control | ✅ | Relative linear resolution per vertex |
 | Point-data transfer | ✅ | Autograd with respect to source field values |
-| **Tessellation** | | |
+| **Tessellation and Generation** | | |
 | Polygon-soup triangulation | ✅ | Convex fan + ear-clip; `Mesh.from_polygons` |
+| Fill a closed boundary | ✅ | `fill_interior`: constrained Delaunay with Ruppert refinement (2D) |
+| Isosurface extraction | ✅ | `marching_cubes` |
+| Implicit-domain volume meshing | ✅ | `mesh_implicit_domain`, from signed distance functions |
 | **Spatial Queries** | | |
 | BVH construction | ✅ | |
 | Point containment | ✅ | |
 | Nearest cell search | ✅ | |
+| Signed distance field | ✅ | `physicsnemo.mesh.spatial.signed_distance_field` |
 | Data interpolation | ✅ | [Barycentric coordinates](https://en.wikipedia.org/wiki/Barycentric_coordinate_system) |
 | **Sampling** | | |
 | Random points on cells | ✅ | [Dirichlet distribution](https://en.wikipedia.org/wiki/Dirichlet_distribution) |
 | Data sampling at points | ✅ | |
 | **Transformations** | | |
 | Translation | ✅ | |
-| Rotation | ✅ | In 2D or 3D (angle-axis); for higher dimensions rotation is ill-defined, use `transform()` instead |
+| Rotation | ✅ | In 2D or 3D (angle-axis); in higher dimensions, pass a rotation matrix to `transform()` |
 | Scaling | ✅ | Uniform or anisotropic |
 | Arbitrary matrix transform | ✅ | |
 | Dense point displacement | ✅ | Aligned tensor or `point_data` key, with optional point weights |
 | Sobolev-filtered deformation | ✅ | Differentiable P1 Helmholtz solve with optional fixed points |
 | Sparse control-point morphing | ✅ | Wendland-C2 compact support with scalar or per-control radii |
 | Global radial-basis deformation | ✅ | Thin-plate-spline field with an affine polynomial tail |
+| Lattice free-form deformation | ✅ | `free_form_deform` |
 | Nearest-surface shrinkwrap | ✅ | Differentiable triangle projection with Torch and Warp search backends |
 | **Deformation energies** | | |
 | Simplex strain | ✅ | Reference-relative St. Venant--Kirchhoff energy |
@@ -336,6 +378,7 @@ Comprehensive overview of PhysicsNeMo-Mesh capabilities:
 | Inversion | ✅ | Signed-Jacobian penalty for full-dimensional simplices |
 | Surface bending | ✅ | Reference-relative triangle-hinge energy |
 | Enclosed volume | ✅ | One edge-connected, closed, consistently oriented triangle surface |
+| **Projections** | | |
 | Extrusion | ✅ | Manifold → higher dimension |
 | Coordinate projection (drop ambient dims) | ✅ | `projections.project` (e.g. 3D → 2D embedding) |
 | Mesh intersection | ❌ | Manifold → lower *manifold* dimension. Work in progress |
@@ -343,10 +386,10 @@ Comprehensive overview of PhysicsNeMo-Mesh capabilities:
 | Point-to-points | ✅ | Graph edges |
 | Point-to-cells | ✅ | Vertex star |
 | Cell-to-cells | ✅ | Shared facets |
-| Cells-to-points | ✅ | Cell vertices |
-| Ragged array format | ✅ | Efficient sparse encoding via offsets + indices |
+| Cell-to-points | ✅ | Cell vertices |
+| Ragged array format | ✅ | Sparse encoding via offsets + indices |
 | **Geometry** | | |
-| Delaunay triangulation from points | ❌ | Work in progress |
+| Delaunay triangulation of a point cloud | ❌ | Work in progress |
 | Voronoi areas | ✅ | |
 | Convex hulls | ❌ | Work in progress |
 | **Topology & Repair** | | |
@@ -364,17 +407,29 @@ Comprehensive overview of PhysicsNeMo-Mesh capabilities:
 | Mesh statistics | ✅ | |
 | **I/O** | | |
 | PyVista integration | ✅ | All PyVista-supported formats |
+| Zarr | ✅ | `to_zarr`, `from_zarr` |
 | **Visualization** | | |
 | Matplotlib backend | ✅ | 2D/3D plotting |
 | PyVista backend | ✅ | Interactive 3D |
 | Scalar colormapping on points or cells | ✅ | Auto L2-norm for vectors |
 <!-- markdownlint-enable MD013 -->
 
-**Legend:** ✅ Complete | ❌ Not Implemented, but planned
+Legend: ✅ Complete | ❌ Not implemented, but planned
 
 ---
 
 ## Examples
+
+The examples in this section use a sphere surface. This block defines it,
+with a field that later blocks use.
+
+```python
+from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
+
+mesh = sphere_icosahedral.load(subdivisions=4)
+x, y, z = mesh.points.unbind(dim=-1)
+mesh.point_data["pressure"] = x * y + z
+```
 
 ### Transformations
 
@@ -443,7 +498,7 @@ supplied and may be signed or greater than one. The current morphing kernel is
 Thin-plate-spline radial-basis deformation has global support. With its default
 affine polynomial tail, `smoothing=0.0`, and a nonsingular control layout, it
 interpolates every control displacement up to solver precision. Positive
-smoothing adds diagonal regularization and deliberately relaxes interpolation
+smoothing adds diagonal regularization and relaxes interpolation
 accuracy.
 
 Sobolev deformation solves `(M + length_scale² K) u = M d` with a P1 stiffness
@@ -458,7 +513,11 @@ default. CPU meshes and higher-dimensional simplices use Torch.
 ### Nearest-Surface Shrinkwrap
 
 ```python
-# target must be a triangle surface on the same device and dtype
+# The target must be a triangle surface on the same device and dtype
+target = sphere_icosahedral.load(radius=1.1, subdivisions=4)
+
+# Fit only the upper half of the sphere
+mesh.point_data["design_mask"] = mesh.points[:, 2] > 0
 fitted = mesh.shrinkwrap(
     target,
     offset=0.01,
@@ -484,7 +543,7 @@ with either backend are not supported inside CUDA Graph capture.
 
 ```python
 refined = mesh.subdivide(levels=2, filter="linear")  # Topology only
-smooth = mesh.subdivide(levels=2, filter="loop")  # C² continuous
+smooth = mesh.subdivide(levels=2, filter="loop")  # Approximating, smooth
 interp = mesh.subdivide(levels=2, filter="butterfly")  # Interpolating
 ```
 
@@ -495,7 +554,8 @@ interp = mesh.subdivide(levels=2, filter="butterfly")  # Interpolating
 coarse = mesh.remesh(n_clusters=1_000)
 
 # Move the mesh to CUDA first to accelerate large inputs.
-coarse_cuda = mesh.to("cuda").remesh(n_clusters=1_000)
+if torch.cuda.is_available():
+    coarse_cuda = mesh.to("cuda").remesh(n_clusters=1_000)
 
 # Transfer selected floating-point fields to the new vertices.
 mesh.point_data["temperature"] = mesh.points[:, 2]
@@ -543,8 +603,7 @@ from physicsnemo.mesh.calculus import (
     compute_curl_points_lsq,
 )
 
-# Gradient
-mesh.point_data["pressure"] = (mesh.points**2).sum(dim=-1)
+# Gradient of the pressure field from the setup block
 mesh_grad = mesh.compute_point_derivatives(keys="pressure", method="lsq")
 grad_p = mesh_grad.point_data["pressure_gradient"]  # (n_points, n_spatial_dims)
 
@@ -553,10 +612,21 @@ mesh.point_data["velocity"] = mesh.points.clone()
 div_v = compute_divergence_points_lsq(mesh, mesh.point_data["velocity"])
 curl_v = compute_curl_points_lsq(mesh, mesh.point_data["velocity"])  # 3D only
 
+# The same operators as Mesh methods, by key or by tensor
+lap_p = mesh.laplacian("pressure")
+div_v = mesh.divergence("velocity")
+
 # For surfaces: intrinsic (tangent space) vs extrinsic (ambient space)
-grad_intrinsic = mesh.compute_point_derivatives(keys="T", gradient_type="intrinsic")
-grad_extrinsic = mesh.compute_point_derivatives(keys="T", gradient_type="extrinsic")
+grad_intrinsic = mesh.compute_point_derivatives(
+    keys="pressure", gradient_type="intrinsic"
+)
+grad_extrinsic = mesh.compute_point_derivatives(
+    keys="pressure", gradient_type="extrinsic"
+)
 ```
+
+See the [calculus README](./calculus/README.md) for the DEC and LSQ methods,
+their accuracy, and which dimensions each operator supports.
 
 ### Mesh Operations
 
@@ -575,24 +645,26 @@ clean = mesh.clean()  # All-in-one
 ```python
 from physicsnemo.mesh.spatial import BVH
 
+# Query points: one random point on each cell of the surface
+query_points = mesh.sample_random_points_on_cells()
+
 bvh = BVH.from_mesh(mesh)
-cell_candidates = bvh.find_candidate_cells(torch.rand(1000, 3))
-sampled = mesh.sample_data_at_points(query_points, data_source="points")
+cell_candidates = bvh.find_candidate_cells(query_points)
+sampled = mesh.sample_data_at_points(query_points, data_source="points", bvh=bvh)
+print(sampled["pressure"].shape)  # torch.Size([5120])
 ```
 
 ### Neighbors
 
-The neighbors module provides efficient ways to compute the *topological*
-neighbors of mesh elements (i.e., based on the mesh connectivity,as opposed to
-*spatial* neighbors based on distance).
+The neighbors module computes the *topological* neighbors of mesh elements:
+neighbors through the mesh connectivity, as opposed to *spatial* neighbors
+by distance.
 
-Note that these use an efficient sparse (`indices`, `offsets`) encoding of the
-adjacency relationships, which is used internally for all computations. (See the
-dedicated
-[`physicsnemo.mesh.neighbors._adjacency.py`](./neighbors/_adjacency.py)
-module.) You can convert these to a typical ragged list-of-lists representation
-with `.to_list()`, which is useful for debugging or interoperability, at the
-cost of performance:
+These functions return a sparse (`indices`, `offsets`) encoding of the
+adjacency, which all internal computations use. (See the
+[`physicsnemo.mesh.neighbors._adjacency`](./neighbors/_adjacency.py) module.)
+`.to_list()` converts it to a ragged list of lists, which helps with
+debugging and interoperability at the cost of performance:
 
 ```python
 point_neighbors = mesh.get_point_to_points_adjacency().to_list()
@@ -606,7 +678,7 @@ cell_neighbors = mesh.get_cell_to_cells_adjacency().to_list()
 The `Mesh` class is a [`tensorclass`](https://pytorch.org/tensordict/stable/reference/tensorclass.html)
 with five components:
 
-```python
+```text
 Mesh(
     points: torch.Tensor,      # (n_points, n_spatial_dims)
     cells: torch.Tensor,       # (n_cells, n_manifold_dims + 1), integer dtype
@@ -616,10 +688,17 @@ Mesh(
 )
 ```
 
-All data moves together with `.to("cuda")` or `.to("cpu")`. Expensive computations
-(centroids, normals, curvature) are lazily cached in a dedicated `_cache` TensorDict,
-separate from `point_data` / `cell_data` so user data is never mixed with internal
-cached geometry.
+All data moves together with `.to("cuda")` or `.to("cpu")`. Expensive
+computations (centroids, normals, curvature) are cached lazily in a dedicated
+`_cache` TensorDict. The cache is separate from `point_data` and `cell_data`,
+so user data never mixes with cached geometry.
+
+`DomainMesh` groups an interior `Mesh` with named boundary meshes (for
+example `"inlet"` and `"no_slip"`) for simulation domains. `RankSpec` and
+`FieldSchema` (in `physicsnemo.mesh.fields`) declare the transformation law
+of each named field. See the
+[User Guide](https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh.html)
+for both.
 
 ### Dimension-Parametrized Types
 
@@ -643,8 +722,8 @@ Use `...` (Ellipsis) to leave a dimension unconstrained.
 
 ## torch.compile Compatibility
 
-PhysicsNeMo-Mesh operations are generally compatible with `torch.compile`, but some
-operations may cause graph breaks due to dynamic shapes or data-dependent control flow.
+Most PhysicsNeMo-Mesh operations work with `torch.compile`. Some cause graph
+breaks because of dynamic shapes or data-dependent control flow.
 
 ### Generally Compilable
 
@@ -657,18 +736,18 @@ operations may cause graph breaks due to dynamic shapes or data-dependent contro
 
 The following patterns may cause graph breaks under `torch.compile`:
 
-- **`scatter_add_` operations**: Used extensively for edge counting, facet extraction,
-  and adjacency computations
-- **`torch.where` with variable-length output**: Returns tensors whose size depends
-  on data values
-- **Dynamic shape operations**: Operations like `torch.unique` that return
-  variable-sized outputs
+- `scatter_add_` operations: used for edge counting, facet extraction,
+  and adjacency computations.
+- `torch.where` with variable-length output: returns tensors whose size
+  depends on data values.
+- Dynamic shape operations: operations like `torch.unique` that return
+  variable-sized outputs.
 
 ### Recommendations
 
-1. **Separate preprocessing from inner loops**: Wrap mesh topology computations
-   (boundaries, neighbors, facets) in a separate function and compile only the
-   numerical computation inner loops
+1. Separate preprocessing from inner loops: wrap mesh topology computations
+   (boundaries, neighbors, facets) in a separate function, and compile only
+   the numerical inner loops.
 
    ```python
    # Preprocessing (may have graph breaks)
@@ -682,84 +761,126 @@ The following patterns may cause graph breaks under `torch.compile`:
        ...
    ```
 
-2. **Use `mode="reduce-overhead"`**: For mixed workloads with some graph breaks
+2. Use `mode="reduce-overhead"` for mixed workloads with some graph breaks.
 
-3. **Pre-compute cached properties**: Access properties like `mesh.cell_areas`,
-   `mesh.cell_normals` etc. before entering compiled code to avoid graph breaks
-   from lazy computation
+3. Precompute cached properties: access properties like `mesh.cell_areas`
+   and `mesh.cell_normals` before you enter compiled code. This avoids graph
+   breaks from lazy computation.
+
+4. Pad to fixed sizes: `mesh.pad_to_next_power()` pads points and cells to a
+   few fixed sizes, so that `torch.compile(dynamic=False)` reuses its compiled
+   kernels across meshes of similar size.
 
 ---
 
 ## Philosophy & Design
 
-PhysicsNeMo-Mesh is built on three principles:
+PhysicsNeMo-Mesh follows three principles, in order of priority:
 
-1. **Correctness First**: Rigorous mathematical foundations, extensive validation
-2. **Performance Second**: Fully vectorized GPU operations, no Python loops over mesh
-   elements
-3. **Usability Third**: Clean APIs that don't sacrifice power for simplicity
+1. Correctness first: rigorous mathematical foundations and extensive
+   validation.
+2. Performance second: vectorized GPU operations, with no Python loops over
+   mesh elements.
+3. Usability third: simple APIs that still expose the full functionality.
 
-Key design decisions enable these principles:
+These design decisions support the principles:
 
-- Simplicial meshes only (enables rigorous
-  [discrete exterior calculus](https://en.wikipedia.org/wiki/Discrete_exterior_calculus))
-- Explicit dimensionality (`n_spatial_dims`, `n_manifold_dims` as first-class concepts)
-- Fail loudly with helpful error messages (no silent failures)
+- Simplicial meshes only (this enables
+  [discrete exterior calculus](https://en.wikipedia.org/wiki/Discrete_exterior_calculus)).
+- Explicit dimensions (`n_spatial_dims` and `n_manifold_dims` are first-class
+  concepts).
+- Raise clear errors instead of failing silently.
+
+---
+
+## Tutorials
+
+The notebooks in [`examples/minimal/mesh/`](../../examples/minimal/mesh/) run
+on a CPU and use a GPU when one is present. Work through them in order:
+
+1. [Getting Started](../../examples/minimal/mesh/tutorial_1_getting_started.ipynb)
+2. [Loading, Converting, and Saving Meshes](../../examples/minimal/mesh/tutorial_2_io_interop.ipynb)
+3. [Primitives and Mesh Generation](../../examples/minimal/mesh/tutorial_3_primitives_generation.ipynb)
+4. [Mesh Operations](../../examples/minimal/mesh/tutorial_4_operations.ipynb)
+5. [Discrete Calculus and Curvature](../../examples/minimal/mesh/tutorial_5_calculus.ipynb)
+6. [Neighbors, Adjacency, and Spatial Queries](../../examples/minimal/mesh/tutorial_6_neighbors_spatial.ipynb)
+7. [Quality, Validation, and Repair](../../examples/minimal/mesh/tutorial_7_quality_repair.ipynb)
+8. [Simulation Domains with DomainMesh](../../examples/minimal/mesh/tutorial_8_domain_mesh.ipynb)
+9. [Meshes in ML Pipelines](../../examples/minimal/mesh/tutorial_9_ml_integration.ipynb)
 
 ---
 
 ## Documentation & Resources
 
-- **Examples**: See [`examples/`](../../examples/) directory for runnable demonstrations
-- **Tests**: See [`test/`](../../test/mesh/) directory for comprehensive test
-  suite showing usage patterns
-- **Source**: Explore [`physicsnemo/mesh/`](./) for implementation details
+- [User Guide](https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh.html):
+  concepts, method choices, and ML integration.
+- [API reference](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/index.html):
+  one page per submodule.
+- Tests: the [`test/mesh/`](../../test/mesh/) directory shows usage patterns
+  for every submodule.
+- Source: explore [`physicsnemo/mesh/`](./) for implementation details.
 
-**Module Organization:**
+Module organization:
 
-- [`physicsnemo.mesh.calculus`](./calculus/) - Discrete differential
-  operators
+- [`physicsnemo.mesh.mesh`](./mesh.py) and
+  [`physicsnemo.mesh.domain_mesh`](./domain_mesh.py) - the `Mesh` and
+  `DomainMesh` classes
+- [`physicsnemo.mesh.fields`](./fields.py) - field rank declarations
+  (`RankSpec`, `FieldSchema`)
+- [`physicsnemo.mesh.primitives`](./primitives/) - canonical mesh generators
+  ([README](./primitives/README.md))
+- [`physicsnemo.mesh.io`](./io/) - PyVista and Zarr import and export
+- [`physicsnemo.mesh.tessellation`](./tessellation/) - polygon-soup
+  triangulation and boundary filling
+- [`physicsnemo.mesh.generate`](./generate/) - marching cubes and
+  implicit-domain meshing
+- [`physicsnemo.mesh.geometry`](./geometry/) - areas, normals, angles, and
+  dual meshes
 - [`physicsnemo.mesh.curvature`](./curvature/) - Gaussian and mean
   curvature
-- [`physicsnemo.mesh.subdivision`](./subdivision/) - Mesh refinement
-  schemes
-- [`physicsnemo.mesh.tessellation`](./tessellation/) - Polygon-soup
-  triangulation
-- [`physicsnemo.mesh.boundaries`](./boundaries/) - Boundary detection
+- [`physicsnemo.mesh.calculus`](./calculus/) - discrete differential
+  operators and integration ([README](./calculus/README.md))
+- [`physicsnemo.mesh.boundaries`](./boundaries/) - boundary detection
   and facet extraction
-- [`physicsnemo.mesh.neighbors`](./neighbors/) - Adjacency computations
-- [`physicsnemo.mesh.spatial`](./spatial/) - BVH and spatial queries
-- [`physicsnemo.mesh.sampling`](./sampling/) - Point sampling and
+- [`physicsnemo.mesh.neighbors`](./neighbors/) - adjacency computations
+- [`physicsnemo.mesh.spatial`](./spatial/) - BVH, spatial queries, and
+  signed distance fields
+- [`physicsnemo.mesh.sampling`](./sampling/) - point sampling and
   interpolation
-- [`physicsnemo.mesh.transformations`](./transformations/) - Geometric
-  operations
-- [`physicsnemo.mesh.deformation`](./deformation/) - Differentiable
+- [`physicsnemo.mesh.transformations`](./transformations/) - geometric
+  transformations and deformations
+- [`physicsnemo.mesh.deformation`](./deformation/) - differentiable
   fixed-topology deformation energies
-- [`physicsnemo.mesh.repair`](./repair/) - Mesh cleaning and topology
+- [`physicsnemo.mesh.projections`](./projections/) - extrusion, embedding,
+  and projection between spatial dimensions
+- [`physicsnemo.mesh.subdivision`](./subdivision/) - mesh refinement
+  schemes
+- [`physicsnemo.mesh.smoothing`](./smoothing/) - Laplacian smoothing
+- [`physicsnemo.mesh.remeshing`](./remeshing/) - uniform and
+  field-controlled remeshing
+- [`physicsnemo.mesh.repair`](./repair/) - mesh cleaning and topology
   repair
-- [`physicsnemo.mesh.validation`](./validation/) - Quality metrics
+- [`physicsnemo.mesh.validation`](./validation/) - quality metrics
   and statistics
-- [`physicsnemo.mesh.visualization`](./visualization/) - Matplotlib
-  and PyVista backends
-- [`physicsnemo.mesh.io`](./io/) - PyVista import/export
-- [`physicsnemo.mesh.primitives`](./primitives/) - Example mesh generators
+- [`physicsnemo.mesh.visualization`](./visualization/) - matplotlib
+  and PyVista backends ([README](./visualization/README.md))
 
 ---
 
 ## Acknowledgments
 
-PhysicsNeMo-Mesh draws inspiration for its API design and mathematical foundation from:
+PhysicsNeMo-Mesh draws on these works for its API design and mathematical foundations:
 
-- **[PyTorch](https://pytorch.org/)** team for the foundational deep learning framework
-- **[PyVista](https://pyvista.org/)** team for the excellent 3D visualization and
-  I/O library
-- **Discrete Exterior Calculus**: Desbrun, Hirani, Leok, Marsden (2005) -
+- The [PyTorch](https://pytorch.org/) team, for the deep learning framework
+- The [PyVista](https://pyvista.org/) team, for the 3D visualization and I/O
+  library
+- Discrete Exterior Calculus: Desbrun, Hirani, Leok, Marsden (2005) -
   [arXiv:math/0508341](https://arxiv.org/abs/math/0508341), and the eponymous
   dissertation on
   [Discrete Exterior Calculus by Hirani (2003)](https://www.cs.jhu.edu/~misha/Fall09/Hirani03.pdf)
-- **Discrete Differential Operators**: Meyer, Desbrun, Schröder, Barr (2003) -
+- Discrete Differential Operators: Meyer, Desbrun, Schröder, Barr (2003) -
   [Discrete Differential-Geometry Operators for Triangulated 2-Manifolds](https://www.multires.caltech.edu/pubs/diffGeoOps.pdf)
-- **Loop Subdivision**: Loop (1987) -
+- Loop Subdivision: Loop (1987) -
   [Smooth Subdivision Surfaces Based on Triangles](https://www.microsoft.com/en-us/research/publication/smooth-subdivision-surfaces-based-on-triangles/)
-- **Butterfly Subdivision**: Zorin, Schröder, Sweldens (1996) -
+- Butterfly Subdivision: Zorin, Schröder, Sweldens (1996) -
   [Interpolating Subdivision for Meshes with Arbitrary Topology](https://cims.nyu.edu/gcl/papers/zorin1996ism.pdf)
