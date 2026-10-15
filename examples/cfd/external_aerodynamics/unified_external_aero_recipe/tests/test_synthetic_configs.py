@@ -119,7 +119,11 @@ def _compose_train_cfg(
 def test_volume_dataset_reader_boundary_policy(
     model: str, dataset: str, expected_drop: bool
 ) -> None:
-    """Point models opt into dropping boundaries; GLOBE keeps the safe default."""
+    """Point models opt into dropping boundaries; GLOBE keeps the safe default.
+
+    Kept boundaries take only the cell subsample: adding the point subsample
+    would keep about N/27 of the N cells of a triangulated surface.
+    """
     dataset_path = _RECIPE_ROOT / "datasets" / f"{dataset}.yaml"
     dataset_cfg = OmegaConf.load(dataset_path)
     train_cfg = _compose_train_cfg(model, dataset)
@@ -127,6 +131,7 @@ def test_volume_dataset_reader_boundary_policy(
     assert dataset_cfg.pipeline.reader.drop_in_file_boundaries is False
     resolved = _apply_dataset_reader_overrides(dataset_cfg, train_cfg)
     assert resolved.pipeline.reader.drop_in_file_boundaries is expected_drop
+    assert resolved.pipeline.reader.boundary_subsample == "cells"
     if model == "globe_volume":
         assert "dataset_reader_overrides" not in train_cfg
         assert train_cfg.forward_kwargs.boundary_meshes.vehicle == "boundaries.vehicle"
