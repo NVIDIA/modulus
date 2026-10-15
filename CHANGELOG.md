@@ -263,6 +263,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   differentiable with respect to the mesh vertices and the query points.
   Before, `backward` raised because the Warp op had no autograd formula. The
   hit points and hit faces carry no gradients.
+- The geometry guardrail's principal-axis feature names match the stored
+  values, which hold the two axes component by component (`pca_axis1_x`,
+  `pca_axis2_x`, `pca_axis1_y`, ...). Before, the names listed one axis after
+  the other. The feature schema version is now `v1.1`; guardrails saved with
+  `v1.0` hold the same values in the same order and still load.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only

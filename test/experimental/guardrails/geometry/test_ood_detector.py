@@ -196,6 +196,64 @@ def test_guardrail_save_load(method, components, device):
         assert results_orig[0]["status"] == results_loaded[0]["status"]
 
 
+def test_guardrail_load_v1_0_file():
+    """Test that a guardrail saved with feature schema v1.0 still loads.
+
+    v1.0 stored the same feature values in the same order and only labelled the
+    principal-axis components differently.
+    """
+    from physicsnemo.experimental.guardrails.geometry import feature_hash
+
+    legacy_names = list(FEATURE_NAMES)
+    legacy_names[3:9] = [
+        "pca_axis1_x",
+        "pca_axis1_y",
+        "pca_axis1_z",
+        "pca_axis2_x",
+        "pca_axis2_y",
+        "pca_axis2_z",
+    ]
+    guardrail = GeometryGuardrail(
+        method="gmm",
+        gmm_components=1,
+        warn_pct=95.0,
+        reject_pct=99.0,
+        device="cpu",
+        random_state=42,
+    )
+    guardrail.fit([from_pyvista(pv.Cube()) for _ in range(10)])
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        save_path = Path(tmpdir) / "guardrail.npz"
+        guardrail.save(save_path)
+        data = dict(np.load(save_path, allow_pickle=False))
+
+        legacy_path = Path(tmpdir) / "guardrail_v1_0.npz"
+        np.savez(
+            legacy_path,
+            **{
+                **data,
+                "feature_version": "v1.0",
+                "feature_names": np.array(legacy_names, dtype="U100"),
+                "feature_hash": feature_hash(legacy_names),
+            },
+        )
+        loaded = GeometryGuardrail.load(legacy_path, device="cpu")
+        assert loaded.feature_names == FEATURE_NAMES
+        assert loaded.feature_version == FEATURE_VERSION
+        test_mesh = [from_pyvista(pv.Cube())]
+        assert np.isclose(
+            loaded.query(test_mesh)[0]["percentile"],
+            guardrail.query(test_mesh)[0]["percentile"],
+        )
+
+        # An unknown schema version is still rejected.
+        unknown_path = Path(tmpdir) / "guardrail_unknown.npz"
+        np.savez(unknown_path, **{**data, "feature_version": "v0.9"})
+        with pytest.raises(RuntimeError, match="Feature version mismatch"):
+            GeometryGuardrail.load(unknown_path, device="cpu")
+
+
 def test_guardrail_save_before_fit():
     """Test that saving before fit raises error."""
     guardrail = GeometryGuardrail(method="gmm")

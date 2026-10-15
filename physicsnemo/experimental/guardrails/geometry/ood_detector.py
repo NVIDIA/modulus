@@ -29,6 +29,7 @@ check_version_spec("pyvista", "0.40.0", hard_fail=True)
 
 from .density_model import GeometryDensityModel
 from .feature_extraction import (
+    COMPATIBLE_FEATURE_NAMES,
     FEATURE_NAMES,
     FEATURE_VERSION,
     extract_features,
@@ -594,6 +595,9 @@ class GeometryGuardrail:
 
         If any check fails, a :exc:`RuntimeError` is raised with a descriptive
         error message. This prevents silent failures from schema mismatches.
+        Files saved with an earlier schema version whose feature vectors are laid
+        out identically (``"v1.0"``, see :data:`COMPATIBLE_FEATURE_NAMES`) are
+        checked against that version's names and load unchanged.
 
         **Device Selection**:
 
@@ -609,23 +613,29 @@ class GeometryGuardrail:
         """
         data = np.load(path, allow_pickle=False)
 
-        # Check feature version compatibility
-        if data["feature_version"] != FEATURE_VERSION:
+        # Check feature version compatibility: the current version, or an earlier one
+        # whose feature vectors are laid out identically
+        saved_version = str(data["feature_version"])
+        if saved_version == FEATURE_VERSION:
+            expected_names = FEATURE_NAMES
+        elif saved_version in COMPATIBLE_FEATURE_NAMES:
+            expected_names = COMPATIBLE_FEATURE_NAMES[saved_version]
+        else:
             raise RuntimeError(
-                f"Feature version mismatch: saved model uses {data['feature_version']}, "
+                f"Feature version mismatch: saved model uses {saved_version}, "
                 f"but current code expects {FEATURE_VERSION}"
             )
 
         # Check feature names match
         # Normalize to str to handle NumPy str_ objects
         loaded_feature_names = [str(name) for name in data["feature_names"]]
-        if loaded_feature_names != FEATURE_NAMES:
+        if loaded_feature_names != expected_names:
             raise RuntimeError(
                 f"Feature schema mismatch: saved model uses different feature names"
             )
 
         # Check feature hash for additional safety
-        if data["feature_hash"] != feature_hash(FEATURE_NAMES):
+        if data["feature_hash"] != feature_hash(expected_names):
             raise RuntimeError(
                 f"Feature hash mismatch: saved model may have been corrupted or "
                 f"uses a different feature extraction implementation"
