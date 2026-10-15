@@ -29,7 +29,7 @@ from tensordict import TensorClass
 _PACKED_PAIR_KEY_LIMIT = 1 << 62
 
 
-class Adjacency(TensorClass):
+class Adjacency(TensorClass, skip_post_init_on_rebuild=True):
     """Ragged adjacency list stored with offset-indices encoding.
 
     This structure efficiently represents variable-length neighbor lists using two
@@ -70,6 +70,9 @@ class Adjacency(TensorClass):
     indices: Int[torch.Tensor, " n_total_neighbors"]
 
     def __post_init__(self) -> None:
+        # Runs on construction and load, but not when tensordict rebuilds an
+        # existing adjacency (clone, to, indexing): the offsets read below
+        # synchronize a CUDA device.
         if not torch.compiler.is_compiling():
             ### Validate offsets is non-empty
             # Offsets must have length (n_sources + 1), so minimum length is 1 (for n_sources=0)
