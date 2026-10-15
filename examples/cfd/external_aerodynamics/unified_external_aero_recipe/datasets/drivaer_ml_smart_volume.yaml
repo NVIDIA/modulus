@@ -14,7 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# CFD-only SMART variant. Full geometry and field queries have separate budgets.
+# CFD-only SMART variant. Geometry uses every available vehicle-cell centroid.
+# Online per-layer geometry sampling is configured in model/smart_*.yaml;
+# sampling_resolution below controls field queries only.
 train_datadir: ${dataset_paths.drivaer_ml}
 pipeline:
   reader:
@@ -27,60 +29,52 @@ pipeline:
     drop_in_file_boundaries: false
     boundary_subsample: cells
   augmentations:
-  - _target_: ${dp:RandomRotateMesh}
-    _convert_: all
-    axes:
-    - z
-    mode: axis_aligned
-    transform_point_data:
-      UMeanTrim: true
-    transform_global_data:
-      U_inf: true
-  - _target_: ${dp:RandomTranslateMesh}
-    distribution:
-      _target_: torch.distributions.Uniform
-      low:
-        _target_: torch.tensor
-        data:
-        - -1.0
-        - -1.0
-        - 0.0
-      high:
-        _target_: torch.tensor
-        data:
-        - 1.0
-        - 1.0
-        - 0.0
+    - _target_: ${dp:RandomRotateMesh}
+      _convert_: all
+      axes: ["z"]
+      mode: axis_aligned
+      transform_point_data:
+        UMeanTrim: true
+      transform_global_data:
+        U_inf: true
+    - _target_: ${dp:RandomTranslateMesh}
+      distribution:
+        _target_: torch.distributions.Uniform
+        low:
+          _target_: torch.tensor
+          data: [-1.0, -1.0, 0.0]
+        high:
+          _target_: torch.tensor
+          data: [1.0, 1.0, 0.0]
   transforms:
-  - _target_: ${dp:DropMeshFields}
-    global_data:
-    - TimeValue
-  - _target_: smart_data.CenterMesh
-    use_area_weighting: false
-  - _target_: ${dp:NonDimensionalizeByMetadata}
-    fields:
-      UMeanTrim: velocity
-      pMeanTrim: pressure
-      nutMeanTrim: identity
-    association: point_data
-  - _target_: ${dp:ComputeSDFFromBoundary}
-    boundary_name: vehicle
-    sdf_field: sdf
-    normals_field: sdf_normals
-    use_winding_number: false
-  - _target_: ${dp:RenameMeshFields}
-    point_data:
-      UMeanTrim: velocity
-      pMeanTrim: pressure
-      nutMeanTrim: nut
-  - _target_: ${dp:NormalizeMeshFields}
-    association: point_data
-    fields:
-      nut:
-        type: scalar
-        mean: 0.00048
-        std: 0.00094
-  - _target_: smart_data.SMARTVolumeGeometry
+    - _target_: ${dp:DropMeshFields}
+      global_data: [TimeValue]
+    - _target_: smart_data.CenterMesh
+      use_area_weighting: false
+    - _target_: ${dp:NonDimensionalizeByMetadata}
+      fields:
+        UMeanTrim: velocity
+        pMeanTrim: pressure
+        nutMeanTrim: identity
+      association: point_data
+    - _target_: ${dp:ComputeSDFFromBoundary}
+      boundary_name: vehicle
+      sdf_field: sdf
+      normals_field: sdf_normals
+      use_winding_number: false
+    - _target_: ${dp:RenameMeshFields}
+      point_data:
+        UMeanTrim: velocity
+        pMeanTrim: pressure
+        nutMeanTrim: nut
+    - _target_: ${dp:NormalizeMeshFields}
+      association: point_data
+      fields:
+        nut:
+          type: scalar
+          mean: 0.00048
+          std: 0.00094
+    - _target_: smart_data.SMARTVolumeGeometry
 targets:
   velocity: vector
   pressure: scalar

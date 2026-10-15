@@ -96,6 +96,10 @@ class SMARTSurfaceMeshToDomainMesh(MeshToDomainMesh):
         super().__init__(**kwargs)
         if isinstance(n_cells, bool) or not isinstance(n_cells, int) or n_cells <= 0:
             raise ValueError("n_cells must be a positive integer")
+        if self._interior_points != "cell_centroids":
+            raise ValueError("SMART surface queries must use cell_centroids")
+        if self._boundary_name == "smart_geometry":
+            raise ValueError("smart_geometry is reserved for the full geometry cloud")
         self.n_cells = n_cells
 
     def __call__(self, mesh: Mesh) -> DomainMesh:
@@ -113,6 +117,7 @@ class SMARTSurfaceMeshToDomainMesh(MeshToDomainMesh):
             interior=domain.interior,
             boundaries={
                 **{
+                    # Native CPU export must not retain source memmap tensors.
                     name: boundary.clone()
                     for name, boundary in domain.boundaries.items()
                 },
@@ -131,6 +136,8 @@ class SMARTVolumeGeometry(MeshTransform):
 
     def apply_to_domain(self, domain: DomainMesh) -> DomainMesh:
         """Retain the CFD surface and add only its geometry coordinates."""
+        if "smart_geometry" in domain.boundaries:
+            raise ValueError("smart_geometry is reserved for the full geometry cloud")
         surface = domain.boundaries["vehicle"]
         if surface.n_cells == 0:
             raise ValueError("SMART requires a CFD vehicle boundary with cells")
@@ -138,6 +145,7 @@ class SMARTVolumeGeometry(MeshTransform):
             interior=domain.interior,
             boundaries={
                 **{
+                    # Native CPU export must not retain source memmap tensors.
                     name: boundary.clone()
                     for name, boundary in domain.boundaries.items()
                 },

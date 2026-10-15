@@ -16,7 +16,7 @@
 
 r"""Independent implementation of the SMART paper, arXiv:2601.18707v2.
 
-See the example's README.md for model choices and training recipes.
+See the unified external aerodynamics recipe for model choices and training.
 No research implementation is used as a dependency.
 """
 

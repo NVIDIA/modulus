@@ -665,11 +665,18 @@ not change with query sampling. Full surface data is loaded before online query
 selection; volume target reads remain subsampled. Existing model/dataset configs
 and their sampling behavior are unchanged.
 
-These are new unified training recipes, not reproductions of the standalone
-SMART example: preprocessing, global conditioning, signed SDF, and the inherited
-training defaults differ. Train new checkpoints; standalone checkpoints are not
-interchangeable. `compile=false` is the SMART default because sampling uses an
-explicit per-case generator. No accuracy parity with another model is claimed.
+SMART is integrated through this recipe and uses its preprocessing and training
+defaults. The implementation was developed independently from the published
+paper and PhysicsNeMo components. The CFD geometry source, query features,
+global conditioning, and sample counts above are recipe choices; these configs
+do not claim to reproduce the paper's experiments or another model's accuracy.
+`compile=false` is the SMART default because sampling uses an explicit per-case
+generator.
+
+The shared trainer saves the final epoch and checkpoints optimizer, scheduler,
+and gradient-scaler states after the epoch scheduler update. Checkpoints created
+by older recipe versions retain their historical scheduler state; loading them
+does not automatically correct that state.
 
 ### Dataset config anatomy
 
