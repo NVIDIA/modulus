@@ -28,7 +28,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt  # noqa: E402
 import matplotlib.tri as mtri  # noqa: E402
-from _style import clean_axis, save  # noqa: E402
+from _style import clean_axis, mesh_label, save  # noqa: E402
 from matplotlib.colors import Normalize  # noqa: E402
 
 from physicsnemo.mesh import Mesh
@@ -243,15 +243,16 @@ def main() -> None:
     )
 
     axes[0].set_title(
-        f"source sheet, point_data[{FIELD_KEY!r}]\n"
-        f"Mesh[2, 2], {source.n_points:,} points"
+        f"source sheet\npoint_data[{FIELD_KEY!r}]\n"
+        f"{mesh_label(source)}, {source.n_points:,} points"
     )
     axes[1].set_title(
-        f"remesh({TARGET_VERTICES})\n"
+        f"remesh({TARGET_VERTICES},\ntransfer_point_data=[{FIELD_KEY!r}])\n"
         f"{uniform.n_points:,} points, field RMSE {uniform_rmse:.4f}"
     )
     axes[2].set_title(
-        f"remesh({TARGET_VERTICES}, resolution_field=...)\n"
+        f"remesh({TARGET_VERTICES}, transfer_point_data=[...],\n"
+        f"resolution_field={RESOLUTION_KEY!r})\n"
         f"{adaptive.n_points:,} points, field RMSE {adaptive_rmse:.4f}"
     )
 

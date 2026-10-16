@@ -37,7 +37,10 @@ def _smoothed_curvature(mesh):
 
     # The airplane has open boundary edges, where curvature is NaN.
     values = torch.nan_to_num(mesh.gaussian_curvature_vertices, nan=0.0)
-    values = values.sign() * values.abs().log1p()
+    # Scale by the median magnitude first: the airplane's units make every |K| far
+    # below one, where log1p is linear and the log scale would do nothing.
+    scale = values.abs().median().clamp(min=torch.finfo(values.dtype).tiny)
+    values = values.sign() * (values.abs() / scale).log1p()
     # Iterated neighbor averaging suppresses per-vertex noise of the estimate.
     source, target = mesh.get_point_to_points_adjacency().expand_to_pairs()
     for _ in range(50):
@@ -57,7 +60,7 @@ def main():
     mesh = mesh.subdivide(levels=2, filter="loop")
     values = _smoothed_curvature(mesh).numpy()
     # Symmetric limits keep zero white. The 80th percentile keeps the sharp edges
-    # from compressing the bulk variation into one color.
+    # from compressing the bulk variation, and both signs, into one color.
     limit = float(np.percentile(np.abs(values), 80))
     norm = TwoSlopeNorm(vmin=-limit, vcenter=0.0, vmax=limit)
 
@@ -87,8 +90,16 @@ def main():
     plotter.camera.zoom(1.25)
     image = plotter.screenshot(return_img=True)
     plotter.close()
+    # Crop the white border, so that the title sits close to the airplane.
+    ink = (image[..., :3] < 250).any(axis=2)
+    rows, cols = np.flatnonzero(ink.any(axis=1)), np.flatnonzero(ink.any(axis=0))
+    image = image[
+        max(rows[0] - 20, 0) : rows[-1] + 20, max(cols[0] - 20, 0) : cols[-1] + 20
+    ]
 
-    figure, axis = plt.subplots(figsize=(11.0, 7.8))
+    figure, axis = plt.subplots(
+        figsize=(11.0, 11.0 * image.shape[0] / image.shape[1] + 1.4)
+    )
     axis.imshow(image)
     axis.set_title(f"gaussian_curvature_vertices\n{mesh_label(mesh)}")
     axis.set_axis_off()
@@ -100,10 +111,12 @@ def main():
         pad=0.01,
         shrink=0.55,
     )
-    colorbar.set_label("Gaussian curvature, sign(x) log(1 + |x|), smoothed")
+    colorbar.set_label(
+        "Gaussian curvature, sign(K) log(1 + |K| / median |K|), smoothed"
+    )
     ticks = np.linspace(-limit, limit, 5)
-    colorbar.set_ticks(ticks, labels=[f"{tick:.3f}" for tick in ticks])
-    save(figure, OUTPUT, tight=True)
+    colorbar.set_ticks(ticks, labels=[f"{tick:.2f}" for tick in ticks])
+    save(figure, OUTPUT, tight=True, full_color=True)
 
 
 if __name__ == "__main__":

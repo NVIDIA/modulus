@@ -134,8 +134,8 @@ def main():
 
     figure.suptitle(
         r"Gradient of $f(x, y) = \sin 2x \, \cos y + y^2$ on a jittered grid",
-        fontsize=13,
-        y=1.02,
+        fontsize=16,
+        y=1.04,
     )
     figure.savefig(OUTPUT, dpi=160, facecolor="white", bbox_inches="tight")
     # Drop the unused alpha channel to keep the file small.
