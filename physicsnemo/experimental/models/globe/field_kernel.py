@@ -113,13 +113,6 @@ def _device_chunk_budget_bytes(device: torch.device) -> int:
     return _device_total_memory_bytes(device) * _CHUNK_MEMORY_BUDGET_PERCENT // 100
 
 
-def _take(x: torch.Tensor, idx: tuple[int, ...], dim: int) -> torch.Tensor:
-    r"""``x.index_select(dim, idx)`` from int views: no host-to-device index upload."""
-    if not idx:
-        return x.narrow(dim, 0, 0)
-    return torch.stack([x.select(dim, i) for i in idx], dim=dim)
-
-
 def _sort_key(key: NestedKey) -> str:
     r"""Sort key that fixes where each named feature goes in a packed tensor.
 
@@ -502,10 +495,15 @@ class Kernel(Module):
         self._n_global_vectors = self.global_schema.count(1)
         ### Pairs of input vectors, in the vector order of ``_evaluate_packed``.
         n_vectors_in = 1 + self._n_source_vectors + self._n_global_vectors
+        ### A buffer, so that gathering the pairs needs no host-to-device
+        ### index upload, and ``index_select`` rather than per-pair
+        ### ``select`` views, whose backward allocates a full-size zero
+        ### tensor per pair.
         pairs = list(itertools.combinations(range(n_vectors_in), 2))
-        self._keypairs: tuple[tuple[int, ...], tuple[int, ...]] = (
-            tuple(i for i, _ in pairs),
-            tuple(j for _, j in pairs),
+        self.register_buffer(
+            "_keypair_index",
+            torch.tensor(pairs, dtype=torch.long).reshape(-1, 2).T.contiguous(),
+            persistent=False,
         )
         ### The spherical-harmonic feature groups were once keyed
         ### ``pairwise_spherical_harmonics_{i}`` and sorted as strings.
@@ -812,7 +810,7 @@ class Kernel(Module):
 
         interaction_dims = r.shape[:-1]
         n_global_vectors = global_vectors.shape[-2]
-        k1, k2 = self._keypairs
+        k1, k2 = self._keypair_index
 
         ### Vector magnitude, direction, and log-magnitude features
         with record_function("kernel::feature_engineering"):
@@ -837,7 +835,7 @@ class Kernel(Module):
 
             ### Pairwise spherical harmonic features from vector pairs
             cos_theta_pairs = torch.sum(
-                _take(vectors_hat, k1, dim=-2) * _take(vectors_hat, k2, dim=-2),
+                vectors_hat.index_select(-2, k1) * vectors_hat.index_select(-2, k2),
                 dim=-1,
             )  # (*interaction_dims, n_keypairs)
 
@@ -846,7 +844,7 @@ class Kernel(Module):
                 x=cos_theta_pairs, n=self.n_spherical_harmonics + 1
             )[1:]
             pair_log_mag = smooth_log(
-                _take(vectors_mag, k1, dim=-1) * _take(vectors_mag, k2, dim=-1)
+                vectors_mag.index_select(-1, k1) * vectors_mag.index_select(-1, k2)
             )
 
             cat_input_tensors = torch.cat(
