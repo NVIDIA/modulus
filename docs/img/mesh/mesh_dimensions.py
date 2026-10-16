@@ -50,8 +50,8 @@ OUTPUT = Path(__file__).parent / "mesh_dimensions.png"
 TINTS = {0: "#e3eef7", 1: "#fbeadb", 2: "#eeeff1"}
 TINT_LABELS = {
     0: "codimension 0\nthe cells fill the space",
-    1: "codimension 1\none normal direction (arrows)",
-    2: "codimension 2 or more\nmany normal directions (disk)",
+    1: "codimension 1\none normal (arrows)",
+    2: "codimension 2 or more\nmany normals (disk)",
 }
 NOUNS = {0: "points", 1: "edges", 2: "triangles", 3: "tetrahedra"}
 
@@ -310,14 +310,15 @@ def main():
             Patch(facecolor=TINTS[c], edgecolor="none", label=TINT_LABELS[c])
             for c in TINTS
         ],
-        loc="center",
+        loc="center left",
         ncol=1,
         frameon=False,
         fontsize=12.5,
         labelspacing=1.4,
-        handlelength=2.2,
+        handlelength=1.8,
+        borderaxespad=0.0,
         handleheight=1.8,
-        bbox_to_anchor=((box.x0 + box.x1) / 2 - 0.015, (box.y0 + box.y1) / 2),
+        bbox_to_anchor=(box.x0 + 0.004, (box.y0 + box.y1) / 2),
     )
     save(figure, OUTPUT)
 
