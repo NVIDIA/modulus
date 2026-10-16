@@ -10,17 +10,20 @@ point positions and the same connectivity.
 :bdg-success:`GPU` :bdg-info:`autograd` :bdg-secondary:`any dimension` :bdg-warning:`shrinks closed surfaces`
 
 .. figure:: ../../img/mesh/smoothing_shrinkage.png
-   :alt: Left: a lumpy sphere after 0, 50, and 500 smoothing iterations,
-         growing smoother and smaller. Right: a line plot of the mean radius
-         against the number of iterations for three icosahedral spheres of
-         increasing resolution, with the coarsest one falling fastest.
+   :alt: Three renderings of the same lumpy closed surface after 0, 50, and 500
+         smoothing iterations, drawn at one scale. The mean radius falls from
+         0.71 to 0.68 to 0.45, and the last surface is visibly smaller. On the
+         right, a plot of mean radius against iterations for spheres of 80,
+         320, and 1280 triangles. All start at 1. By 500 iterations the
+         80-triangle sphere has collapsed to nearly zero, the 320-triangle
+         sphere is at 0.11, and the 1280-triangle sphere is at 0.57.
    :align: center
    :width: 100%
 
-   Left: :func:`smooth_laplacian` on a lumpy sphere at 0, 50, and 500
-   iterations with ``relaxation_factor=0.1``. Right: the mean radius of
-   icosahedral unit spheres against the number of iterations. Coarser meshes
-   shrink faster.
+   Laplacian smoothing moves each vertex toward its neighbors, so many
+   iterations shrink a closed surface. With ``relaxation_factor=0.1``, 500
+   iterations take a unit ``sphere_icosahedral`` of 1280 triangles to a mean
+   radius of 0.57. Coarser meshes shrink faster.
 
 .. rubric:: Most Used
 
@@ -80,9 +83,8 @@ Other meshes use uniform weights.
 
 .. warning::
 
-   Many iterations shrink a closed surface. For example, 500 iterations with
-   ``relaxation_factor=0.1`` reduce the mean radius of
-   ``sphere_icosahedral.load(subdivisions=3)``, a unit sphere, to about 0.57.
+   Many iterations shrink a closed surface, as the figure shows. Keep
+   ``n_iter`` small, or rescale the result, when the volume matters.
 
 Choosing Parameters
 -------------------

@@ -10,19 +10,23 @@ for each point or cell, and the same values are cached ``Mesh`` properties.
 :bdg-success:`GPU` :bdg-info:`autograd` :bdg-secondary:`any dimension` :bdg-warning:`mean curvature needs codimension 1`
 
 .. figure:: ../../img/mesh/curvature_torus.png
-   :alt: Three panels. Left: a torus colored by Gaussian curvature, red on the
-         outer rim, blue on the inner rim, and white on the top and bottom
-         circles. Middle: the same torus colored by mean curvature. Right: five
-         triangles around one vertex of an icosahedron laid flat, with a
-         60-degree gap labeled as the angle defect.
+   :alt: Three panels. Left, a torus colored blue on the inner rim, white on
+         the top and bottom, and red on the outer rim, labeled
+         gaussian_curvature_vertices, K from -4.39 to 2.12. Middle, the same
+         torus colored red everywhere, labeled mean_curvature_vertices, H from
+         0.66 to 1.80. Right, five triangles laid flat around a vertex, with a
+         shaded gap of sixty degrees labeled 2 pi minus the sum of the angles
+         equals pi over three.
    :align: center
    :width: 100%
 
-   Gaussian curvature :math:`K` and mean curvature :math:`H` on a torus, each
-   on a color scale centered at zero. :math:`K` changes sign between the outer
-   rim, which curves like a sphere, and the inner rim, which curves like a
-   saddle. Right: the angle defect at one vertex of an icosahedron, the gap
-   left when its triangles are laid flat.
+   Gaussian and mean curvature on a torus, and the angle defect behind the
+   Gaussian curvature. The Gaussian curvature changes sign. It is positive on
+   the outer rim and negative on the inner rim. It is zero on the top and
+   bottom circles. The mean curvature is positive everywhere, because every
+   part of this torus bulges toward its outward normals. At a vertex of an
+   icosahedron, five angles of 60 degrees sum to 300 degrees, which leaves a
+   gap of :math:`\pi/3`.
 
 .. rubric:: Most Used
 

@@ -10,17 +10,21 @@ tensor with one value for each cell, point, or edge.
 :bdg-success:`GPU` :bdg-info:`autograd` :bdg-secondary:`any dimension` :bdg-warning:`cell normals need codimension 1`
 
 .. figure:: ../../img/mesh/dec_primal_dual.png
-   :alt: Two panels of one small jittered triangle patch. Left: an orange
-         vertex with arrows to its blue neighbor vertices. Right: dots at the
-         circumcenters of the triangles around the vertex, which bound its
-         shaded dual cell. One primal edge is crossed by its dual edge.
+   :alt: Two panels on the same jittered triangle mesh. Left, labeled
+         method="lsq", a vermillion vertex with blue arrows to its six blue
+         neighbors. Right, labeled method="dec", black dots mark the triangle
+         circumcenters. A shaded hexagon around the vertex joins the six
+         nearest circumcenters. A blue primal edge runs from the vertex to one
+         neighbor, and a short green dual edge crosses it, labeled w_ij = 0.50.
    :align: center
    :width: 100%
 
-   The circumcenters of the cells around a vertex bound its dual cell, whose
-   area :func:`compute_dual_volumes_0` returns. Each primal edge has a dual
-   edge between two circumcenters, and :func:`compute_cotan_weights_fem`
-   gives its weight.
+   The circumcentric dual mesh. The dual cell of a vertex joins the
+   circumcenters of its triangles, and its area is the dual volume from
+   :func:`compute_dual_volumes_0`. Each primal edge has a dual edge that joins
+   the circumcenters of its two triangles, and the cotangent weight from
+   :func:`compute_cotan_weights_fem` is the ratio of their lengths. Left, for
+   comparison, the neighbors that least squares (LSQ) uses.
 
 .. rubric:: Most Used
 

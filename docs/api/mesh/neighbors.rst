@@ -155,18 +155,20 @@ are the nodes, and its ``cells``, of shape ``(n_edges, 2)``, are the edges.
 The connectivity of any mesh is one call away as such a graph.
 
 .. figure:: ../../img/mesh/mesh_graphs.png
-   :alt: Three views of one gently curved triangle sheet. Left: the shaded
-         triangle mesh. Middle: its edges as blue tubes with blue nodes, over a
-         faint copy of the surface. Right: orange nodes at the triangle
-         centroids, joined by orange edges across each shared edge.
+   :alt: Three views of the same gently curved sheet of 50 triangles. Left, the
+         shaded triangle mesh. Center, its edge graph drawn as blue nodes and
+         edges on the vertices and edges of the sheet, labeled Mesh[1, 3] with
+         36 nodes and 85 edges. Right, its dual graph drawn as orange nodes at
+         the triangle centers, joined across shared edges, labeled Mesh[1, 3]
+         with 50 nodes and 65 edges.
    :align: center
    :width: 100%
 
-   A triangle mesh, its edge graph from ``to_edge_graph()``, and its dual
-   graph from ``to_dual_graph()``. The edge graph treats mesh vertices as
-   nodes and mesh edges as edges. The dual graph puts a node at each cell
-   centroid and joins each pair of cells that share a facet. Both are
-   ``Mesh[1, 3]`` objects, so every ``Mesh`` method works on them.
+   The edge graph and the dual graph of a triangle mesh. The edge graph,
+   ``mesh.to_edge_graph()``, keeps the mesh vertices as nodes and the mesh
+   edges as edges. The dual graph, ``mesh.to_dual_graph()``, puts a node at
+   each cell centroid and links two cells that share a facet. Both are
+   ``Mesh[1, 3]``, so every ``Mesh`` method works on them.
 
 For mesh-based graph work, a ``Mesh[1, n]`` holds what a deep learning graph
 library usually provides:
@@ -231,16 +233,21 @@ from its geometry, and runs one step of mean aggregation on plain tensors:
     print(batch.n_points, batch.n_cells)  # 324 960
 
 .. figure:: ../../img/mesh/graph_message_passing.png
-   :alt: Four panels of one planar edge graph. First: one orange target node
-         with arrows from its blue neighbors. Second: edges colored by length.
-         Third: nodes colored by a noisy field. Fourth: the same field after
-         three steps of mean aggregation, visibly smoother.
+   :alt: Four panels on one small planar graph of 36 nodes and 85 edges. Top
+         left, arrows from six neighboring nodes point into one orange node,
+         labeled 170 directed pairs from expand_to_pairs. Top right, the edges
+         colored by length from dark purple to yellow. Bottom left, nodes
+         colored by a noisy field that runs from blue on the left to red on the
+         right. Bottom right, the same nodes after three steps of averaging
+         over neighbors with index_add_, where the noise is gone and a smooth
+         blue to red ramp remains.
    :align: center
-   :width: 100%
+   :width: 70%
 
-   Message passing on a ``Mesh[1, 2]``. ``expand_to_pairs()`` gives each
-   undirected edge in both directions, ``cell_areas`` gives the edge lengths,
-   and three steps of mean aggregation with ``index_add_`` smooth a node field.
+   Message passing on a mesh graph needs only tensors. ``expand_to_pairs()``
+   gives two index pairs for each edge. ``cell_areas`` of a ``Mesh[1, n]``
+   gives the edge lengths. Three steps of mean aggregation with ``index_add_``
+   remove the noise from a node field and keep the ramp.
 
 .. tip::
 

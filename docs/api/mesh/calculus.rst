@@ -20,8 +20,8 @@ as a tensor, and returns a tensor.
    :align: center
    :width: 100%
 
-   Error of the LSQ and DEC vertex gradients of a smooth field on a jittered
-   grid. Both methods converge at first order on this grid, and the error at
+   Error of the least squares (LSQ) and discrete exterior calculus (DEC)
+   vertex gradients of a smooth field on a jittered grid. Both methods converge at first order on this grid, and the error at
    boundary vertices stays five to eight times larger.
 
 .. rubric:: Most Used
@@ -181,16 +181,35 @@ Two methods compute the operators:
       **Watch out:** DEC has no curl and no cell derivatives.
 
 .. figure:: ../../img/mesh/dec_primal_dual.png
-   :alt: Two panels of one small jittered triangle patch. Left: an orange
-         vertex with arrows to its blue neighbor vertices. Right: dots at the
-         circumcenters of the triangles around the vertex, which bound its
-         shaded dual cell. One primal edge is crossed by its dual edge.
+   :alt: Two panels on the same jittered triangle mesh. Left, labeled
+         method="lsq", a vermillion vertex with blue arrows to its six blue
+         neighbors. Right, labeled method="dec", black dots mark the triangle
+         circumcenters. A shaded hexagon around the vertex joins the six
+         nearest circumcenters. A blue primal edge runs from the vertex to one
+         neighbor, and a short green dual edge crosses it, labeled w_ij = 0.50.
    :align: center
    :width: 100%
 
-   How the two methods see one vertex. LSQ fits a linear function to the
-   values at the neighbors. DEC works on the circumcentric dual cell of the
-   vertex and on the dual edge of each primal edge.
+   The stencils behind the two methods. LSQ fits a linear function to the
+   values at a vertex's neighbors. DEC works on the circumcentric dual mesh.
+   The dual cell of a vertex joins the circumcenters of its triangles, and its
+   area is the dual volume. Each primal edge has a dual edge that joins the
+   circumcenters of its two triangles, and the cotangent weight is the ratio of
+   their lengths.
+
+Use the following guidelines to choose a function:
+
+- Use :meth:`~physicsnemo.mesh.mesh.Mesh.compute_point_derivatives` or
+  :meth:`~physicsnemo.mesh.mesh.Mesh.compute_cell_derivatives` to add
+  gradients of named fields to the mesh data.
+- Use ``mesh.gradient``, ``mesh.divergence``, ``mesh.curl``, and
+  ``mesh.laplacian``, or the ``compute_*`` functions, for a tensor result
+  without changing the mesh.
+- For the Laplacian, use ``mesh.laplacian`` or
+  :func:`compute_laplacian_points_dec`.
+- Expect larger errors at boundary points, where the neighborhood is
+  one-sided, as the error figure shows. The User Guide compares the two
+  methods in detail.
 
 .. warning::
 
@@ -254,18 +273,6 @@ Two methods compute the operators:
         - yes
         - yes
         - yes
-
-Use the following guidelines to choose a function:
-
-- Use :meth:`~physicsnemo.mesh.mesh.Mesh.compute_point_derivatives` or
-  :meth:`~physicsnemo.mesh.mesh.Mesh.compute_cell_derivatives` to add
-  gradients of named fields to the mesh data.
-- Use the ``compute_*`` functions for a tensor result without changing the
-  mesh.
-- For the Laplacian, use :func:`compute_laplacian_points_dec`.
-- Expect larger errors at boundary points, where the neighborhood is
-  one-sided, as the error figure shows. The User Guide compares the two
-  methods in detail.
 
 Effective Measures and Integration
 ----------------------------------

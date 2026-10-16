@@ -10,14 +10,18 @@ Matplotlib ``Axes`` or a PyVista ``Plotter`` that you can keep drawing on.
 :bdg-secondary:`Matplotlib` :bdg-secondary:`PyVista` :bdg-warning:`at most three spatial dimensions`
 
 .. figure:: ../../img/mesh/draw_gallery.png
-   :alt: A row of meshes drawn with mesh.draw(): a planar mesh and a curve
-         drawn with Matplotlib, and a colored surface and a volume drawn with
-         PyVista.
+   :alt: Four panels. Top left, a triangulated ring with each triangle colored
+         by a cell field named pressure. Top right, the same ring colored by a
+         point field named temperature. Bottom left, a shaded lumpy sphere
+         drawn by PyVista and colored by height. Bottom right, the ring colored
+         by the magnitude of a two-component velocity field. Each panel has a
+         viridis colorbar and a title with the draw call.
    :align: center
-   :width: 100%
+   :width: 80%
 
-   Meshes of several dimensions drawn with ``mesh.draw()``, each colored by a
-   point or cell field.
+   ``mesh.draw()`` picks Matplotlib for meshes in 2D space and PyVista in 3D
+   space. It colors cells or points by a stored field, and it colors a vector
+   field by its norm.
 
 .. rubric:: Most Used
 

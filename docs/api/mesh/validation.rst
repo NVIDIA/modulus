@@ -10,16 +10,28 @@ quality value for each cell, and summary statistics.
 :bdg-success:`GPU` :bdg-secondary:`any dimension`
 
 .. figure:: ../../img/mesh/mesh_defects.png
-   :alt: A grid of small mesh panels, one column for each defect: duplicate
-         points, a degenerate cell, a reversed cell, and a hole. The top row
-         shows each defect highlighted in orange, the middle row what the
-         validation check reports, and the bottom row the mesh after the
-         repair.
+   :alt: A grid of ten panels in two rows, each a small square triangle mesh.
+         Top row, from left: blue rings on five points where the right half of
+         the mesh has its own copies, labeled n_duplicate_vertices: 5. A
+         vermillion line through three collinear points, labeled
+         n_degenerate_cells: 1. Three vermillion dots outside the mesh, labeled
+         n_isolated_vertices: 3. Circular arrows in every cell, one of them
+         vermillion and reversed, labeled 1 normal points down. Vermillion
+         outlines on the outer edge and on a square hole, labeled 20 boundary
+         edges. The bottom row shows the repaired meshes. clean_mesh, n_points
+         30 to 25. remove_degenerate_cells, n_cells 33 to 32.
+         remove_isolated_points, n_points 28 to 25. fix_orientation,
+         n_cells_flipped: 1. fill_holes, one hole filled in light blue and the
+         outer loop skipped.
    :align: center
    :width: 100%
 
-   Common mesh defects, the check that finds each one, and the function in
-   :doc:`repair` that fixes it.
+   Five defects, each with the call that finds it (top) and the call that
+   repairs it (bottom). :func:`validate` finds duplicate points and zero-area
+   cells. :func:`compute_mesh_statistics` counts unused points. The normals in
+   ``cell_normals`` show a reversed cell, and ``get_boundary_mesh`` shows the
+   loops around holes. ``fill_holes`` fills the hole and skips the outer loop,
+   which has more edges than ``max_hole_edges``.
 
 .. rubric:: Most Used
 

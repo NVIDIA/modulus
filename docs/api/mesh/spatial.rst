@@ -10,20 +10,21 @@ bounding volume hierarchy (BVH), a cluster tree, and a signed distance field. Un
 :bdg-success:`GPU` :bdg-secondary:`any dimension` :bdg-secondary:`Warp signed distance` :bdg-warning:`signed distance needs triangles in 3D`
 
 .. figure:: ../../img/mesh/spatial_bvh_sdf.png
-   :alt: Two panels. Left: a triangulated ring under nested gray boxes that
-         get fainter with depth, an orange star for a query point, and the
-         few blue triangles whose boxes contain it. Right: a slice through a
-         closed surface, red outside and blue inside, with the surface as an
-         orange contour. Arrows run from query points to their closest surface
-         points.
+   :alt: Two panels. Left, a ring-shaped triangle mesh overlaid with nested
+         gray rectangles. The rectangles that contain an orange star are blue,
+         and the two triangles under the star are light blue. Its title reads
+         191 nodes over 96 cells, 2 candidates. Right, a blue-to-red filled
+         contour plot of signed distance around a lumpy closed curve drawn in
+         vermillion, with black arrows from five query points to the curve.
    :align: center
    :width: 100%
 
-   Left: a :class:`BVH` over an annulus, with its boxes at three depths and
-   the candidate cells that ``find_candidate_cells`` returns for one query
-   point. Right: :func:`signed_distance_field` on a slice through a closed
-   surface, negative inside and positive outside, with arrows to the closest
-   surface points.
+   Left, a BVH over an annulus, with its boxes at depths one, three, and five.
+   A point query descends only into the boxes that hold the point (blue) and
+   returns the cells of the leaves it reaches as candidates. Right, the signed
+   distance to a closed surface on the plane z = 0. It is negative inside and
+   positive outside, and the arrows run from query points to the closest points
+   on the surface that :func:`signed_distance_field` returns.
 
 .. rubric:: Most Used
 
