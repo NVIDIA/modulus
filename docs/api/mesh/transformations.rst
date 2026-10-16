@@ -318,7 +318,7 @@ remains fixed. The reproducible figure source is
 The arrows show the normalized negative adjoint, which is the gradient-descent
 update direction. Each panel applies that field to the sheet geometry for
 visibility. The raw panel is corrugated by vertex-scale oscillations. The
-Sobolev panel gives the same broad upward pull with a smooth surface. Orange
+Sobolev panel gives the same broad upward pull with a smooth surface. Green
 points mark the fixed boundary, and both panels use one shared scale.
 
 .. figure:: ../../img/mesh/sobolev_adjoint_field_3d.png
@@ -410,9 +410,9 @@ used as supplied and can be signed or greater than one.
 .. rubric:: Visualization
 
 The panels compare the original sphere with the single-control and
-multiple-control examples above. Green markers identify the displaced handle
-locations, while arrows and labels show the prescribed displacement directions
-and magnitudes.
+multiple-control examples above. Orange markers identify the displaced handle
+locations. Arrows show the prescribed displacement directions, and the panel
+titles give their magnitudes.
 
 .. figure:: ../../img/mesh/sphere_morphing.png
    :alt: Original sphere and single-control and multiple-control sphere morphing
@@ -432,8 +432,8 @@ morphing, every control generally influences every point. Fixed controls are
 therefore useful as anchors.
 
 The standard affine polynomial tail reproduces affine displacement fields. The
-controls must affinely span the coordinate space, and the augmented system must
-be nonsingular. This formulation follows the thin-plate-spline interpolant
+controls must affinely span the coordinate space. In 3D, for example, they must
+not all lie in one plane. The augmented system must also be nonsingular. This formulation follows the thin-plate-spline interpolant
 described by Bookstein [1].
 
 [1] F. L. Bookstein, "Principal warps: thin-plate splines and the decomposition
@@ -479,7 +479,7 @@ edge:
     )
 
 The corner controls remain fixed while the upper edge and interior deform
-smoothly. The hollow green marker in the output panel shows the handle's source
+smoothly. The hollow orange marker in the output panel shows the handle's source
 position.
 
 .. figure:: ../../img/mesh/square_rbf_morph.png
@@ -531,8 +531,8 @@ Both evaluation backends use PyTorch for the dense coefficient solve. The Warp
 backend fuses evaluation over the mesh points without materializing its full
 kernel matrix between points and controls.
 
-Orange controls are fixed anchors. Green controls mark moved handles, and the
-arrows show their displacement directions. The labels give the prescribed
+Green controls are fixed anchors. Orange controls mark moved handles, and the
+arrows show their displacement directions. The panel titles give the prescribed
 magnitudes. With zero smoothing, the deformed surfaces interpolate all six
 control displacements up to solver precision.
 

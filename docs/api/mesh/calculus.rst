@@ -21,8 +21,9 @@ as a tensor, and returns a tensor.
    :width: 100%
 
    Error of the least squares (LSQ) and discrete exterior calculus (DEC)
-   vertex gradients of a smooth field on a jittered grid. Both methods converge at first order on this grid, and the error at
-   boundary vertices stays five to eight times larger.
+   vertex gradients of a smooth field on a jittered grid. Both methods
+   converge at first order on this grid, and the error at boundary vertices
+   stays five to eight times larger.
 
 .. rubric:: Most Used
 

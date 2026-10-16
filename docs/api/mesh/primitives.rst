@@ -15,14 +15,15 @@ the exception, with one function for each kind of text mesh.
 .. figure:: ../../img/mesh/primitives_gallery.png
    :alt: A grid of five columns and two rows, one column for each family.
          Curves: a helix and a spiral. Planar: an annulus and an L-shape.
-         Surfaces: a torus and a Möbius strip. Volumes: a cube and a single
-         tetrahedron. Procedural: a lumpy sphere and a lumpy ball cut open.
+         Surfaces: a torus and a Möbius strip. Volumes: a cube and a ball,
+         each cut open to show its tetrahedra. Procedural: a lumpy sphere and
+         a jittered planar grid.
    :align: center
    :width: 100%
 
    Two primitives from each family, labeled with the module path and with the
-   manifold and spatial dimensions. Each tetrahedron of the volume meshes is
-   shrunk so that it shows.
+   manifold and spatial dimensions. The volume meshes are cut open, and their
+   tetrahedra are shrunk so that they show.
 
 The most-used primitives are the following:
 
