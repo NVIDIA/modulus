@@ -1307,6 +1307,21 @@ class TestLaplacianManifoldDimensions:
         assert laplacian.shape == scalar_values.shape
         assert torch.isfinite(laplacian).all()
 
+    def test_laplacian_millimetre_tet_float32(self):
+        """Lap(|x|^2) is scale-free, so a 1-mm float32 tet in metres gives the
+        unit tet's values: dual volumes h^3/24 and origin-edge weights h/6
+        give 12 at the origin and -4 at the other vertices."""
+        from physicsnemo.mesh.calculus.laplacian import compute_laplacian_points_dec
+
+        points = 1e-3 * torch.cat([torch.zeros(1, 3), torch.eye(3)])
+        mesh = Mesh(points=points, cells=torch.tensor([[0, 1, 2, 3]]))
+
+        laplacian = compute_laplacian_points_dec(mesh, (points**2).sum(dim=-1))
+
+        torch.testing.assert_close(
+            laplacian, torch.tensor([12.0, -4.0, -4.0, -4.0]), rtol=1e-5, atol=1e-5
+        )
+
     def test_laplacian_flat_mesh_quadratic(self):
         r"""Verify \Delta(x^2+y^2) = 4 on flat 2D mesh.
 
@@ -2710,3 +2725,81 @@ class TestMeshCalculusConvenienceMethods:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestDECGradientIsExactForLinearFields:
+    """The DEC gradient uses the edges of every cell, in any manifold dimension."""
+
+    def test_barycentric_gradients_of_segments(self):
+        from physicsnemo.mesh.geometry.interpolation import (
+            compute_barycentric_gradients,
+        )
+
+        points = torch.tensor([[0.0, 0.0, 0.0], [2.0, 1.0, 2.0], [2.0, 4.0, 6.0]])
+        mesh = Mesh(points=points, cells=torch.tensor([[0, 1], [2, 1]]))
+        gradients = compute_barycentric_gradients(mesh)  # (n_cells, 2, 3)
+
+        edges = points[mesh.cells[:, 1]] - points[mesh.cells[:, 0]]
+        # Each phi rises from 0 to 1 along its edge, and the two sum to one
+        torch.testing.assert_close((gradients[:, 1] * edges).sum(-1), torch.ones(2))
+        torch.testing.assert_close(gradients.sum(dim=1), torch.zeros(2, 3))
+
+    def test_straight_polyline(self):
+        from physicsnemo.mesh.calculus.gradient import compute_gradient_points_dec
+
+        x = torch.tensor([0.0, 0.3, 1.0, 1.2, 2.0], dtype=torch.float64)
+        mesh = Mesh(
+            points=torch.stack([x, torch.zeros_like(x)], dim=1),
+            cells=torch.tensor([[0, 1], [1, 2], [2, 3], [3, 4]]),
+        )
+        gradient = compute_gradient_points_dec(mesh, 2.0 * x)
+        expected = torch.tensor([2.0, 0.0], dtype=torch.float64).expand(5, 2)
+        torch.testing.assert_close(gradient, expected)
+
+    @pytest.mark.parametrize("scale", [1e-6, 1.0, 1e6])
+    def test_float32_polyline_at_any_scale(self, scale):
+        from physicsnemo.mesh.calculus.gradient import compute_gradient_points_dec
+
+        x = torch.tensor([0.0, 0.3, 1.0, 1.2, 2.0]) * scale
+        mesh = Mesh(
+            points=torch.stack([x, torch.zeros_like(x)], dim=1),
+            cells=torch.tensor([[0, 1], [1, 2], [2, 3], [3, 4]]),
+        )
+        gradient = compute_gradient_points_dec(mesh, x)
+        torch.testing.assert_close(gradient, torch.tensor([1.0, 0.0]).expand(5, 2))
+
+    def test_barycentric_gradients_of_zero_length_segment_are_finite(self):
+        from physicsnemo.mesh.geometry.interpolation import (
+            compute_barycentric_gradients,
+        )
+
+        mesh = Mesh(points=torch.ones(2, 2), cells=torch.tensor([[0, 1]]))
+        assert torch.isfinite(compute_barycentric_gradients(mesh)).all()
+
+    def test_barycentric_gradients_of_millimetre_triangle_in_3d(self):
+        """grad phi = n x e / (2A) has units 1/length: a 1-mm float32 triangle
+        in metres gets the unit triangle's gradients divided by 1e-3, and a
+        degenerate triangle gets zero gradients."""
+        from physicsnemo.mesh.geometry.interpolation import (
+            compute_barycentric_gradients,
+        )
+
+        points = 1e-3 * torch.tensor(
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+        )
+        mesh = Mesh(points=points, cells=torch.tensor([[0, 1, 2], [0, 1, 1]]))
+        gradients = compute_barycentric_gradients(mesh)
+
+        expected = torch.tensor([[-1.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+        torch.testing.assert_close(gradients[0], expected / 1e-3)
+        torch.testing.assert_close(gradients[1], torch.zeros(3, 3))
+
+    def test_tetrahedra(self):
+        from physicsnemo.mesh.calculus.gradient import compute_gradient_points_dec
+        from physicsnemo.mesh.primitives.volumes import cube_volume
+
+        mesh = cube_volume.load(subdivisions=3)
+        mesh = Mesh(points=mesh.points.double(), cells=mesh.cells)
+        slope = torch.tensor([2.0, 3.0, -1.0], dtype=torch.float64)
+        gradient = compute_gradient_points_dec(mesh, mesh.points @ slope)
+        torch.testing.assert_close(gradient, slope.expand(mesh.n_points, 3))
