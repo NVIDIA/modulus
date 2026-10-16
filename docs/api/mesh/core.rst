@@ -208,8 +208,12 @@ Summary
    Mesh.point_data_to_cell_data
    Mesh.to
    Mesh.clone
-   Mesh.save
    Mesh.load
+
+``Mesh.save`` writes a mesh to disk as memory-mapped tensors, and
+:meth:`Mesh.load` reads it back. ``DomainMesh.save`` and
+:meth:`DomainMesh.load <physicsnemo.mesh.domain_mesh.DomainMesh.load>` do the
+same for a domain.
 
 .. rubric:: Dimensions and Geometry
 
@@ -348,8 +352,6 @@ Construction and Data
 .. automethod:: Mesh.to
 
 .. automethod:: Mesh.clone
-
-.. automethod:: Mesh.save
 
 .. automethod:: Mesh.load
 
@@ -508,5 +510,3 @@ domain from a mesh and its boundary:
    :show-inheritance:
 
 .. automethod:: DomainMesh.clone
-
-.. automethod:: DomainMesh.save

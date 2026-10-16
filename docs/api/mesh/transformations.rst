@@ -827,6 +827,8 @@ mesh one manifold dimension higher:
 Summary
 -------
 
+.. currentmodule:: None
+
 .. rubric:: Geometric Transformations
 
 .. autosummary::
