@@ -539,9 +539,12 @@ class GLOBE(Module):
             ### of every BC's tree: the B destination plans of that source,
             ### already joined (B traversals instead of B^2).
             n_targets = sum(mesh.n_cells for mesh in meshes)
-            forest, roots = ClusterTree.merge(
-                [cluster_trees_built[bc] for bc in bc_types]
-            )
+            if len(bc_types) == 1:  # the tree itself: self-interaction
+                forest, roots = cluster_trees_built[bc_types[0]], None
+            else:
+                forest, roots = ClusterTree.merge(
+                    [cluster_trees_built[bc] for bc in bc_types]
+                )
             comm_plans_built: dict[str, DualInteractionPlan] = {}
             comm_centroids_built: dict[str, torch.Tensor | None] = {}
             for src_bc, src_mesh in zip(bc_types, meshes):
