@@ -83,6 +83,19 @@ class Conv3dX0Predictor(Module):
         return self.net(x) / (1 + t_bc)
 
 
+class FeatureOutputs(DiffusionExtraOutputs):
+    r"""Model-specific fields selected explicitly by adversarial tests."""
+
+    spatial: Float[torch.Tensor, " B *dims"]
+
+
+def extract_teacher_features(
+    prediction: Float[torch.Tensor, " B *dims"], extras: FeatureOutputs
+) -> TensorDict:
+    r"""Select the teacher field used by the test discriminator."""
+    return TensorDict({"spatial": extras.spatial}, batch_size=extras.batch_size)
+
+
 class StructuredDiffusionModel(Module):
     r"""Linear model with optional destination times and learned loss weights."""
 
@@ -117,7 +130,8 @@ class StructuredDiffusionModel(Module):
             prediction = prediction + condition["shift"]
         if self.output == "tensor":
             return prediction
-        return prediction, DiffusionExtraOutputs(
+        return prediction, FeatureOutputs(
+            spatial=x,
             logvar=(
                 self.gain * current_t
                 if self.logvar is None
@@ -145,6 +159,18 @@ class GaussianDenoiser(Module):
         time = t.reshape(-1, *([1] * (x.ndim - 1)))  # (B, 1, ...)
         alpha, sigma = self.scheduler.alpha(time), self.scheduler.sigma(time)
         return self.gain * alpha * x / (alpha.square() + sigma.square())
+
+
+class FeatureDiscriminator(Module):
+    r"""Map named spatial features to one logit per sample."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.gain = torch.nn.Parameter(torch.tensor(0.4))
+
+    def forward(self, features: TensorDict) -> Float[torch.Tensor, " B logits"]:
+        r"""Keep a differentiable input path for generator-gradient checks."""
+        return self.gain * features["spatial"].flatten(1).mean(1, keepdim=True)
 
 
 class AttentionDiffusionModel(StructuredDiffusionModel):
