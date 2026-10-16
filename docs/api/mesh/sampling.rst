@@ -40,6 +40,9 @@ Both are also ``Mesh`` methods:
 Example
 -------
 
+The following example samples points on a sphere and interpolates a field on
+a square:
+
 .. code:: python
 
     import torch
@@ -63,6 +66,8 @@ Example
 
 Choosing a Function
 -------------------
+
+Use the following guidelines to choose a function:
 
 - :func:`find_containing_cells` returns the first cell that contains each
   query point (``-1`` if none) and its barycentric coordinates.
@@ -90,10 +95,13 @@ Summary
    compute_barycentric_coordinates
    match_points
 
-See Also
---------
+Related Topics
+--------------
 
-- :doc:`spatial` for the BVH that accelerates the search.
+Refer to the following pages for related topics:
+
+- :doc:`spatial` for the bounding volume hierarchy (BVH) that accelerates the
+  search.
 - Tutorial: `Neighbors, Adjacency, and Spatial Queries
   <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_6_neighbors_spatial.ipynb>`_
 

@@ -26,6 +26,9 @@ The single repairs are:
 Example
 -------
 
+The following example cleans and repairs a mesh made of two copies of one
+sphere:
+
 .. code:: python
 
     import torch
@@ -57,13 +60,15 @@ Example
 Choosing a Function
 -------------------
 
+Use the following guidelines to choose a function:
+
 - To remove duplicates after a merge or a file import, use ``mesh.clean()``.
   It merges points closer than ``tolerance`` (default ``1e-12``).
 - To repair a mesh from an outside source, use :func:`repair_mesh`. Its
   ``tolerance`` default is ``1e-6``. It does not remove duplicate cells, so
   run :func:`clean_mesh` first if the mesh can have them.
-- :func:`fill_holes` works only on meshes with a manifold dimension of 2, and
-  only closes loops of at most ``max_hole_edges`` edges (default 10).
+- :func:`fill_holes` works only on meshes with a manifold dimension of two,
+  and only closes loops of at most ``max_hole_edges`` edges (default 10).
 
 Summary
 -------
@@ -81,8 +86,10 @@ Summary
    remove_duplicate_cells
    remove_unused_points
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - :doc:`validation` to find problems before you repair them.
 - Tutorial: `Quality, Validation, and Repair

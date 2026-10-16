@@ -5,7 +5,8 @@ Neighbors and Adjacency
 
 ``physicsnemo.mesh.neighbors`` computes which points and cells of a mesh are
 connected to which others. These queries use the connectivity in
-``mesh.cells``, not distances. For queries by distance, see :doc:`spatial`.
+``mesh.cells``, not distances. For queries by distance, refer to
+:doc:`spatial`.
 
 There are four adjacency queries:
 
@@ -40,6 +41,8 @@ a PyTorch Geometric ``edge_index``.
 Example
 -------
 
+The following example runs the four queries on a small square mesh:
+
 .. code:: python
 
     from physicsnemo.mesh.primitives.planar import unit_square
@@ -70,6 +73,8 @@ result, and the cache stays valid through geometric transformations.
 Choosing a Function
 -------------------
 
+Use the following guidelines to choose a function:
+
 - For a graph of the mesh, use point to points. For a graph of the cells,
   such as the input of a graph neural network on cells, use cell to cells.
   ``mesh.to_edge_graph()`` and ``mesh.to_dual_graph()`` return the same
@@ -92,8 +97,10 @@ Summary
    get_cell_to_points_adjacency
    build_adjacency_from_pairs
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - :doc:`boundaries` for facets and boundaries.
 - Tutorial: `Neighbors, Adjacency, and Spatial Queries

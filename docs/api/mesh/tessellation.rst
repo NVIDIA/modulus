@@ -10,8 +10,8 @@ Tessellation
   stores. It uses a vectorized vertex-0 fan for convex polygons and `ear
   clipping <https://en.wikipedia.org/wiki/Polygon_triangulation>`_ for the
   rare non-convex ones.
-- :func:`fill_interior` fills a closed boundary mesh with quality simplices
-  (see `Exact-Boundary Interior Filling`_ below).
+- :func:`fill_interior` fills a closed boundary mesh with quality simplices.
+  Refer to `Exact-Boundary Interior Filling`_ below.
 
 Each polygon must be simple (no self-intersections), with no repeated
 consecutive vertices or zero-length edges. :func:`triangulate` does not detect
@@ -19,27 +19,28 @@ these cases, and the result is undefined. Ear clipping also assumes that a
 non-convex polygon is approximately planar.
 
 A *polygon soup* is a flat list of polygonal cells, each given only by its
-vertex ring, with no shared-edge connectivity between cells -- the form a
-surface mesh takes when read straight from a polygonal face list (e.g. a VTP or
-STL file). Equivalently, it is a surface mesh whose cells may be arbitrary
-polygons rather than triangles.
+vertex ring, with no shared-edge connectivity between cells. A surface mesh
+takes this form when it is read straight from a polygonal face list, for
+example, a VTP or STL file. Equivalently, it is a surface mesh whose cells can
+be arbitrary polygons rather than triangles.
 
 .. note::
 
    This is unrelated to the (now deprecated) ``Tessellation`` *geometry* class
    in PhysicsNeMo-Sym (``physicsnemo.sym.geometry.tessellation``), which
    represents a tessellated STL surface as a solid for sampling
-   surface/interior points and signed-distance values. The utilities here
+   surface and interior points and signed-distance values. The utilities here
    instead split the polygonal cells of an existing mesh into simplices.
 
 Handling non-convex polygons correctly matters for any unsigned-area-weighted
-quantity (wall-shear / viscous force integration, or total wetted area): the
-signed *vector* area of a vertex-0 fan telescopes to the polygon's total area regardless
-of convexity, but the sum of the *unsigned* triangle areas does not.
+quantity, such as wall-shear or viscous force integration, or total wetted
+area. The signed *vector* area of a vertex-0 fan telescopes to the polygon's
+total area regardless of convexity, but the sum of the *unsigned* triangle
+areas does not.
 
-Every ``k``-gon yields exactly ``k - 2`` triangles, so per-polygon data is
-broadcast to the output identically in both paths using the returned
-``parent_index``.
+Every ``k``-gon yields exactly ``k - 2`` triangles, so the returned
+``parent_index`` broadcasts per-polygon data to the output identically in both
+paths. The following example triangulates one quad:
 
 .. code:: python
 
@@ -74,11 +75,11 @@ boundary is an edge mesh forming one or more loops, in any order and
 orientation. The algorithm resolves holes, multiple components, and
 islands-inside-holes automatically through containment.
 
-The algorithm uses constrained Delaunay triangulation
-(Bowyer--Watson insertion with constrained-edge recovery, holes removed
-topologically by even-odd parity flood fill) followed by Ruppert's
+The algorithm uses constrained Delaunay triangulation followed by Ruppert's
 Delaunay refinement, so that every 2D output triangle satisfies the
-requested minimum angle and, optionally, a maximum cell size.
+requested minimum angle and, optionally, a maximum cell size. The
+triangulation uses Bowyer--Watson insertion with constrained-edge recovery,
+and an even-odd parity flood fill removes holes topologically.
 
 The minimum-angle guarantee has these conditions:
 
@@ -111,10 +112,13 @@ user-owned namespace.
 
 The contract is dimension-generic by design. The ``n = 3`` case (a
 watertight surface ``Mesh[2, 3]`` producing tetrahedra) currently raises
-:class:`NotImplementedError`: exact 3D boundary recovery is a
+:class:`NotImplementedError`. Exact 3D boundary recovery is a
 substantially harder problem that requires its own implementation effort.
 For implicit domains, or approximate volume meshing of a surface through
-its SDF, refer to :func:`physicsnemo.mesh.generate.mesh_implicit_domain`.
+its signed distance function (SDF), refer to
+:func:`physicsnemo.mesh.generate.mesh_implicit_domain`.
+
+The following example fills a unit square with triangles:
 
 .. code:: python
 
@@ -146,8 +150,10 @@ Summary
    fill_interior
    polygon_interior_point
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - :doc:`generate` for meshes of implicit domains, in any dimension.
 - :doc:`io` to load polygon meshes from files.

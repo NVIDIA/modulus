@@ -4,9 +4,10 @@ Fields and Schemas
 .. currentmodule:: physicsnemo.mesh.fields
 
 A mesh has named fields, such as ``"pressure"``, ``"velocity"``, and
-``"stress"``. Each field has a tensor rank: 0 for a scalar, 1 for a vector,
-2 for a rank-2 tensor, and so on. The rank sets the transformation law of the
-field, which is how its values change when you rotate or reflect the frame.
+``"stress"``. Each field has a tensor rank: zero for a scalar, one for a
+vector, two for a rank-2 tensor, and so on. The rank sets the transformation
+law of the field, which is how its values change when you rotate or reflect
+the frame.
 A scalar does not change. A vector :math:`v` becomes :math:`R v`, and a
 rank-2 tensor :math:`T` becomes :math:`R T R^\top`.
 
@@ -95,10 +96,10 @@ configuration files. It accepts these forms:
 
 - A field is a :class:`RankSpec`, or a mapping of its attributes:
   ``{"rank": 2, "symmetric": True}``. The key ``"rank"`` is required. A bare
-  integer raises ``TypeError``: write ``{"rank": 0}``, not ``0``.
+  integer raises ``TypeError``. Write ``{"rank": 0}``, not ``0``.
 - A group is a mapping of fields or of other groups, such as
   ``{"surface": {"shear": {"rank": 1}}}``. ``{}`` is an empty group.
-- A dotted name is the same nesting: ``"surface.shear"`` and the nested
+- A dotted name is the same nesting. ``"surface.shear"`` and the nested
   group above give the same field.
 
 The schema stores flat, dotted names. :meth:`FieldSchema.key` converts a
@@ -134,8 +135,8 @@ rank read from each leaf's shape. Shapes do not record symmetry or parity, so
 these attributes take their defaults.
 
 The GLOBE model (``physicsnemo.experimental.models.globe.GLOBE``) is the
-in-tree user. It takes an ``output_schema``, one schema per boundary
-condition type in ``boundary_source_schemas``, and an optional
+in-tree user. It takes an ``output_schema``, one schema for each
+boundary condition type in ``boundary_source_schemas``, and an optional
 ``global_schema``. In ``forward``, it checks the cell data of each boundary
 mesh and the global data against these schemas. GLOBE builds its features
 from scalars and true vectors, so it raises ``NotImplementedError`` for a
@@ -145,11 +146,11 @@ Field Associations
 ------------------
 
 Each field belongs to one of three containers on a
-:class:`~physicsnemo.mesh.mesh.Mesh`: ``point_data`` (one value per point),
-``cell_data`` (one value per cell), or ``global_data`` (one value for the
-mesh). Two names in ``physicsnemo.mesh`` describe these containers. They
-are defined in ``physicsnemo.mesh.mesh`` and exported from
-``physicsnemo.mesh``:
+:class:`~physicsnemo.mesh.mesh.Mesh`: ``point_data`` (one value for each
+point), ``cell_data`` (one value for each cell), or ``global_data`` (one value
+for the mesh). Two names in ``physicsnemo.mesh`` describe these containers.
+``physicsnemo.mesh.mesh`` defines them, and ``physicsnemo.mesh`` exports
+them:
 
 .. currentmodule:: physicsnemo.mesh.mesh
 
@@ -179,6 +180,8 @@ are defined in ``physicsnemo.mesh.mesh`` and exported from
 Choosing Between Similar Tools
 ------------------------------
 
+Use the following guidelines to choose between similar tools:
+
 - Use :meth:`FieldSchema.parse` for declarations that a user writes. Use the
   ``FieldSchema`` constructor only for a flat mapping of :class:`RankSpec`
   values.
@@ -203,8 +206,10 @@ Summary
    RankSpecLike
    FieldSchemaLike
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - User Guide: `Fields, Ranks, and Schemas
   <https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh/fields.html>`_

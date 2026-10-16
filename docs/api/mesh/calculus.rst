@@ -16,8 +16,8 @@ integrates fields over it. It has four differential operators:
 Two methods compute them:
 
 - Weighted least squares (LSQ) fits a linear function to each point's
-  neighborhood, as in finite-volume CFD. LSQ gives the gradient,
-  divergence, and curl, at points and at cells.
+  neighborhood, as in finite-volume computational fluid dynamics (CFD). LSQ
+  gives the gradient, divergence, and curl, at points and at cells.
 - Discrete exterior calculus (DEC) uses the circumcentric dual mesh and the
   Hodge star, after Desbrun, Hirani, Leok, and Marsden
   (`arXiv:math/0508341 <https://arxiv.org/abs/math/0508341>`_). DEC gives the
@@ -37,14 +37,16 @@ of the mesh, and an extrinsic gradient lies in the ambient space.
    :width: 100%
 
    Error of the LSQ and DEC vertex gradients of a smooth field on a jittered
-   grid. (a) Error maps at :math:`h = 1/16`: the error is largest on the
-   boundary. (b) RMS error against the mesh spacing: both methods converge at
-   first order on this grid, and the error at boundary vertices stays five to
-   eight times larger. On a regular grid, the interior error falls at second
-   order.
+   grid. (a) Error maps at :math:`h = 1/16`. The error is largest on the
+   boundary. (b) Root-mean-square (RMS) error against the mesh spacing. Both
+   methods converge at first order on this grid, and the error at boundary
+   vertices stays five to eight times larger. On a regular grid, the interior
+   error falls at second order.
 
 Example
 -------
+
+The following example computes derivatives of fields on a tetrahedral cube:
 
 .. code:: python
 
@@ -74,17 +76,19 @@ Example
 Choosing a Method
 -----------------
 
+Use the following guidelines to choose a method:
+
 - Use :meth:`~physicsnemo.mesh.mesh.Mesh.compute_point_derivatives` or
   :meth:`~physicsnemo.mesh.mesh.Mesh.compute_cell_derivatives` to add
   gradients of named fields to the mesh data. ``method="lsq"`` is the
-  default. ``method="dec"`` selects DEC, for point derivatives only:
+  default. ``method="dec"`` selects DEC, for point derivatives only.
   ``compute_cell_derivatives`` raises ``NotImplementedError`` for it.
 - Use the ``compute_*`` functions for a tensor result without changing the
   mesh.
 - For the Laplacian, use :func:`compute_laplacian_points_dec`. LSQ has no
   Laplacian.
-- Expect larger errors at boundary points, where the neighborhood is one-sided
-  (see the figure). The User Guide compares the two methods in detail.
+- Expect larger errors at boundary points, where the neighborhood is one-sided,
+  as the figure shows. The User Guide compares the two methods in detail.
 
 Summary
 -------
@@ -106,7 +110,7 @@ Summary
    compute_curl_cells_lsq
    compute_laplacian_points_dec
 
-.. rubric:: Integration and measures
+.. rubric:: Integration and Measures
 
 .. autosummary::
    :nosignatures:
@@ -128,9 +132,9 @@ Effective Measures and Integration
 ----------------------------------
 
 The reserved ``_effective_measure`` field stores one complete integration
-measure per cell or point in ``cell_data`` or ``point_data``. Read these with
-``cell_measures(mesh)`` or ``point_measures(mesh)``. They already include any
-geometric contribution and sampling correction.
+measure for each cell or point in ``cell_data`` or ``point_data``. Read these
+with ``cell_measures(mesh)`` or ``point_measures(mesh)``. They already include
+any geometric contribution and sampling correction.
 
 * ``mesh.integrate(field, data_source="cells")`` integrates piecewise-constant
   cell values. ``data_source="points"`` integrates piecewise-linear vertex
@@ -148,9 +152,9 @@ measures require their represented ``dimension``:
 - 2 for area
 - 3 for volume
 
-``scale_measures`` multiplies existing measures by a scalar or a factor per
-cell or point, such as an inverse sampling probability. Raw slicing does not
-apply a sampling correction.
+``scale_measures`` multiplies existing measures by a scalar or a factor for
+each cell or point, such as an inverse sampling probability. Raw slicing does
+not apply a sampling correction.
 
 Converting cells to centroid samples transfers their measures automatically:
 
@@ -167,11 +171,13 @@ For vertex quadrature, ``lumped_point_measures(mesh)`` distributes each cell's
 measure equally among its vertices without modifying the mesh. For finite
 fields, these weights reproduce piecewise-linear integration.
 
-See :doc:`transformations` for the geometric changes that keep reference
+Refer to :doc:`transformations` for the geometric changes that keep reference
 measures.
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - :doc:`curvature` and :doc:`geometry`.
 - User Guide: `Using Mesh

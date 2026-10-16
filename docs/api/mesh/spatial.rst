@@ -14,10 +14,11 @@ bounding boxes over the cells of a mesh. It speeds up two queries:
 - Point containment: the cell, if any, that contains each query point
 - Nearest-cell search: the closest cell to each query point
 
-The BVH is used internally by the sampling module
-(:func:`~physicsnemo.mesh.sampling.sample_data_at_points`,
-:func:`~physicsnemo.mesh.sampling.find_containing_cells`) to avoid brute-force
-search over all cells.
+The sampling module uses the BVH internally, in
+:func:`~physicsnemo.mesh.sampling.sample_data_at_points` and
+:func:`~physicsnemo.mesh.sampling.find_containing_cells`, to avoid brute-force
+search over all cells. The following example builds a BVH over a sphere and
+finds the candidate cells of random query points:
 
 .. code:: python
 
@@ -32,7 +33,7 @@ search over all cells.
     candidate_cells = bvh.find_candidate_cells(query_points)  # an Adjacency
 
 :class:`ClusterTree` is a hierarchy of point clusters for Barnes-Hut
-acceleration of kernel and attention operators: far-apart clusters interact
+acceleration of kernel and attention operators. Far-apart clusters interact
 through aggregates instead of point by point. :class:`DualInteractionPlan`
 and :class:`SourceAggregates` hold the plan and the cluster aggregates of
 that computation.
@@ -44,7 +45,7 @@ Signed Distance Field
 query points to a triangle surface mesh, together with the closest point on the
 surface for each query. It is a :class:`~physicsnemo.mesh.Mesh`-typed wrapper
 around the Warp-backed :func:`physicsnemo.nn.functional.signed_distance_field`
-op, which runs NVIDIA Warp mesh queries on CPU and CUDA.
+function, which runs NVIDIA Warp mesh queries on CPU and CUDA.
 
 ``use_sign_winding_number`` selects one of two methods for the sign:
 
@@ -54,6 +55,9 @@ op, which runs NVIDIA Warp mesh queries on CPU and CUDA.
 - ``True``: the generalized winding number
   (``wp.mesh_query_point_sign_winding_number``). This method suits open or
   self-intersecting geometry, such as a triangle soup.
+
+The following example computes the signed distance from two points to a unit
+sphere:
 
 .. code:: python
 
@@ -80,8 +84,10 @@ Summary
    SourceAggregates
    signed_distance_field
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - :doc:`sampling`, which uses the BVH to interpolate data at query points.
 - Tutorial: `Neighbors, Adjacency, and Spatial Queries
