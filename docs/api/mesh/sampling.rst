@@ -3,27 +3,12 @@ Sampling and Interpolation
 
 .. currentmodule:: physicsnemo.mesh.sampling
 
-``physicsnemo.mesh.sampling`` does two jobs:
-
-- Random points on cells. :func:`sample_random_points_on_cells` returns one
-  random point in each cell that you list. The barycentric coordinates come
-  from a
-  `Dirichlet distribution <https://en.wikipedia.org/wiki/Dirichlet_distribution>`_,
-  which is uniform in the cell for the default ``alpha=1.0``. Repeat a cell
-  index to draw several points from that cell. To sample uniformly over the
-  whole mesh, draw the cell indices in proportion to the cell areas.
-- Data at query points. :func:`sample_data_at_points` finds the cell that
-  contains each query point, computes its
-  `barycentric coordinates <https://en.wikipedia.org/wiki/Barycentric_coordinate_system>`_,
-  and interpolates point data (``data_source="points"``) or takes the cell
-  data (``data_source="cells"``) there. A query point outside the mesh gets
-  ``NaN``, unless you set ``project_onto_nearest_cell=True``. The search uses
-  a :class:`~physicsnemo.mesh.spatial.BVH`. To reuse one over several calls,
-  build it once and pass it as ``bvh``.
-
-Both are also ``Mesh`` methods:
+``physicsnemo.mesh.sampling`` draws random points on the cells of a mesh and
+interpolates mesh data at query points. Both jobs are also ``Mesh`` methods,
 :meth:`~physicsnemo.mesh.mesh.Mesh.sample_random_points_on_cells` and
 :meth:`~physicsnemo.mesh.mesh.Mesh.sample_data_at_points`.
+
+:bdg-success:`GPU` :bdg-info:`autograd` :bdg-secondary:`any dimension`
 
 .. figure:: ../../img/mesh/sampling_interpolation.png
    :alt: Two views of a torus with a shared colorbar. Left: the surface shaded
@@ -36,6 +21,46 @@ Both are also ``Mesh`` methods:
    Right: 5000 points sampled uniformly by area with
    :func:`sample_random_points_on_cells`, colored by the values that
    :func:`sample_data_at_points` interpolates from the vertices.
+
+.. rubric:: Most Used
+
+.. grid:: 1 1 2 2
+   :gutter: 2
+
+   .. grid-item-card:: Random Points
+      :link: physicsnemo.mesh.sampling.sample_random_points_on_cells
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``sample_random_points_on_cells(mesh, idx)`` returns one point in each
+      listed cell.
+
+   .. grid-item-card:: Data at Points
+      :link: physicsnemo.mesh.sampling.sample_data_at_points
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``mesh.sample_data_at_points(queries)`` interpolates point or cell data.
+
+   .. grid-item-card:: Containing Cells
+      :link: physicsnemo.mesh.sampling.find_containing_cells
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``find_containing_cells(mesh, queries)`` gives each point's cell and its
+      barycentric coordinates.
+
+   .. grid-item-card:: Nearest Cells
+      :link: physicsnemo.mesh.sampling.find_nearest_cells
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``find_nearest_cells(mesh, queries)`` gives the cell with the nearest
+      centroid.
 
 Example
 -------
@@ -63,6 +88,28 @@ a square:
     queries = torch.tensor([[0.25, 0.25], [0.5, 0.75], [2.0, 2.0]])
     values = square.sample_data_at_points(queries, data_source="points")
     print(values["u"])  # tensor([0.2500, 0.5000,    nan]): the last point is outside
+
+:func:`sample_random_points_on_cells` draws the barycentric coordinates from a
+`Dirichlet distribution <https://en.wikipedia.org/wiki/Dirichlet_distribution>`_,
+which is uniform in the cell for the default ``alpha=1.0``. Repeat a cell
+index to draw several points from that cell. To sample uniformly over the
+whole mesh, draw the cell indices in proportion to the cell areas, as the
+example does.
+
+:func:`sample_data_at_points` finds the cell that contains each query point,
+computes its
+`barycentric coordinates <https://en.wikipedia.org/wiki/Barycentric_coordinate_system>`_,
+and interpolates point data (``data_source="points"``) or takes the cell data
+(``data_source="cells"``) there. The search uses a
+:class:`~physicsnemo.mesh.spatial.BVH`. To reuse one over several calls, build
+it once and pass it as ``bvh``.
+
+.. tip::
+
+   A query point outside the mesh gets ``NaN``. Set
+   ``project_onto_nearest_cell=True`` to first move each query point to the
+   centroid of its nearest cell. This helps on surfaces, where query points
+   seldom lie exactly on a cell.
 
 Choosing a Function
 -------------------
