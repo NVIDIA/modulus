@@ -423,6 +423,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contradicts, are corrected across the API reference, READMEs, and docstrings.
   The corrected claims include the sign of the Laplacian and the dimensions
   that each calculus operator supports.
+- The transient conjugate heat transfer tank filling example trains again, on
+  one GPU or several. Before, its `train.py` stopped with a `TypeError` before
+  the first step.
 
 ### Security
 
