@@ -52,12 +52,12 @@ GALLERY = {
         ("surfaces.mobius_strip", surfaces.mobius_strip.load()),
     ],
     "volumes": [
-        ("volumes.cube_volume", volumes.cube_volume.load(subdivisions=4)),
-        ("volumes.tetrahedron_volume", volumes.tetrahedron_volume.load()),
+        ("volumes.cube_volume", volumes.cube_volume.load(subdivisions=3)),
+        ("volumes.sphere_volume", volumes.sphere_volume.load(resolution=16)),
     ],
     "procedural": [
         ("procedural.lumpy_sphere", procedural.lumpy_sphere.load(subdivisions=3)),
-        ("procedural.lumpy_ball", procedural.lumpy_ball.load()),
+        ("procedural.perturbed_grid", procedural.perturbed_grid.load(n_x=9, n_y=9)),
     ],
 }
 
@@ -74,12 +74,13 @@ def _render(mesh):
         plotter.add_mesh(dataset.tube(radius=0.012 * dataset.length), color=CURVE_COLOR)
     else:
         if mesh.n_manifold_dims == 3 and mesh.n_cells > 1:
-            # Drop the cells on the camera's side of the center and shrink the
-            # rest toward their centroids, to show the tetrahedra inside.
+            # Cut the solid open: drop the cells in the octant that faces the
+            # camera, and shrink the rest toward their centroids a little, to
+            # show the tetrahedra inside.
             offsets = mesh.cell_centroids - mesh.points.mean(dim=0)
-            keep = offsets @ mesh.points.new_tensor(VIEW_VECTOR) < 0.0
-            dataset = dataset.extract_cells(keep.nonzero().squeeze(1).numpy())
-            dataset = dataset.shrink(0.8)
+            facing = (offsets * mesh.points.new_tensor(VIEW_VECTOR) > 0.0).all(dim=1)
+            dataset = dataset.extract_cells((~facing).nonzero().squeeze(1).numpy())
+            dataset = dataset.shrink(0.88)
         plotter.add_mesh(
             dataset,
             color=MESH_COLOR,
