@@ -60,7 +60,7 @@ criterion, dual-tree traversal, and far-field monopole approximation.
 
 import logging
 import math
-from typing import Literal, NamedTuple
+from typing import Literal, NamedTuple, Sequence
 
 import torch
 import torch.nn.functional as F
@@ -893,6 +893,99 @@ class ClusterTree(TensorClass):
             batch_size=torch.Size([]),
         )
 
+    @classmethod
+    def merge(
+        cls, trees: Sequence["ClusterTree"]
+    ) -> tuple["ClusterTree", Int[torch.Tensor, " n_roots"]]:
+        r"""Combine trees into one forest; return the forest and its roots.
+
+        The forest holds each tree's nodes and points after those of the
+        trees before it, with every node, range and point index shifted to
+        match, so its points are the trees' points laid end to end. A dual
+        traversal against the forest from its roots
+        (``target_roots`` of :meth:`find_dual_interaction_pairs`) makes the
+        same decisions as one traversal per tree, in one pass: its plan is
+        the per-tree plans joined, indexing the concatenated points.
+
+        Parameters
+        ----------
+        trees : Sequence[ClusterTree]
+            Trees with the same spatial dimension, dtype and device.
+
+        Returns
+        -------
+        forest : ClusterTree
+            The combined trees; its ``max_depth`` is the largest of theirs.
+        roots : Int[torch.Tensor, "n_roots"]
+            The root node of each nonempty tree, in order.
+
+        Examples
+        --------
+        >>> a = ClusterTree.from_points(torch.rand(30, 3))
+        >>> b = ClusterTree.from_points(torch.rand(20, 3) + 2.0)
+        >>> forest, roots = ClusterTree.merge([a, b])
+        >>> forest.n_sources, roots.tolist() == [0, a.n_nodes]
+        (50, True)
+        """
+        if not trees:
+            raise ValueError("merge needs at least one tree")
+        device = trees[0].node_aabb_min.device
+        node_offsets: list[int] = []
+        point_offsets: list[int] = []
+        n_nodes = n_points = 0
+        for tree in trees:
+            node_offsets.append(n_nodes)
+            point_offsets.append(n_points)
+            n_nodes += tree.n_nodes
+            n_points += tree.n_sources
+
+        def shifted(name: str, offsets: list[int], *, keep_negative: bool = False):
+            parts = []
+            for tree, offset in zip(trees, offsets):
+                ids = getattr(tree, name)
+                if keep_negative:  # -1 marks "no child" / "not a leaf"
+                    ids = torch.where(ids >= 0, ids + offset, ids)
+                else:
+                    ids = ids + offset
+                parts.append(ids)
+            return torch.cat(parts)
+
+        def joined(name: str) -> torch.Tensor:
+            return torch.cat([getattr(tree, name) for tree in trees])
+
+        forest = cls(
+            node_aabb_min=joined("node_aabb_min"),
+            node_aabb_max=joined("node_aabb_max"),
+            node_diameter_sq=joined("node_diameter_sq"),
+            node_left_child=shifted(
+                "node_left_child", node_offsets, keep_negative=True
+            ),
+            node_right_child=shifted(
+                "node_right_child", node_offsets, keep_negative=True
+            ),
+            leaf_start=shifted("leaf_start", point_offsets, keep_negative=True),
+            leaf_count=joined("leaf_count"),
+            node_range_start=shifted("node_range_start", point_offsets),
+            node_range_count=joined("node_range_count"),
+            node_total_area=joined("node_total_area"),
+            sorted_source_order=shifted("sorted_source_order", point_offsets),
+            source_points=joined("source_points"),
+            max_depth=torch.stack([tree.max_depth for tree in trees]).max(),
+            batch_size=torch.Size([]),
+        )
+        ### Filled on the device: ``torch.tensor(list, device=...)`` would copy
+        ### from pageable host memory, which synchronizes.
+        roots = [
+            torch.full((1,), offset, dtype=torch.long, device=device)
+            for tree, offset in zip(trees, node_offsets)
+            if tree.n_nodes > 0
+        ]
+        return forest, (
+            torch.cat(roots)
+            if roots
+            else torch.empty(0, dtype=torch.long, device=device)
+        )
+
     def compute_source_aggregates(
         self,
         source_points: Float[torch.Tensor, "n_sources n_dims"],
@@ -1027,6 +1120,7 @@ class ClusterTree(TensorClass):
         expand_far_targets: bool = False,
         validate: bool = True,
         source_admissible: torch.Tensor | None = None,
+        target_roots: Int[torch.Tensor, " n_roots"] | None = None,
     ) -> DualInteractionPlan:
         r"""Find near-field and far-field pairs via dual-tree traversal.
 
@@ -1075,6 +1169,10 @@ class ClusterTree(TensorClass):
             norm of their node average (:meth:`compute_source_aggregates`)
             is about ``1 - s**2 / 2``, so ``norm >= 1 - tol**2 / 2`` admits
             nodes whose normals spread by at most about ``tol`` radians.
+        target_roots : torch.Tensor or None, optional
+            Nodes of ``target_tree`` to start from, one per tree when
+            ``target_tree`` is a forest from :meth:`merge` (pass the roots it
+            returns). ``None`` starts from node 0, the root of a single tree.
 
         Returns
         -------
@@ -1136,9 +1234,13 @@ class ClusterTree(TensorClass):
             return plan
 
         with record_function("cluster_tree::dual_traversal"):
-            ### Initialize: root-to-root pair
-            active_tgt_nodes = torch.zeros(1, dtype=torch.long, device=device)
-            active_src_nodes = torch.zeros(1, dtype=torch.long, device=device)
+            ### Initialize: root-to-root pairs (one per target tree of a forest)
+            active_tgt_nodes = (
+                torch.zeros(1, dtype=torch.long, device=device)
+                if target_roots is None
+                else target_roots
+            )
+            active_src_nodes = torch.zeros_like(active_tgt_nodes)
 
             ### Output streams.  All per-iteration outputs use a
             ### deferred-compaction protocol: the per-element tensor is

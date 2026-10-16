@@ -42,67 +42,6 @@ from physicsnemo.utils.logging import PythonLogger
 logger = PythonLogger("globe.model")
 
 
-def _concatenate_plans(
-    plans: Sequence[DualInteractionPlan],
-    n_targets: Sequence[int],
-    n_target_nodes: Sequence[int],
-) -> DualInteractionPlan:
-    r"""Join plans from one source tree to several target sets into one plan.
-
-    The target sets are laid end to end: each plan's target ids and
-    target-node ids are offset by the sizes of the sets before it, and its
-    broadcast pair ids by the pair counts of the plans before it. The result
-    indexes the concatenated targets (and the concatenated target-node
-    centroids) exactly as each part indexes its own, so one kernel call
-    evaluates every part with the same interactions, in the same order for
-    each target.
-
-    Parameters
-    ----------
-    plans : Sequence[DualInteractionPlan]
-        Plans from the same source tree, one per target set.
-    n_targets : Sequence[int]
-        Number of target points in each set.
-    n_target_nodes : Sequence[int]
-        Number of nodes in each set's target tree.
-
-    Returns
-    -------
-    DualInteractionPlan
-        The joined plan.
-    """
-    if len(plans) == 1:
-        return plans[0]
-    point_offset = node_offset = far_offset = fn_offset = fn_bcast_offset = 0
-    parts: dict[str, list[torch.Tensor]] = {}
-    for plan, n_t, n_tn in zip(plans, n_targets, n_target_nodes):
-        for name, offset in (
-            ("near_target_ids", point_offset),
-            ("near_source_ids", 0),
-            ("far_target_node_ids", node_offset),
-            ("far_source_node_ids", 0),
-            ("nf_target_ids", point_offset),
-            ("nf_source_node_ids", 0),
-            ("fn_target_node_ids", node_offset),
-            ("fn_source_ids", 0),
-            ("fn_broadcast_targets", point_offset),
-            ("fn_broadcast_starts", fn_bcast_offset),
-            ("fn_broadcast_counts", 0),
-            ("far_broadcast_target_ids", point_offset),
-            ("far_broadcast_pair_ids", far_offset),
-            ("fn_expanded_target_ids", point_offset),
-            ("fn_expanded_pair_ids", fn_offset),
-        ):
-            ids = getattr(plan, name)
-            parts.setdefault(name, []).append(ids + offset if offset else ids)
-        point_offset += n_t
-        node_offset += n_tn
-        far_offset += plan.n_far_nodes
-        fn_offset += plan.n_fn
-        fn_bcast_offset += plan.fn_broadcast_targets.shape[0]
-    return DualInteractionPlan(**{name: torch.cat(ids) for name, ids in parts.items()})
-
-
 def _column_runs(layout: PackLayout) -> tuple[tuple[int, int, int], ...]:
     r"""Maximal column ranges of a packed layout whose fields share one shape.
 
@@ -529,12 +468,12 @@ class GLOBE(Module):
     ]:
         """Build per-BC-type cluster trees and cross-BC dual interaction plans.
 
-        Builds one :class:`ClusterTree` per BC type (O(B) trees), then computes
-        a :class:`DualInteractionPlan` for every (source BC, destination BC)
-        pair (B^2 plans total).  For self-interaction (source == destination),
-        the target tree is the same object as the source tree.  The plans of
-        each source BC are joined over the destinations (in
-        ``boundary_meshes`` order), so that a communication layer evaluates
+        Builds one :class:`ClusterTree` per BC type (O(B) trees), then plans
+        the interactions of every (source BC, destination BC) pair: one dual
+        traversal per source BC against a forest of all B trees
+        (:meth:`ClusterTree.merge`), whose plan is that source's B plans
+        joined, indexing the cell centroids of all BCs laid end to end (in
+        ``boundary_meshes`` order).  A communication layer then evaluates
         each source kernel once for all boundary cells.  Plans are reused
         across all communication layers since the geometry is fixed.
 
@@ -596,35 +535,35 @@ class GLOBE(Module):
                     centroids, leaf_size=self.leaf_size, areas=areas,
                 )
 
-            ### Pass 2: build B^2 plans + log each in-line, and join the
-            ### plans of each source BC over the destinations.
-            n_cells = [mesh.n_cells for mesh in meshes]
-            n_nodes = [cluster_trees_built[bc].n_nodes for bc in bc_types]
+            ### Pass 2: one dual traversal per source BC, against a forest
+            ### of every BC's tree: the B destination plans of that source,
+            ### already joined (B traversals instead of B^2).
+            n_targets = sum(mesh.n_cells for mesh in meshes)
+            forest, roots = ClusterTree.merge(
+                [cluster_trees_built[bc] for bc in bc_types]
+            )
             comm_plans_built: dict[str, DualInteractionPlan] = {}
             comm_centroids_built: dict[str, torch.Tensor | None] = {}
-            for src_bc, n_src in zip(bc_types, n_cells):
-                src_tree = cluster_trees_built[src_bc]
-                plans = []
-                for dst_bc, n_dst in zip(bc_types, n_cells):
-                    plan = src_tree.find_dual_interaction_pairs(
-                        target_tree=cluster_trees_built[dst_bc], theta=self.theta,
-                        expand_far_targets=self.expand_far_targets, validate=False,
-                    )
-                    plans.append(plan)
-                    logger.logger.debug(
-                        "comm plan [%s -> %s]: %d near + %d nf + %d fn + %d far_node "
-                        "(%.2f%% near-field, %d src x %d dst faces, "
-                        "theta=%.2f, leaf_size=%d)",
-                        src_bc, dst_bc,
-                        plan.n_near, plan.n_nf, plan.n_fn, plan.n_far_nodes,
-                        100.0 * plan.n_near / max(n_src * n_dst, 1),
-                        n_src, n_dst, self.theta, self.leaf_size,
-                    )
-                comm_plans_built[src_bc] = _concatenate_plans(plans, n_cells, n_nodes)
-                ### Target-node centroids, only for plans that use them: the
-                ### area-weighted node centroids for self-interaction (the
-                ### source aggregates' own), plain node means otherwise.
-                if any(p.n_far_nodes + p.n_fn > 0 for p in plans):
+            for src_bc, src_mesh in zip(bc_types, meshes):
+                plan = cluster_trees_built[src_bc].find_dual_interaction_pairs(
+                    target_tree=forest, theta=self.theta, target_roots=roots,
+                    expand_far_targets=self.expand_far_targets, validate=False,
+                )
+                comm_plans_built[src_bc] = plan
+                logger.logger.debug(
+                    "comm plan [%s -> all]: %d near + %d nf + %d fn + %d far_node "
+                    "(%.2f%% near-field, %d src x %d dst faces, "
+                    "theta=%.2f, leaf_size=%d)",
+                    src_bc,
+                    plan.n_near, plan.n_nf, plan.n_fn, plan.n_far_nodes,
+                    100.0 * plan.n_near / max(src_mesh.n_cells * n_targets, 1),
+                    src_mesh.n_cells, n_targets, self.theta, self.leaf_size,
+                )
+                ### Target-node centroids, only for plans that use them, in
+                ### the forest's node order: the area-weighted node centroids
+                ### for self-interaction (the source aggregates' own), plain
+                ### node means otherwise.
+                if plan.n_far_nodes + plan.n_fn > 0:
                     comm_centroids_built[src_bc] = torch.cat(
                         [
                             cluster_trees_built[dst_bc]

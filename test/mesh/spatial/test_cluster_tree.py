@@ -228,6 +228,84 @@ def test_plan_covers_every_pair_exactly_once_cross(device, theta, leaf_size):
     )
 
 
+def _plan_entries(plan):
+    """Each stream of a plan as a sorted list of its entries (order-free)."""
+    far = list(
+        zip(plan.far_target_node_ids.tolist(), plan.far_source_node_ids.tolist())
+    )
+    fn = list(zip(plan.fn_target_node_ids.tolist(), plan.fn_source_ids.tolist()))
+    return {
+        "near": sorted(
+            zip(plan.near_target_ids.tolist(), plan.near_source_ids.tolist())
+        ),
+        "nf": sorted(
+            zip(plan.nf_target_ids.tolist(), plan.nf_source_node_ids.tolist())
+        ),
+        "far": sorted(far),
+        "fn": sorted(fn),
+        "far_broadcast": sorted(
+            (t, *far[p])
+            for t, p in zip(
+                plan.far_broadcast_target_ids.tolist(),
+                plan.far_broadcast_pair_ids.tolist(),
+            )
+        ),
+        "fn_expanded": sorted(
+            (t, *fn[p])
+            for t, p in zip(
+                plan.fn_expanded_target_ids.tolist(), plan.fn_expanded_pair_ids.tolist()
+            )
+        ),
+    }
+
+
+@pytest.mark.parametrize("theta", [0.0, 1.0, 1.5])
+@pytest.mark.parametrize("expand_far_targets", [False, True])
+def test_forest_plan_is_the_joined_per_tree_plans(device, theta, expand_far_targets):
+    """One traversal against a merged forest plans what one per tree would.
+
+    The target trees (one of them empty) are merged; a traversal from the
+    forest's roots must give, stream by stream, the per-tree plans with
+    target ids and target-node ids shifted to the concatenated points.
+    """
+    src_tree = ClusterTree.from_points(_points(40, 3, device, seed=4), leaf_size=2)
+    target_sets = [
+        _points(35, 3, device, seed=5),
+        _points(0, 3, device, seed=6),
+        _points(22, 3, device, seed=7) + 1.5,
+        _points(9, 3, device, seed=8) * 0.1,
+    ]
+    trees = [ClusterTree.from_points(p, leaf_size=2) for p in target_sets]
+    forest, roots = ClusterTree.merge(trees)
+    assert forest.n_sources == sum(p.shape[0] for p in target_sets)
+    assert roots.tolist() == [0, trees[0].n_nodes, trees[0].n_nodes + trees[2].n_nodes]
+
+    kwargs = dict(theta=theta, expand_far_targets=expand_far_targets)
+    plan = src_tree.find_dual_interaction_pairs(forest, target_roots=roots, **kwargs)
+    plan.validate()
+
+    expected = {name: [] for name in _plan_entries(plan)}
+    point_offset = node_offset = 0
+    for tree in trees:
+        part = _plan_entries(src_tree.find_dual_interaction_pairs(tree, **kwargs))
+        for name, entries in part.items():
+            for entry in entries:
+                shifted = list(entry)
+                shifted[0] += point_offset if name in ("near", "nf") else node_offset
+                if name in ("far_broadcast", "fn_expanded"):
+                    shifted[0] += point_offset - node_offset
+                    shifted[1] += node_offset
+                expected[name].append(tuple(shifted))
+        point_offset += tree.n_sources
+        node_offset += tree.n_nodes
+    assert _plan_entries(plan) == {k: sorted(v) for k, v in expected.items()}
+
+    count = _coverage_counts(
+        plan, forest, src_tree, forest.n_sources, src_tree.n_sources
+    )
+    assert (count == 1).all()
+
+
 @pytest.mark.parametrize("theta", [0.0, 1.0])
 def test_plan_covers_every_pair_exactly_once_self(device, theta):
     """Self-interaction plans (target_tree is source_tree) are also exact."""
