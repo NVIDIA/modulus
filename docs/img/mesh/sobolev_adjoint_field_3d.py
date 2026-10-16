@@ -22,8 +22,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 import torch
-from _style import DIVERGING, DPI, FIXED, SURFACE_EDGE, TEXT, mesh_label, spheres
-from matplotlib.colors import Normalize
+from _style import (
+    ACCENT_LIGHTING,
+    DIVERGING,
+    FIXED,
+    SURFACE_EDGE,
+    TEXT,
+    mesh_label,
+    save,
+    spheres,
+)
+from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.lines import Line2D
 
 from physicsnemo.mesh import Mesh
@@ -37,6 +46,18 @@ DISPLAY_STEP = 0.52
 SCALAR_NAME = "Normalized upward update"
 MESH_EDGE = SURFACE_EDGE
 ARROW_COLOR = TEXT
+# The update is upward everywhere, so only the zero-to-positive half of the map is used.
+UPDATE_CMAP = ListedColormap(plt.get_cmap(DIVERGING)(np.linspace(0.5, 1.0, 256)))
+
+
+def _trim(images, margin=24):
+    """Crop the white border shared by same-size renders, keeping their common scale."""
+
+    ink = np.any([(image[..., :3] < 250).any(axis=2) for image in images], axis=0)
+    rows, cols = np.flatnonzero(ink.any(axis=1)), np.flatnonzero(ink.any(axis=0))
+    r0, r1 = max(rows[0] - margin, 0), rows[-1] + margin
+    c0, c1 = max(cols[0] - margin, 0), cols[-1] + margin
+    return [image[r0:r1, c0:c1] for image in images]
 
 
 def _make_sheet() -> tuple[Mesh, torch.Tensor]:
@@ -187,9 +208,12 @@ def main() -> None:
     fixed = fixed_points.numpy()
     grid = np.arange(mesh.n_points).reshape(RESOLUTION, RESOLUTION)
     selected = grid[1:-1:2, 1:-1:2].reshape(-1)
+    lowest = min(raw_update[:, 2].min().item(), sobolev_update[:, 2].min().item())
+    if lowest < -1.0e-6:
+        raise RuntimeError(f"Upward update has a negative component ({lowest:.2e})")
     panels = (
         (
-            f"raw upward update, {mesh_label(mesh)}",
+            "raw upward update",
             raw_update.numpy(),
             raw_roughness.item(),
         ),
@@ -200,8 +224,8 @@ def main() -> None:
         ),
     )
 
-    figure, axes = plt.subplots(1, 2, figsize=(13.5, 5.6))
-    for axis, (title, update, roughness) in zip(axes, panels, strict=True):
+    images = []
+    for _, update, _ in panels:
         deformed_points = points + DISPLAY_STEP * update
         panel_mesh = to_pyvista(mesh)
         panel_mesh.points = deformed_points
@@ -212,8 +236,8 @@ def main() -> None:
         plotter.add_mesh(
             panel_mesh,
             scalars=SCALAR_NAME,
-            cmap=DIVERGING,
-            clim=(-1.0, 1.0),
+            cmap=UPDATE_CMAP,
+            clim=(0.0, 1.0),
             show_edges=True,
             edge_color=MESH_EDGE,
             line_width=0.6,
@@ -227,11 +251,12 @@ def main() -> None:
             update[selected],
             mag=0.13,
             color=ARROW_COLOR,
+            **ACCENT_LIGHTING,
         )
         plotter.add_mesh(
             spheres(points[fixed] + np.array((0.0, 0.0, 0.012)), 0.025),
             color=FIXED,
-            ambient=0.35,
+            **ACCENT_LIGHTING,
         )
         plotter.camera_position = [
             (2.8, -4.0, 2.4),
@@ -239,14 +264,20 @@ def main() -> None:
             (0.0, 0.0, 1.0),
         ]
         plotter.camera.parallel_projection = True
-        plotter.camera.zoom(1.02)
-        axis.imshow(plotter.screenshot(return_img=True))
+        plotter.camera.zoom(0.9)
+        images.append(plotter.screenshot(return_img=True))
         plotter.close()
-        axis.set_title(f"{title}\nnormalized edge roughness {roughness:.2f}")
+
+    images = _trim(images)
+    height, width = images[0].shape[:2]
+    figure, axes = plt.subplots(1, 2, figsize=(13.5, 6.75 * height / width + 2.0))
+    for axis, image, (title, _, roughness) in zip(axes, images, panels, strict=True):
+        axis.imshow(image)
+        axis.set_title(f"{title}\n{mesh_label(mesh)}, edge roughness {roughness:.2f}")
         axis.set_axis_off()
 
     colorbar = figure.colorbar(
-        plt.cm.ScalarMappable(norm=Normalize(vmin=-1.0, vmax=1.0), cmap=DIVERGING),
+        plt.cm.ScalarMappable(norm=Normalize(vmin=0.0, vmax=1.0), cmap=UPDATE_CMAP),
         ax=axes,
         orientation="horizontal",
         fraction=0.05,
@@ -272,9 +303,7 @@ def main() -> None:
         frameon=False,
     )
     # Smooth color ramps band under a 256-color palette, so keep full RGB.
-    figure.savefig(OUTPUT, dpi=DPI, facecolor="white", bbox_inches="tight")
-    plt.close(figure)
-    print(f"Saved {OUTPUT} ({OUTPUT.stat().st_size / 1024:.0f} KB)")
+    save(figure, OUTPUT, tight=True, full_color=True)
 
     print(f"Raw adjoint roughness: {raw_roughness.item():.4f}")
     print(f"Sobolev adjoint roughness: {sobolev_roughness.item():.4f}")

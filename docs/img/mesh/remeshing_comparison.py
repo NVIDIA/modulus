@@ -21,7 +21,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pyvista as pv
 import torch
-from _style import RESULT, SURFACE, SURFACE_EDGE, save
+from _style import RESULT, SURFACE, SURFACE_EDGE, mesh_label, save
 
 from physicsnemo.mesh.io import to_pyvista
 from physicsnemo.mesh.remeshing import remesh
@@ -83,9 +83,7 @@ def main():
     figure, axes = plt.subplots(1, 2, figsize=(11.0, 6.0))
     for axis, (title, mesh, color) in zip(axes, panels, strict=True):
         axis.imshow(_render(mesh, color, camera))
-        axis.set_title(
-            f"{title}\nMesh[2, 3], {mesh.n_points:,} points, {mesh.n_cells:,} cells"
-        )
+        axis.set_title(f"{title}\n{mesh_label(mesh)}, {mesh.n_points:,} points")
         axis.set_axis_off()
     figure.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=0.9, wspace=0.02)
     save(figure, OUTPUT)

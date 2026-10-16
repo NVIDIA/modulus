@@ -22,7 +22,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 import torch
-from _style import FIXED, RESULT, SURFACE, SURFACE_EDGE, mesh_label, save, spheres
+from _style import (
+    ACCENT_LIGHTING,
+    RESULT,
+    SURFACE,
+    SURFACE_EDGE,
+    mesh_label,
+    save,
+    spheres,
+)
 from matplotlib.lines import Line2D
 
 from physicsnemo.mesh.io import to_pyvista
@@ -33,6 +41,7 @@ pv.OFF_SCREEN = True
 OUTPUT = Path(__file__).parent / "sphere_morphing.png"
 
 CAMERA = [(5.0, -5.0, 2.6), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+RADIUS = 1.0
 
 
 def _render(actors, camera):
@@ -78,7 +87,7 @@ def _arrows(starts, vectors, color):
         )
         for start, vector in zip(starts, vectors, strict=True)
     ]
-    return (pv.merge(arrows), {"color": color})
+    return (pv.merge(arrows), {"color": color, **ACCENT_LIGHTING})
 
 
 def _legend(figure, entries):
@@ -106,7 +115,9 @@ def _panel(mesh, controls, displacements):
     actors = [_surface(mesh)]
     if controls is not None:
         destinations = (controls + displacements).numpy()
-        actors.append((spheres(destinations, 0.06), {"color": RESULT}))
+        actors.append(
+            (spheres(destinations, 0.06), {"color": RESULT, **ACCENT_LIGHTING})
+        )
         actors.append(_arrows(destinations, 0.6 * displacements.numpy(), RESULT))
     return _render(actors, CAMERA)
 
@@ -120,14 +131,14 @@ def main():
 
     single_points = mesh.points[top_index].unsqueeze(0)
     single_displacements = mesh.points.new_tensor([[0.0, 0.0, 0.5]])
-    single_morph = mesh.morph(single_points, single_displacements, radius=1.0)
+    single_morph = mesh.morph(single_points, single_displacements, radius=RADIUS)
 
     multiple_points = mesh.points[torch.stack((top_index, bottom_index))]
     multiple_displacements = mesh.points.new_tensor([[0.0, 0.0, 0.5], [0.0, 0.0, -0.5]])
     multiple_morph = mesh.morph(
         multiple_points,
         multiple_displacements,
-        radius=mesh.points.new_tensor([1.0, 1.0]),
+        radius=mesh.points.new_tensor([RADIUS, RADIUS]),
     )
 
     panels = (
@@ -152,7 +163,7 @@ def main():
         axis.imshow(_panel(panel_mesh, controls, displacements))
         axis.set_title(f"{title}\n{mesh_label(panel_mesh)}")
         axis.set_axis_off()
-    _legend(figure, (("displaced controls, radius=1.0", RESULT),))
+    _legend(figure, ((f"displaced controls, radius={RADIUS}", RESULT),))
     figure.subplots_adjust(left=0.0, right=1.0, bottom=0.07, top=0.88, wspace=0.02)
     save(figure, OUTPUT)
 

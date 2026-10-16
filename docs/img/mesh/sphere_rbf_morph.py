@@ -22,7 +22,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 import torch
-from _style import FIXED, RESULT, SURFACE, SURFACE_EDGE, mesh_label, save, spheres
+from _style import (
+    ACCENT_LIGHTING,
+    FIXED,
+    RESULT,
+    SURFACE,
+    SURFACE_EDGE,
+    TEXT,
+    mesh_label,
+    save,
+    spheres,
+)
 from matplotlib.lines import Line2D
 
 from physicsnemo.mesh.io import to_pyvista
@@ -105,7 +115,7 @@ def _arrows(starts, vectors, color):
         )
         for start, vector in zip(starts, vectors, strict=True)
     ]
-    return (pv.merge(arrows), {"color": color})
+    return (pv.merge(arrows), {"color": color, **ACCENT_LIGHTING})
 
 
 def _legend(figure, entries):
@@ -134,10 +144,18 @@ def _panel(mesh, controls, displacements):
     displacements = displacements.numpy()
     active = np.linalg.norm(displacements, axis=1) > 0.0
     actors = [_surface(mesh)]
-    actors.append((spheres(controls[~active], 0.06), {"color": FIXED}))
+    if not active.any():
+        # Before any move, a control is neither an anchor nor a handle.
+        actors.append((spheres(controls, 0.06), {"color": TEXT, **ACCENT_LIGHTING}))
+        return _render(actors, CAMERA)
+    actors.append(
+        (spheres(controls[~active], 0.06), {"color": FIXED, **ACCENT_LIGHTING})
+    )
     if active.any():
         destinations = controls[active] + displacements[active]
-        actors.append((spheres(destinations, 0.07), {"color": RESULT}))
+        actors.append(
+            (spheres(destinations, 0.07), {"color": RESULT, **ACCENT_LIGHTING})
+        )
         directions = displacements[active] / np.linalg.norm(
             displacements[active], axis=1, keepdims=True
         )
@@ -171,7 +189,10 @@ def main():
         axis.imshow(_panel(mesh, controls, displacements))
         axis.set_title(f"{title}\n{mesh_label(mesh)}")
         axis.set_axis_off()
-    _legend(figure, (("fixed anchors", FIXED), ("moved handles", RESULT)))
+    _legend(
+        figure,
+        (("controls", TEXT), ("fixed anchors", FIXED), ("moved handles", RESULT)),
+    )
     figure.subplots_adjust(left=0.0, right=1.0, bottom=0.07, top=0.88, wspace=0.02)
     save(figure, OUTPUT)
 

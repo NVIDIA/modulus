@@ -34,6 +34,7 @@ import pyvista as pv
 import torch
 import torch.nn.functional as F
 from _style import (
+    ACCENT_LIGHTING,
     FIXED,
     FOURTH,
     SEQUENTIAL,
@@ -363,9 +364,9 @@ def render_panel(
     if movable is not None:
         # Mark the root vertices held by the point-weight mask.
         root = mesh.points[~movable].detach().cpu().numpy()
-        plotter.add_mesh(spheres(root, 0.012), color=FIXED_COLOR, ambient=0.35)
+        plotter.add_mesh(spheres(root, 0.012), color=FIXED_COLOR, **ACCENT_LIGHTING)
     plotter.camera_position = camera
-    plotter.camera.zoom(1.05)
+    plotter.camera.zoom(0.95)
     image = plotter.screenshot(return_img=True)
     plotter.close()
     return image
@@ -437,7 +438,7 @@ def render(
         bbox_to_anchor=(0.36, 0.0),
         frameon=False,
     )
-    save(figure, OUTPUT, tight=True)
+    save(figure, OUTPUT, tight=True, full_color=True)
 
 
 def main() -> None:

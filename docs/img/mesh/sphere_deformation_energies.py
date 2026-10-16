@@ -23,6 +23,7 @@ import numpy as np
 import pyvista as pv
 import torch
 from _style import (
+    ACCENT_LIGHTING,
     FIXED,
     RESULT,
     SECOND,
@@ -139,6 +140,8 @@ def _render(actors, camera):
 
     plotter = pv.Plotter(off_screen=True, window_size=(900, 900))
     plotter.enable_anti_aliasing("ssaa")
+    # The surface is translucent, so that controls on the far side stay visible.
+    plotter.enable_depth_peeling()
     plotter.set_background("white")
     for dataset, kwargs in actors:
         plotter.add_mesh(dataset, **{"ambient": 0.35, **kwargs})
@@ -146,6 +149,16 @@ def _render(actors, camera):
     image = plotter.screenshot(return_img=True)
     plotter.close()
     return image
+
+
+def _trim(images, margin=40):
+    """Crop the white border shared by same-size renders, keeping their common scale."""
+
+    ink = np.any([(image[..., :3] < 250).any(axis=2) for image in images], axis=0)
+    rows, cols = np.flatnonzero(ink.any(axis=1)), np.flatnonzero(ink.any(axis=0))
+    r0, r1 = max(rows[0] - margin, 0), rows[-1] + margin
+    c0, c1 = max(cols[0] - margin, 0), cols[-1] + margin
+    return [image[r0:r1, c0:c1] for image in images]
 
 
 def _surface(mesh):
@@ -159,6 +172,7 @@ def _surface(mesh):
             "edge_color": SURFACE_EDGE,
             "line_width": 0.6,
             "diffuse": 0.7,
+            "opacity": 0.55,
         },
     )
 
@@ -177,7 +191,7 @@ def _arrows(starts, vectors, color):
         )
         for start, vector in zip(starts, vectors, strict=True)
     ]
-    return (pv.merge(arrows), {"color": color})
+    return (pv.merge(arrows), {"color": color, **ACCENT_LIGHTING})
 
 
 def _legend(figure, entries):
@@ -210,11 +224,11 @@ def _panel(mesh, points, controls, displacements, *, original):
     destination = source + displacements_np[-1]
     actors = [
         _surface(shown),
-        (spheres(placed[:2], 0.06), {"color": FIXED}),
-        (spheres(placed[2:13], 0.055), {"color": SECOND}),
+        (spheres(placed[:2], 0.06), {"color": FIXED, **ACCENT_LIGHTING}),
+        (spheres(placed[2:13], 0.055), {"color": SECOND, **ACCENT_LIGHTING}),
         (
             spheres((source if original else destination)[None], 0.075),
-            {"color": RESULT},
+            {"color": RESULT, **ACCENT_LIGHTING},
         ),
     ]
     if not original:
@@ -313,15 +327,20 @@ def main() -> None:
         ),
     )
 
-    figure, axes = plt.subplots(1, 3, figsize=(13.5, 6.0))
     cpu_reference = reference.to("cpu")
-    for axis, (title, points, displacements, residuals, original) in zip(
-        axes, panels, strict=True
+    images = _trim(
+        [
+            _panel(cpu_reference, points, controls, displacements, original=original)
+            for _, points, displacements, _, original in panels
+        ]
+    )
+    height, width = images[0].shape[:2]
+    figure, axes = plt.subplots(1, 3, figsize=(13.5, 4.5 * height / width + 1.15))
+    for axis, image, (title, _, _, residuals, _) in zip(
+        axes, images, panels, strict=True
     ):
         volume_error, bending = residuals
-        axis.imshow(
-            _panel(cpu_reference, points, controls, displacements, original=original)
-        )
+        axis.imshow(image)
         axis.set_title(
             f"{title}\n{mesh_label(reference)}\n"
             f"volume error {volume_error:.1e}, bending {bending:.2f}"
@@ -335,8 +354,8 @@ def main() -> None:
             ("target handle", RESULT),
         ),
     )
-    figure.subplots_adjust(left=0.0, right=1.0, bottom=0.07, top=0.84, wspace=0.02)
-    save(figure, OUTPUT)
+    figure.subplots_adjust(left=0.0, right=1.0, bottom=0.07, top=0.98, wspace=0.02)
+    save(figure, OUTPUT, tight=True)
     print(f"Saved {OUTPUT} with {implementation} on {device}")
 
 
