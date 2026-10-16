@@ -143,6 +143,10 @@ class EDMNoiseScheduler(LinearGaussianNoiseScheduler):
         r"""Identity mapping: :math:`t = \sigma`."""
         return sigma
 
+    def snr_inv(self, q: Float[Tensor, " *shape"]) -> Float[Tensor, " *shape"]:
+        r"""Find diffusion time :math:`t = 1/q` for amplitude ratios ``q > 0``."""
+        return self.sigma_inv(q.reciprocal())
+
     def sigma_dot(
         self,
         t: Float[Tensor, " *shape"],

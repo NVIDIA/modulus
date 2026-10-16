@@ -456,6 +456,47 @@ class LinearGaussianNoiseScheduler(ABC, NoiseScheduler):
         """
         return self.alpha(t) / self.sigma(t)
 
+    def snr_inv(
+        self,
+        q: Float[Tensor, " *shape"],
+    ) -> Float[Tensor, " *shape"]:
+        r"""Find the diffusion time for a signal-to-noise amplitude ratio.
+
+        Use this to match noise levels between diffusion schedules. The
+        ratio compares signal and noise amplitudes. The usual power
+        signal-to-noise ratio is its square.
+
+        .. math::
+
+            q = \alpha(t) / \sigma(t), \qquad t = \mathrm{snr\_inv}(q).
+
+        Parameters
+        ----------
+        q : Tensor
+            Amplitude ratio, not its square. Built-in continuous inverses
+            support finite positive ratios without clipping to training bounds.
+
+        Returns
+        -------
+        Tensor
+            Diffusion times with the shape of ``q``.
+
+        Notes
+        -----
+        Override this method if your custom scheduler needs an inverse.
+        Keep the calculation differentiable for training losses such as sCM.
+        Schedulers without an inverse raise ``NotImplementedError`` here.
+
+        Examples
+        --------
+        >>> from physicsnemo.diffusion.noise_schedulers import EDMNoiseScheduler
+        >>> EDMNoiseScheduler().snr_inv(torch.tensor([2.0]))
+        tensor([0.5000])
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement snr_inv()."
+        )
+
     def x0_to_score(
         self,
         x0: Float[Tensor, " B *dims"],

@@ -105,6 +105,10 @@ class VENoiseScheduler(LinearGaussianNoiseScheduler):
         r"""Inverse VE mapping: :math:`t = \sigma^2`."""
         return sigma**2
 
+    def snr_inv(self, q: Float[Tensor, " *shape"]) -> Float[Tensor, " *shape"]:
+        r"""Find diffusion time :math:`t = q^{-2}` for amplitude ratios ``q > 0``."""
+        return self.sigma_inv(q.reciprocal())
+
     def sigma_dot(
         self,
         t: Float[Tensor, " *shape"],

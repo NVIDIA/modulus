@@ -131,6 +131,10 @@ class IDDPMNoiseScheduler(LinearGaussianNoiseScheduler):
         r"""For iDDPM, :math:`t = \sigma` (identity mapping)."""
         return sigma
 
+    def snr_inv(self, q: Float[Tensor, " *shape"]) -> Float[Tensor, " *shape"]:
+        r"""Find continuous diffusion time :math:`t = 1/q` for amplitude ratios ``q > 0``."""
+        return q.reciprocal()
+
     def sigma_dot(
         self,
         t: Float[Tensor, " *shape"],
