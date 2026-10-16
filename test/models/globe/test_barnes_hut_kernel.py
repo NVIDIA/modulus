@@ -1838,3 +1838,50 @@ def test_compute_node_strengths_precision_at_scale() -> None:
 
 if __name__ == "__main__":
     pytest.main()
+
+
+def test_bh_compiled_second_call_reuses_graph() -> None:
+    """The first compiled call leaves nothing that fails the next call's guards.
+
+    A ``cached_property`` read for the first time inside a compiled forward
+    adds itself to the module's ``__dict__``, and Dynamo guards on that
+    ``__dict__``: the second call of a training run recompiled every caller.
+    """
+    from torch._dynamo.testing import CompileCounter
+
+    torch.manual_seed(DEFAULT_SEED)
+    bh_kernel = BarnesHutKernel(
+        n_spatial_dims=3,
+        output_schema={"p": {"rank": 0}},
+        hidden_layer_sizes=[8],
+        leaf_size=DEFAULT_LEAF_SIZE,
+    ).eval()
+    g = torch.Generator().manual_seed(0)
+    source_pts = torch.randn(40, 3, generator=g)
+    target_pts = torch.randn(20, 3, generator=g)
+    cluster_tree = ClusterTree.from_points(source_pts, leaf_size=DEFAULT_LEAF_SIZE)
+    target_tree = ClusterTree.from_points(target_pts, leaf_size=DEFAULT_LEAF_SIZE)
+    plan = cluster_tree.find_dual_interaction_pairs(
+        target_tree=target_tree, theta=1.0, expand_far_targets=True
+    )
+    assert plan.n_near > 0
+
+    def evaluate(source_pts, target_pts, cluster_tree, target_tree, plan):
+        return bh_kernel(
+            source_points=source_pts,
+            target_points=target_pts,
+            reference_length=torch.ones(()),
+            cluster_tree=cluster_tree,
+            target_tree=target_tree,
+            dual_plan=plan,
+        )
+
+    counter = CompileCounter()
+    compiled = torch.compile(evaluate, backend=counter, dynamic=True)
+    args = (source_pts, target_pts, cluster_tree, target_tree, plan)
+    with torch.no_grad():
+        compiled(*args)
+        n_frames = counter.frame_count
+        compiled(*args)
+    assert n_frames >= 1
+    assert counter.frame_count == n_frames, "the second call recompiled"

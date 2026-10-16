@@ -521,6 +521,12 @@ class Kernel(Module):
         by their dotted names.  ``output_layout.unpack(packed)`` gives the
         output TensorDict."""
 
+        ### Fill the lazily computed size now.  A first access inside a
+        ### compiled forward adds it to the instance ``__dict__``; the next
+        ### call then fails Dynamo's guard on that ``__dict__`` and recompiles
+        ### every caller (3-5 minutes per DrivAerML training run on GB300).
+        _ = self._floats_per_interaction
+
     @cached_property
     def _floats_per_interaction(self) -> int:
         """Identifiable float allocations per (target, source) interaction.
