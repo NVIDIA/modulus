@@ -52,12 +52,8 @@ class SMARTField(SMART):
         Share corresponding encoder and decoder refinements.
     eval_seed : int, optional, default=0
         Fixed geometry sampling seed during evaluation.
-    attention_precision : {"float16", "bfloat16"} or None, optional, default=None
-        Optional attention precision override; see :class:`SMART`.
     qk_normalization : bool, optional, default=False
         Normalize projected queries and keys by their per-head RMS.
-    attention_precision_scope : {"attention", "sdpa", "decoder_sdpa"}, optional, default="attention"
-        Scope of the optional attention precision override.
     qk_temperature_max : float or None, optional, default=None
         Optional bound on learned normalized-attention temperature.
 
@@ -105,9 +101,7 @@ class SMARTField(SMART):
         mlp_ratio: int = 4,
         share_weights: bool = True,
         eval_seed: int = 0,
-        attention_precision: str | None = None,
         qk_normalization: bool = False,
-        attention_precision_scope: str = "attention",
         qk_temperature_max: float | None = None,
     ):
         if field not in ("surface", "volume"):
@@ -136,9 +130,7 @@ class SMARTField(SMART):
             mlp_ratio=mlp_ratio,
             share_weights=share_weights,
             eval_seed=eval_seed,
-            attention_precision=attention_precision,
             qk_normalization=qk_normalization,
-            attention_precision_scope=attention_precision_scope,
             qk_temperature_max=qk_temperature_max,
         )
         self.field = field
