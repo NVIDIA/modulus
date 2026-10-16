@@ -14,6 +14,8 @@ on CPU or GPU, and most of them are differentiable with
 Where to Start
 --------------
 
+The following resources document the library:
+
 - The `PhysicsNeMo-Mesh User Guide
   <https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh.html>`_
   explains the data model (manifold dimension, spatial dimension, and
@@ -22,15 +24,15 @@ Where to Start
 - The `tutorial notebooks
   <https://github.com/NVIDIA/physicsnemo/tree/main/examples/minimal/mesh>`_
   teach the library step by step, from a first mesh to an ML pipeline.
-- This API reference has one page per submodule. Each page gives the purpose
-  of the submodule, a short example, a table of its public API, and the full
-  reference.
+- This API reference has one page for each submodule. Each page gives the
+  purpose of the submodule, a short example, a table of its public API, and
+  the full reference.
 
 Quick Start
 -----------
 
 This example runs on a CPU. It builds two triangles in the plane, attaches a
-scalar field to the points, and computes the gradient of the field.
+scalar field to the points, and computes the gradient of the field:
 
 .. code:: python
 
@@ -54,6 +56,8 @@ To run the same code on a GPU, move the mesh and all of its data with
 
 Submodules
 ----------
+
+Each submodule has its own page:
 
 .. list-table::
    :header-rows: 1
@@ -82,8 +86,8 @@ Submodules
    * - :doc:`curvature`
      - Gaussian and mean curvature.
    * - :doc:`calculus`
-     - Gradient, divergence, curl, and Laplacian (DEC and LSQ), and
-       integration.
+     - Gradient, divergence, curl, and Laplacian, by discrete exterior
+       calculus (DEC) and least squares (LSQ), and integration.
    * - :doc:`boundaries`
      - Boundary detection, facet extraction, and watertight and manifold
        checks.
@@ -137,7 +141,7 @@ Work through them in order:
 
 .. toctree::
    :maxdepth: 1
-   :caption: Building meshes
+   :caption: Building Meshes
 
    primitives
    io
@@ -146,7 +150,7 @@ Work through them in order:
 
 .. toctree::
    :maxdepth: 1
-   :caption: Geometry and calculus
+   :caption: Geometry and Calculus
 
    geometry
    curvature
@@ -154,7 +158,7 @@ Work through them in order:
 
 .. toctree::
    :maxdepth: 1
-   :caption: Topology and queries
+   :caption: Topology and Queries
 
    boundaries
    neighbors
@@ -174,7 +178,7 @@ Work through them in order:
 
 .. toctree::
    :maxdepth: 1
-   :caption: Checking and viewing
+   :caption: Checking and Viewing
 
    validation
    visualization

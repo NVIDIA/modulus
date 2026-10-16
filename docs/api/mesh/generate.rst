@@ -3,8 +3,9 @@ Generate
 
 .. currentmodule:: physicsnemo.mesh.generate
 
-Mesh generation from implicit representations: isosurface extraction and
-dimension-generic volume meshing.
+``physicsnemo.mesh.generate`` generates meshes from implicit
+representations. It provides isosurface extraction and dimension-generic
+volume meshing.
 
 Choosing a Mesher
 -----------------
@@ -21,23 +22,24 @@ PhysicsNeMo-Mesh has three generation tools with distinct contracts:
    * - ``physicsnemo.mesh.tessellation.fill_interior``
      - closed boundary ``Mesh`` (2D today)
      - volume ``Mesh``, exact boundary, deterministic, a guaranteed
-       minimum angle (up to 33 degrees, for input corners of 60 degrees or
-       more; see :doc:`tessellation`)
-     - the boundary discretization is the contract (coupling, per-boundary
-       BCs, guaranteed worst-element quality)
+       minimum angle of up to 33 degrees for input corners of 60 degrees or
+       more (refer to :doc:`tessellation`)
+     - the boundary discretization is the contract (coupling, boundary
+       conditions on each boundary, guaranteed worst-element quality)
    * - :func:`mesh_implicit_domain`
-     - implicit function :math:`\varphi(x)` (SDF, level set, neural field)
+     - implicit function :math:`\varphi(x)`, such as a signed distance
+       function (SDF), a level set, or a neural field
      - volume ``Mesh`` in any dimension, boundary approximated to
        :math:`O(h^2)` where it is smooth (sharp corners are rounded at the
        ``h`` scale unless passed as ``feature_points``), GPU-native,
        differentiable refit
-     - geometry is implicit, you need 3D/ND volumes, GPU scale, or
+     - geometry is implicit, you need 3D or ND volumes, GPU scale, or
        gradients with regard to shape
    * - :func:`marching_cubes`
      - 3D scalar field on a grid
      - surface ``Mesh`` (the isosurface only, no interior)
-     - the boundary surface itself is the deliverable (visualization,
-       B-rep export)
+     - the boundary surface itself is the deliverable, for visualization or
+       boundary representation (B-rep) export
 
 Volume Meshing of Implicit Domains
 ----------------------------------
@@ -46,30 +48,34 @@ Volume Meshing of Implicit Domains
 ``{x : phi(x) < 0}`` for an arbitrary implicit function ``phi`` (a signed
 distance function, or any level set with a usable gradient, including
 neural implicit fields), in *any spatial dimension*, entirely in PyTorch
-tensor ops on CPU or CUDA. The meshed set is ``{phi < 0}`` intersected
+tensor operations on CPU or CUDA. The meshed set is ``{phi < 0}`` intersected
 with the bounding box. Where the domain reaches the box, the generator
 treats its faces as a boundary, so external-flow "box minus obstacle"
 domains work directly. Every optimization step is validity-gated, so when
 the function returns, the mesh is positively oriented and has a
 closed-manifold boundary. Difficult inputs lower element quality, which
-``full_output=True`` reports in a diagnostics dict, but do not by themselves
-stop generation. The function raises ``ValueError`` when no lattice cell fits
-inside the domain at this ``h``, or when the coverage guard trips. The
+``full_output=True`` reports in a diagnostics dictionary, but do not by
+themselves stop generation. The function raises ``ValueError`` when no
+lattice cell fits inside the domain at this ``h``, or when the coverage guard
+trips. The
 coverage guard raises the error, rather than dropping geometry, when the
 domain has features below the target edge length ``h`` or when coverage
-cannot be certified at all. The latter can happen, for example, if a neural
+cannot be certified. The latter can happen, for example, if a neural
 field returns NaN inside the box when queried outside its training range.
 Without ``feature_points``, sharp convex corners are rounded off at the
 ``h`` scale. Pass the corners as ``feature_points`` to interpolate them
 exactly.
 
-:func:`refit_mesh_to_implicit` is the differentiable companion: it
+:func:`refit_mesh_to_implicit` is the differentiable companion. It
 re-projects a mesh's boundary onto ``phi = 0`` with graph-preserving
 Newton steps at fixed topology, so gradients flow from mesh coordinates to
 shape parameters inside ``phi``. This enables meshing as a
 differentiable layer for shape optimization. For a box-minus-obstacle mesh,
 pass the same box as ``bounds=``, so that the vertices on the box faces stay
 on them.
+
+The following example meshes a spherical shell and differentiates its volume
+with respect to the outer radius:
 
 .. code:: python
 
@@ -97,23 +103,26 @@ on them.
 
 The refit does not gate its Newton steps, so that it stays differentiable. It
 warns when the projection inverts cells. On this coarse mesh, it warns that
-about 2% of the cells inverted, most of them near the outer sphere.
+about two percent of the cells inverted, most of them near the outer sphere.
 
-The following signed-distance building blocks are provided for
+The module also provides the following signed-distance building blocks for
 convenience:
 
 - :func:`sdf_sphere`
 - :func:`sdf_box`
 - :func:`sdf_polygon_2d`
-- :func:`sdf_union` (CSG combinator)
-- :func:`sdf_intersection` (CSG combinator)
-- :func:`sdf_difference` (CSG combinator)
-- :func:`project_to_zero_set` (Newton projection onto ``phi = 0``)
+- :func:`sdf_union`, a constructive solid geometry (CSG) combinator
+- :func:`sdf_intersection`, a CSG combinator
+- :func:`sdf_difference`, a CSG combinator
+- :func:`project_to_zero_set`, a Newton projection onto ``phi = 0``
 
 Any callable with the signature ``phi(x: (..., d)) -> (...)`` also works,
-if it is negative inside the domain and positive outside, differentiable
-(almost everywhere) under autograd, and has a nonzero gradient near
-``phi = 0``. It must not return NaN inside the bounds.
+if it meets the following conditions:
+
+- It is negative inside the domain and positive outside.
+- It is differentiable, almost everywhere, under autograd.
+- It has a nonzero gradient near ``phi = 0``.
+- It does not return NaN inside the bounds.
 
 Isosurface Extraction
 ---------------------
@@ -138,8 +147,10 @@ Summary
    sdf_difference
    project_to_zero_set
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - :doc:`tessellation` for exact-boundary filling of a closed boundary mesh.
 - Tutorial: `Primitives and Mesh Generation

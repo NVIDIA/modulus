@@ -231,8 +231,10 @@ Summary
    surface_bending_energy
    closed_surface_volume_energy
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following page for a related topic:
 
 - :doc:`transformations` for the deformations that these energies regularize.
 

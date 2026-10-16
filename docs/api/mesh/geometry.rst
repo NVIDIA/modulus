@@ -9,15 +9,16 @@ Geometry
 - Cell areas (the n-dimensional volume of each simplex) and cell normals
 - Interior angles of each cell at each of its vertices
 - Circumcenters of each cell, which define the circumcentric dual mesh that
-  DEC (discrete exterior calculus) uses
+  discrete exterior calculus (DEC) uses
 - Dual volumes: the Voronoi region around each vertex and the dual cell of
   each edge
-- Cotangent weights, the standard edge weights of the FEM and DEC Laplacian
+- Cotangent weights, the standard edge weights of the finite element method
+  (FEM) and DEC Laplacian
 
-Most users do not call these functions directly. The ``Mesh`` properties
-(``mesh.cell_areas``, ``mesh.cell_normals``) and the calculus and curvature
-functions call them and cache the results. Use them to write your own DEC
-operators or finite element (FEM) assembly.
+Most of the time, you do not call these functions directly. The ``Mesh``
+properties (``mesh.cell_areas``, ``mesh.cell_normals``) and the calculus and
+curvature functions call them and cache the results. Use them to write your
+own DEC operators or FEM assembly.
 
 Some functions take a mesh. Others take tensors, so that you can call them
 on cell geometry without a ``Mesh``:
@@ -31,6 +32,8 @@ on cell geometry without a ``Mesh``:
 
 Example
 -------
+
+The following example computes geometric quantities on an icosahedral sphere:
 
 .. code:: python
 
@@ -70,14 +73,16 @@ Example
 Choosing a Function
 -------------------
 
+Use the following guidelines to choose a function:
+
 - :func:`get_or_compute_circumcenters` and
   :func:`get_or_compute_dual_volumes_0` read the mesh cache first and
   compute only on a miss. Use them in place of
   :func:`compute_circumcenters` and :func:`compute_dual_volumes_0` when you
   call them more than once on one mesh.
-- :func:`compute_vertex_angles` gives one angle per cell vertex.
-  :func:`compute_vertex_angle_sums` adds them up per point, which gives the
-  angle defect for Gaussian curvature.
+- :func:`compute_vertex_angles` gives one angle for each cell vertex.
+  :func:`compute_vertex_angle_sums` adds them up for each point, which gives
+  the angle defect for Gaussian curvature.
 - :func:`compute_triangle_angles` and :func:`stable_angle_between_vectors`
   take point coordinates or vectors as tensors, not a mesh.
 
@@ -100,8 +105,10 @@ Summary
    compute_dual_volumes_1
    compute_cotan_weights_fem
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - :doc:`calculus` and :doc:`curvature`, which use these quantities.
 - Tutorial: `Discrete Calculus and Curvature

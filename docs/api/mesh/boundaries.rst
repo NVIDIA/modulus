@@ -5,7 +5,7 @@ Boundaries and Topology
 
 ``physicsnemo.mesh.boundaries`` finds the boundary of a mesh, extracts its
 facets, and checks its topology. A facet is a face of a cell with one
-dimension less than the cell: the facets of a triangle are its three edges,
+dimension less than the cell. The facets of a triangle are its three edges,
 and the facets of a tetrahedron are its four triangles. A boundary facet
 belongs to exactly one cell. An interior facet is shared by two cells.
 
@@ -15,11 +15,10 @@ The module has three groups of functions:
 - Facet extraction: a new mesh of the facets, with data aggregated from the
   parent cells.
 - Topology checks: whether a mesh is
-  `watertight <https://en.wikipedia.org/wiki/Watertight_(3D_modeling)>`_
-  (it has no boundary facets) or
-  `manifold <https://en.wikipedia.org/wiki/Manifold>`_ (it looks locally
-  like Euclidean space, so that, for example, each facet belongs to one or
-  two cells).
+  `watertight <https://en.wikipedia.org/wiki/Watertight_(3D_modeling)>`_ or
+  `manifold <https://en.wikipedia.org/wiki/Manifold>`_. A watertight mesh has
+  no boundary facets. A manifold mesh looks locally like Euclidean space, so
+  that, for example, each facet belongs to one or two cells.
 
 The most common operations are also ``Mesh`` methods:
 :meth:`~physicsnemo.mesh.mesh.Mesh.get_boundary_mesh`,
@@ -28,8 +27,8 @@ The most common operations are also ``Mesh`` methods:
 :meth:`~physicsnemo.mesh.mesh.Mesh.is_manifold`.
 
 .. figure:: ../../img/mesh/boundaries_facets.png
-   :alt: Top row: a triangulated ring; the same ring, faded, with its outer
-         and inner circles drawn in thick orange; all of the ring's edges
+   :alt: Top row: a triangulated ring, the same ring faded with its outer
+         and inner circles drawn in thick orange, and all of the ring's edges
          drawn as lines. Bottom row: a ball cut open, with its tetrahedra
          shrunk apart, and its triangulated boundary surface in orange.
    :align: center
@@ -42,6 +41,8 @@ The most common operations are also ``Mesh`` methods:
 
 Example
 -------
+
+The following example finds the boundaries of a square and of a cube:
 
 .. code:: python
 
@@ -72,6 +73,8 @@ mean of the ``cell_data`` of its parent cells. Set ``data_aggregation`` to
 Choosing a Function
 -------------------
 
+Use the following guidelines to choose a function:
+
 - For a mesh of the boundary, use ``mesh.get_boundary_mesh()``. For a mesh of
   all facets, use ``mesh.get_facet_mesh()``. With ``target_counts``, the facet
   mesh can keep only the boundary (``"boundary"``), shared (``"shared"``), or
@@ -101,8 +104,10 @@ Summary
    compute_aggregation_weights
    deduplicate_and_aggregate_facets
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - :doc:`neighbors` for adjacency between points and cells.
 - :doc:`repair` for hole filling and orientation fixes.

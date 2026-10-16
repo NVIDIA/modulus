@@ -4,19 +4,19 @@ Subdivision
 .. currentmodule:: physicsnemo.mesh.subdivision
 
 ``physicsnemo.mesh.subdivision`` refines a mesh by splitting each n-simplex
-into :math:`2^n` child simplices: each edge becomes two edges, each triangle
+into :math:`2^n` child simplices. Each edge becomes two edges, each triangle
 four triangles, and each tetrahedron eight tetrahedra. New points go at or
 near the edge midpoints. There are three schemes:
 
 Linear (midpoint)
-    New points go at the exact edge midpoints. This scheme is interpolating:
-    the original points keep their positions. It is the fastest scheme and
+    New points go at the exact edge midpoints. This scheme is interpolating.
+    The original points keep their positions. It is the fastest scheme and
     the only one for every manifold dimension. It does not smooth, so each
     original cell stays visible as a flat facet of the refined mesh.
 
 Loop (`Loop, 1987 <https://www.microsoft.com/en-us/research/publication/smooth-subdivision-surfaces-based-on-triangles/>`_)
     A weighted average that depends on the valence (number of neighbors) of
-    each point gives smooth limit surfaces. This scheme is approximating: it
+    each point gives smooth limit surfaces. This scheme is approximating. It
     also moves the original points, so on a convex surface the refined mesh
     lies inside the coarse one. It is the standard choice for a smooth surface
     from a coarse triangle mesh.
@@ -31,9 +31,9 @@ Loop and Butterfly need a triangle mesh (``n_manifold_dims == 2``). All
 schemes carry ``point_data`` and ``cell_data`` to the refined mesh.
 
 .. figure:: ../../img/mesh/subdivision_schemes.png
-   :alt: Four panels with an orange wireframe of a cube. A plain cube of 12
-         triangles; the same cube, finely triangulated; a sphere inside the
-         wireframe; a rounded, bulging box that passes through the cube's
+   :alt: Four panels with an orange wireframe of a cube: a plain cube of 12
+         triangles, the same cube finely triangulated, a sphere inside the
+         wireframe, and a rounded, bulging box that passes through the cube's
          corners.
    :align: center
    :width: 100%
@@ -45,6 +45,8 @@ schemes carry ``point_data`` and ``cell_data`` to the refined mesh.
 
 Example
 -------
+
+The following example subdivides an icosahedron with each scheme:
 
 .. code:: python
 
@@ -73,8 +75,10 @@ Summary
    subdivide_loop
    subdivide_butterfly
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - :doc:`remeshing` for a new mesh with a target number of points.
 - Tutorial: `Mesh Operations

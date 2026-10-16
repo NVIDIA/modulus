@@ -5,8 +5,9 @@ I/O
 
 ``physicsnemo.mesh.io`` converts between :class:`~physicsnemo.mesh.mesh.Mesh`
 and `PyVista <https://pyvista.org/>`_ meshes, and saves meshes in the native
-Zarr format. PyVista reads and writes many file formats (VTK, STL, PLY, OBJ,
-and others), so it is the main way to load and save files.
+Zarr format. PyVista reads and writes many file formats, such as VTK, STL,
+PLY, and OBJ, so it is the main way to load and save files. The module has
+the following functions:
 
 - :func:`from_pyvista` converts a ``pyvista.PolyData``,
   ``pyvista.UnstructuredGrid``, or ``pyvista.PointSet`` to a ``Mesh``, with
@@ -70,8 +71,10 @@ Summary
    from_zarr
    to_zarr
 
-See Also
---------
+Related Topics
+--------------
+
+Refer to the following pages for related topics:
 
 - :doc:`tessellation` for polygon meshes.
 - Tutorial: `Loading, Converting, and Saving Meshes
