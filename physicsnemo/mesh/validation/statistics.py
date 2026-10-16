@@ -26,8 +26,8 @@ from typing import TYPE_CHECKING
 import torch
 
 from physicsnemo.mesh.validation.quality import (
+    _compute_quality_metrics,
     compute_cell_edge_lengths,
-    compute_quality_metrics,
 )
 
 if TYPE_CHECKING:
@@ -101,14 +101,15 @@ def compute_mesh_statistics(
         .sum()
     )
 
-    quality_metrics = compute_quality_metrics(mesh)
-
     ### Lengths of every edge of every cell (a shared edge counts once per cell)
+    # The quality metrics reuse them, so they are computed once.
+    cell_edge_lengths = compute_cell_edge_lengths(mesh)
+    quality_metrics = _compute_quality_metrics(mesh, cell_edge_lengths)
     if mesh.n_manifold_dims == 0:
         # A 0-simplex has no edges; its quality metrics report a NaN length.
         edge_lengths = quality_metrics["min_edge_length"]
     else:
-        edge_lengths = compute_cell_edge_lengths(mesh).flatten()
+        edge_lengths = cell_edge_lengths.flatten()
     optional_stats = [
         key
         for key in ("aspect_ratio", "quality_score")
