@@ -18,9 +18,13 @@
 
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 import torch
+from _style import DIVERGING, DPI, FIXED, SURFACE_EDGE, TEXT, mesh_label, spheres
+from matplotlib.colors import Normalize
+from matplotlib.lines import Line2D
 
 from physicsnemo.mesh import Mesh
 from physicsnemo.mesh.io import to_pyvista
@@ -31,9 +35,8 @@ RESOLUTION = 13
 LENGTH_SCALE = 0.18
 DISPLAY_STEP = 0.52
 SCALAR_NAME = "Normalized upward update"
-MESH_EDGE = "#3e4a4f"
-ARROW_COLOR = "#18272d"
-FIXED_COLOR = "#c36a2d"
+MESH_EDGE = SURFACE_EDGE
+ARROW_COLOR = TEXT
 
 
 def _make_sheet() -> tuple[Mesh, torch.Tensor]:
@@ -186,50 +189,38 @@ def main() -> None:
     selected = grid[1:-1:2, 1:-1:2].reshape(-1)
     panels = (
         (
-            "Before: raw upward update",
+            f"raw upward update, {mesh_label(mesh)}",
             raw_update.numpy(),
             raw_roughness.item(),
         ),
         (
-            "After: Sobolev-filtered update",
+            f"sobolev_deform(length_scale={LENGTH_SCALE})",
             sobolev_update.numpy(),
             sobolev_roughness.item(),
         ),
     )
 
-    pv.OFF_SCREEN = True
-    plotter = pv.Plotter(shape=(1, 2), window_size=(1600, 500))
-    plotter.enable_anti_aliasing("ssaa")
-    for column, (title, update, roughness) in enumerate(panels):
+    figure, axes = plt.subplots(1, 2, figsize=(13.5, 5.6))
+    for axis, (title, update, roughness) in zip(axes, panels, strict=True):
         deformed_points = points + DISPLAY_STEP * update
         panel_mesh = to_pyvista(mesh)
         panel_mesh.points = deformed_points
         panel_mesh.point_data[SCALAR_NAME] = update[:, 2]
-
-        plotter.subplot(0, column)
+        plotter = pv.Plotter(off_screen=True, window_size=(1100, 800))
+        plotter.enable_anti_aliasing("ssaa")
+        plotter.set_background("white")
         plotter.add_mesh(
             panel_mesh,
             scalars=SCALAR_NAME,
-            cmap="OrRd",
-            clim=(0.0, 1.0),
+            cmap=DIVERGING,
+            clim=(-1.0, 1.0),
             show_edges=True,
             edge_color=MESH_EDGE,
-            line_width=0.55,
+            line_width=0.6,
             smooth_shading=True,
-            ambient=0.3,
+            ambient=0.35,
             diffuse=0.7,
-            show_scalar_bar=column == 1,
-            scalar_bar_args={
-                "title": "",
-                "color": "black",
-                "label_font_size": 10,
-                "vertical": False,
-                "position_x": 0.31,
-                "position_y": 0.02,
-                "width": 0.62,
-                "height": 0.07,
-                "n_labels": 3,
-            },
+            show_scalar_bar=False,
         )
         plotter.add_arrows(
             deformed_points[selected] + np.array((0.0, 0.0, 0.012)),
@@ -237,32 +228,11 @@ def main() -> None:
             mag=0.13,
             color=ARROW_COLOR,
         )
-        plotter.add_points(
-            points[fixed] + np.array((0.0, 0.0, 0.012)),
-            color=FIXED_COLOR,
-            point_size=8.0,
-            render_points_as_spheres=True,
+        plotter.add_mesh(
+            spheres(points[fixed] + np.array((0.0, 0.0, 0.012)), 0.025),
+            color=FIXED,
+            ambient=0.35,
         )
-        plotter.add_text(
-            f"{title}\nnormalized edge roughness  {roughness:.2f}",
-            position="upper_left",
-            font_size=12,
-            color="black",
-        )
-        if column == 0:
-            plotter.add_text(
-                "● fixed boundary",
-                position="lower_left",
-                font_size=9,
-                color=FIXED_COLOR,
-            )
-        else:
-            plotter.add_text(
-                "normalized upward update",
-                position="lower_left",
-                font_size=9,
-                color="#35444a",
-            )
         plotter.camera_position = [
             (2.8, -4.0, 2.4),
             (0.0, 0.0, 0.12),
@@ -270,16 +240,44 @@ def main() -> None:
         ]
         plotter.camera.parallel_projection = True
         plotter.camera.zoom(1.02)
+        axis.imshow(plotter.screenshot(return_img=True))
+        plotter.close()
+        axis.set_title(f"{title}\nnormalized edge roughness {roughness:.2f}")
+        axis.set_axis_off()
 
-    plotter.link_views()
-    plotter.set_background("white")
-    plotter.render()
-    plotter.screenshot(OUTPUT, transparent_background=False)
-    plotter.close()
+    colorbar = figure.colorbar(
+        plt.cm.ScalarMappable(norm=Normalize(vmin=-1.0, vmax=1.0), cmap=DIVERGING),
+        ax=axes,
+        orientation="horizontal",
+        fraction=0.05,
+        pad=0.02,
+        shrink=0.4,
+    )
+    colorbar.set_label("normalized upward update (arrows share the scale)")
+    figure.legend(
+        handles=[
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="none",
+                markerfacecolor=FIXED,
+                markeredgecolor="white",
+                markersize=12,
+                label="fixed boundary",
+            )
+        ],
+        loc="lower left",
+        bbox_to_anchor=(0.04, 0.04),
+        frameon=False,
+    )
+    # Smooth color ramps band under a 256-color palette, so keep full RGB.
+    figure.savefig(OUTPUT, dpi=DPI, facecolor="white", bbox_inches="tight")
+    plt.close(figure)
+    print(f"Saved {OUTPUT} ({OUTPUT.stat().st_size / 1024:.0f} KB)")
 
     print(f"Raw adjoint roughness: {raw_roughness.item():.4f}")
     print(f"Sobolev adjoint roughness: {sobolev_roughness.item():.4f}")
-    print(f"Saved {OUTPUT}")
 
 
 if __name__ == "__main__":
