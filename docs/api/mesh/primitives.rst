@@ -22,8 +22,8 @@ the exception, with one function for each kind of text mesh.
    :width: 100%
 
    Two primitives from each family, labeled with the module path and with the
-   manifold and spatial dimensions. The volume meshes are cut open, and their
-   tetrahedra are shrunk so that they show.
+   manifold and spatial dimensions. The volume meshes are cut open, and the
+   faces of the tetrahedra on each cut are drawn in a lighter tint.
 
 The most-used primitives are the following:
 

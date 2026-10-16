@@ -24,6 +24,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import pyvista as pv
+import torch
 from PIL import Image
 
 from physicsnemo.mesh.io import to_pyvista
@@ -36,6 +37,7 @@ OUTPUT = Path(__file__).parent / "primitives_gallery.png"
 MESH_COLOR = "#9ecae1"
 EDGE_COLOR = "#304050"
 CURVE_COLOR = "#0072b2"
+CUT_COLOR = "#e3f0f8"  # a lighter tint of MESH_COLOR for the faces on a cut
 VIEW_VECTOR = (1.0, -1.4, 0.9)
 
 GALLERY = {
@@ -52,7 +54,7 @@ GALLERY = {
         ("surfaces.mobius_strip", surfaces.mobius_strip.load()),
     ],
     "volumes": [
-        ("volumes.cube_volume", volumes.cube_volume.load(subdivisions=3)),
+        ("volumes.cube_volume", volumes.cube_volume.load(subdivisions=4)),
         ("volumes.sphere_volume", volumes.sphere_volume.load(resolution=16)),
     ],
     "procedural": [
@@ -64,33 +66,50 @@ GALLERY = {
 plt.rcParams.update({"font.size": 13})
 
 
+def _keys(triangles):
+    """One integer per triangle, independent of the vertex order."""
+
+    a, b, c = triangles.sort(dim=1).values.long().unbind(1)
+    return (a * 2**20 + b) * 2**20 + c
+
+
 def _render(mesh):
     """Render one primitive: top-down in 2D, oblique in 3D, cut open if solid."""
 
-    dataset = to_pyvista(mesh)
     plotter = pv.Plotter(window_size=(700, 700))
     plotter.enable_anti_aliasing("ssaa")
+    style = {
+        "show_edges": True,
+        "edge_color": EDGE_COLOR,
+        "line_width": 0.6,
+        "lighting": mesh.n_spatial_dims == 3,
+        "ambient": 0.35,
+        "diffuse": 0.7,
+    }
     if mesh.n_manifold_dims == 1:
+        dataset = to_pyvista(mesh)
         plotter.add_mesh(dataset.tube(radius=0.012 * dataset.length), color=CURVE_COLOR)
-    else:
-        if mesh.n_manifold_dims == 3 and mesh.n_cells > 1:
-            # Cut the solid open: drop the cells in the octant that faces the
-            # camera, and shrink the rest toward their centroids a little, to
-            # show the tetrahedra inside.
-            offsets = mesh.cell_centroids - mesh.points.mean(dim=0)
-            facing = (offsets * mesh.points.new_tensor(VIEW_VECTOR) > 0.0).all(dim=1)
-            dataset = dataset.extract_cells((~facing).nonzero().squeeze(1).numpy())
-            dataset = dataset.shrink(0.88)
-        plotter.add_mesh(
-            dataset,
-            color=MESH_COLOR,
-            show_edges=True,
-            edge_color=EDGE_COLOR,
-            line_width=0.6,
-            lighting=mesh.n_spatial_dims == 3,
-            ambient=0.35,
-            diffuse=0.7,
+    elif mesh.n_manifold_dims == 3:
+        # Cut the solid open: drop the tetrahedra in the quarter that faces the
+        # camera, then draw the outer skin and the faces on the cut apart, so
+        # that the cut shows in a lighter tint.
+        offsets = mesh.cell_centroids - mesh.points.mean(dim=0)
+        kept = mesh.slice_cells(~((offsets[:, 0] > 0.0) & (offsets[:, 1] < 0.0)))
+        exposed = kept.get_boundary_mesh()
+        on_skin = torch.isin(
+            _keys(exposed.cells), _keys(mesh.get_boundary_mesh().cells)
         )
+        plotter.add_mesh(
+            to_pyvista(exposed.slice_cells(on_skin)), color=MESH_COLOR, **style
+        )
+        # Mostly ambient light keeps the cut light and even, though its faces
+        # point many ways.
+        cut_style = {**style, "ambient": 0.8, "diffuse": 0.25, "specular": 0.0}
+        plotter.add_mesh(
+            to_pyvista(exposed.slice_cells(~on_skin)), color=CUT_COLOR, **cut_style
+        )
+    else:
+        plotter.add_mesh(to_pyvista(mesh), color=MESH_COLOR, **style)
     plotter.set_background("white")
     if mesh.n_spatial_dims == 2:
         plotter.view_xy()

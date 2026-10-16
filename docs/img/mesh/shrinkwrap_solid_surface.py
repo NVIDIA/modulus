@@ -779,17 +779,17 @@ def render_case(
 
     panels = (
         (
-            "optimized enclosure\n"
+            f"optimized enclosure\n{mesh_label(source)}\n"
             f"cap crosses the plane by up to {metrics.max_correction:.2f}",
             screenshot(before),
         ),
         (
-            "shrinkwrap(plane, point_weights=movable)\n"
+            f"shrinkwrap(plane, point_weights=movable)\n{mesh_label(result)}\n"
             "cap meets the plane, the rest is retained",
             screenshot(after),
         ),
         (
-            f"result, same connectivity\n{mesh_label(result)}",
+            f"result\n{mesh_label(result)}\nsame connectivity as the input",
             screenshot(final),
         ),
     )
@@ -809,7 +809,7 @@ def render_case(
         ncol=4,
         frameon=False,
     )
-    figure.subplots_adjust(left=0.0, right=1.0, bottom=0.1, top=0.86, wspace=0.02)
+    figure.subplots_adjust(left=0.0, right=1.0, bottom=0.1, top=0.82, wspace=0.02)
     output.parent.mkdir(parents=True, exist_ok=True)
     save(figure, output)
 
