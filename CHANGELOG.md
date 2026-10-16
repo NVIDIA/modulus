@@ -295,6 +295,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A mesh saved with cached adjacencies now loads in a new Python process.
   Before, `Mesh.load` raised unless `physicsnemo.mesh.neighbors` was already
   imported.
+- Intrinsic cell gradients on curves in 3D now lie along each cell's own
+  direction. Before, they crashed on open curves and were projected onto the
+  wrong tangent on closed curves.
+- Curvature of a curve whose two edges at a vertex both start or both end
+  there, as `get_boundary_mesh` produces, is now correct. Before, the angle at
+  such a vertex was wrong, so a right-angled corner had zero curvature.
+- DEC gradients, divergences and Laplacians of a float32 field on a float64
+  mesh now return float64 results instead of raising. DEC gradients and
+  Laplacians of tensor fields, and LSQ cell gradients, no longer fail on meshes
+  without cells, and `flat` handles fields with several trailing dimensions.
 - `DefaultCollator` with a `stack_dim` past the batch dimensions of the
   samples stacks each tensor with `torch.stack`, without TensorDict behaviour
   that 0.15 deprecates. The batch's `batch_size` now matches its tensors, and

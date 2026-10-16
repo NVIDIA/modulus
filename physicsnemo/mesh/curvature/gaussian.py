@@ -104,6 +104,11 @@ def gaussian_curvature_vertices(mesh: "Mesh") -> Float[torch.Tensor, " n_points"
 
     where the sum is over vertices and :math:`\chi(M)` is the Euler
     characteristic.
+
+    For a curve in 2D, the sign of :math:`K` follows the edge orientation, so
+    it needs consistently oriented edges (one ending and one starting at each
+    vertex), as :func:`~physicsnemo.mesh.repair.fix_orientation` gives. Where
+    the two edges at a vertex are not, :math:`|K|` is returned.
     """
     n_manifold_dims = mesh.n_manifold_dims
 
