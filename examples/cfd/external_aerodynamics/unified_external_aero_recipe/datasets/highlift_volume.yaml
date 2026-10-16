@@ -34,7 +34,7 @@ pipeline:
     pattern: "geo_LHC*/*.pdmsh"
     subsample_n_points: ${sampling_resolution}
     subsample_n_cells: ${sampling_resolution}
-    # In-file boundaries get only the cell subsample (see drivaer_ml_volume.yaml).
+    # The default ("both") keeps only ~1/27 of the requested boundary cells.
     boundary_subsample: cells
     # Interior consumed as a point cloud; drop tet topology so the point
     # subsample is a cheap contiguous block read (see drivaer_ml_volume.yaml).
