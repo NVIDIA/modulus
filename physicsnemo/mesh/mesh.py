@@ -2532,6 +2532,11 @@ class Mesh(
         codimension-1 facet (e.g., cells sharing an edge in 2D or a face in
         3D).  The parent mesh's ``cell_data`` becomes the ``point_data`` of the
         returned Mesh, since each dual-graph node corresponds to a parent cell.
+        As in ``to_point_cloud(point_source="cell_centroids")``, each node also
+        carries its parent cell's measure in ``point_data["_effective_measure"]``,
+        and ``global_data["_point_measure_dimension"]`` records the parent's
+        manifold dimension. ``integrate_samples`` reads these reserved fields,
+        so it integrates node values over the parent mesh.
 
         Returns
         -------
