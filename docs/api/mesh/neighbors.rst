@@ -250,7 +250,7 @@ from its geometry, and runs one step of mean aggregation on plain tensors:
    Message passing on a mesh graph needs only tensors. ``expand_to_pairs()``
    gives two index pairs for each edge. ``cell_areas`` of a ``Mesh[1, n]``
    gives the edge lengths. Three steps of mean aggregation with ``index_add_``
-   remove the noise from a node field and keep the ramp.
+   remove most of the noise from a node field and keep the ramp.
 
 .. tip::
 
