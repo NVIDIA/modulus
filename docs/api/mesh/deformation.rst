@@ -8,6 +8,17 @@ objectives. They can regularize a deformation predicted by a model or produced
 by an optimizer while gradients continue to the deformed coordinates and the
 parameters that generated them.
 
+:bdg-success:`CPU and GPU` :bdg-info:`autograd`
+:bdg-warning:`float32 and float64 only`
+
+.. figure:: /img/mesh/square_deformation_energies.png
+   :alt: Original square and unregularized and penalty-regularized RBF deformations
+   :width: 100%
+
+   A square deformed toward one radial basis function (RBF) target, with no
+   penalties (center) and with strain, area, and inversion penalties (right).
+   Titles give the relative area error and the minimum signed area ratio.
+
 These functions provide penalty terms, not a deformation solver or exact
 constraint mechanism. A finite penalty weight does not guarantee that an area,
 volume, or inversion limit is satisfied exactly. The caller chooses an
@@ -147,10 +158,6 @@ enforced in the parameterization, as above, or included in the objective.
 The figure compares the same RBF target with and without geometric penalties.
 The third panel is *penalty-regularized*: finite weights reduce, but do not
 strictly eliminate, the geometric residuals.
-
-.. figure:: /img/mesh/square_deformation_energies.png
-   :alt: Original square and unregularized and penalty-regularized RBF deformations
-   :width: 100%
 
 Volume and Bending Control in 3D
 --------------------------------

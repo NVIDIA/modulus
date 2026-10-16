@@ -23,8 +23,9 @@ for each point or cell, and the same values are cached ``Mesh`` properties.
    Gaussian and mean curvature on a torus, and the angle defect behind the
    Gaussian curvature. The Gaussian curvature changes sign. It is positive on
    the outer rim and negative on the inner rim. It is zero on the top and
-   bottom circles. The mean curvature is positive everywhere, because every
-   part of this torus bulges toward its outward normals. At a vertex of an
+   bottom circles. The mean curvature is positive everywhere on this torus,
+   because the bend around the thin tube outweighs the opposite bend on the
+   inner rim. At a vertex of an
    icosahedron, five angles of 60 degrees sum to 300 degrees, which leaves a
    gap of :math:`\pi/3`.
 
@@ -53,6 +54,8 @@ for each point or cell, and the same values are cached ``Mesh`` properties.
 
 Example
 -------
+
+The following example checks both curvatures on a sphere of radius 2:
 
 .. code:: python
 

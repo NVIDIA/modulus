@@ -15,7 +15,7 @@ rank-2 tensor :math:`T` becomes :math:`R T R^\top`.
 it reads or writes, and check data against that declaration. A plain
 concatenation of channels loses this information.
 
-:bdg-secondary:`any rank` :bdg-secondary:`JSON round trip` :bdg-info:`rank-aware rotations`
+:bdg-secondary:`any rank` :bdg-secondary:`JSON round trip` :bdg-secondary:`rank, symmetry, parity`
 
 .. figure:: ../../img/mesh/fields_rank_transforms.png
    :alt: Two rows of three panels. Top: a square triangle mesh colored by
@@ -43,7 +43,7 @@ The most-used members are the following:
       :shadow: md
       :class-card: sd-card-hover
 
-      A schema from a mapping or a JSON file.
+      A schema from a mapping, such as one loaded from JSON.
 
    .. grid-item-card:: FieldSchema.check
       :link: physicsnemo.mesh.fields.FieldSchema.check

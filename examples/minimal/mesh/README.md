@@ -2,8 +2,8 @@
 
 Nine executed notebooks that take you from a first mesh to meshes in a machine
 learning (ML) pipeline. PhysicsNeMo-Mesh stores point clouds, curves, surfaces,
-and volumes as PyTorch tensors, so every operation runs on a GPU and works with
-autograd. For an overview of the module, refer to the
+and volumes as PyTorch tensors, so operations run on a GPU, and the numerical
+ones work with autograd. For an overview of the module, refer to the
 [physicsnemo.mesh README](../../../physicsnemo/mesh/README.md).
 
 ## The Tutorials
@@ -20,7 +20,7 @@ Build a mesh from two tensors, attach fields, draw it, and differentiate its are
 </td>
 <td width="33%" valign="top">
 <a href="tutorial_2_io_interop.ipynb"><img src="../../../docs/img/mesh/thumbnails/io.png" alt="A cube of hexahedral cells, each split into tetrahedra" width="100%"></a><br>
-<b>2. <a href="tutorial_2_io_interop.ipynb">Loading, Converting, and Saving</a></b><br>
+<b>2. <a href="tutorial_2_io_interop.ipynb">Loading, Converting, and Saving Meshes</a></b><br>
 Convert PyVista and VTK meshes, triangulate polygons, and save to <code>.pmsh</code> and Zarr.
 </td>
 <td width="33%" valign="top">
@@ -68,7 +68,7 @@ Batch meshes, train a graph model, compile it, and declare field schemas.
 
 ## Learning Path
 
-Each tutorial assumes the ones before it. The nine fall into five steps:
+Each tutorial builds on the ones before it. The nine fall into five steps:
 
 | Step | Tutorials | You Learn |
 | ---- | --------- | --------- |

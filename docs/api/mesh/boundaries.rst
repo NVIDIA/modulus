@@ -105,23 +105,13 @@ mean of the ``cell_data`` of its parent cells. Set ``data_aggregation`` to
 ``data_source="points"`` to carry ``point_data`` instead.
 
 The most common operations are both ``Mesh`` methods and functions in this
-module:
+module. The following code is the function form of the check above:
 
-.. tab-set::
+.. code:: python
 
-   .. tab-item:: Mesh method
+    from physicsnemo.mesh.boundaries import is_manifold, is_watertight
 
-      .. code:: python
-
-          print(square.is_watertight(), square.is_manifold())  # False True
-
-   .. tab-item:: Function
-
-      .. code:: python
-
-          from physicsnemo.mesh.boundaries import is_manifold, is_watertight
-
-          print(is_watertight(square), is_manifold(square))  # False True
+    print(is_watertight(square), is_manifold(square))  # False True
 
 Choosing a Function
 -------------------

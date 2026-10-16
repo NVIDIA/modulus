@@ -10,7 +10,7 @@ module with one ``load`` function. Its keyword arguments set the size and the
 resolution, and ``device`` sets where the tensors go. The ``text`` module is
 the exception, with one function for each kind of text mesh.
 
-:bdg-success:`CPU and GPU` :bdg-secondary:`points to volumes` :bdg-info:`fixed seeds`
+:bdg-success:`CPU and GPU` :bdg-secondary:`points to volumes` :bdg-info:`deterministic`
 
 .. figure:: ../../img/mesh/primitives_gallery.png
    :alt: A grid of five columns and two rows, one column for each family.
@@ -135,7 +135,7 @@ function, which lists the arguments and defaults.
            - ``Mesh[1, 3]``
            - A trefoil knot curve in 3D space
 
-   .. tab-item:: Planar Meshes
+   .. tab-item:: Planar
 
       ``physicsnemo.mesh.primitives.planar``: Triangle meshes that fill a region of the plane: squares, rectangles, disks, an annulus, polygons, and a non-convex L shape. The following table lists its primitives:
 
@@ -249,7 +249,7 @@ function, which lists the arguments and defaults.
            - ``Mesh[3, 3]``
            - A single regular tetrahedron volume
 
-   .. tab-item:: Procedural Meshes
+   .. tab-item:: Procedural
 
       ``physicsnemo.mesh.primitives.procedural``: Meshes with seeded random perturbations, for tests that need irregular geometry. Each ``load`` function takes a ``seed`` argument. The helper module ``procedural.noise`` provides the Perlin noise functions that they use: ``perlin_noise_1d``, ``perlin_noise_2d``, ``perlin_noise_3d``, and ``perlin_noise_nd``. The following table lists its primitives:
 
@@ -273,7 +273,7 @@ function, which lists the arguments and defaults.
            - ``Mesh[2, 2]``
            - A perturbed structured grid in 2D space
 
-   .. tab-item:: Basic Meshes
+   .. tab-item:: Basic
 
       ``physicsnemo.mesh.primitives.basic``: Meshes with one to three cells, for unit tests and small examples. The following table lists its primitives:
 

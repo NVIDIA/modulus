@@ -8,10 +8,11 @@ cells and the dimension of the space they live in, written `2D→3D` for a
 surface in 3D. For the API reference, refer to the
 [primitives page](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/primitives.html).
 
-![Ten primitives in five columns, curves, planar, surfaces, volumes, and
-procedural. A helix and a spiral, an annulus and an L-shape, a torus and a
-Möbius strip, a tetrahedral cube and a tetrahedron, and a lumpy sphere and a
-lumpy ball.](../../../docs/img/mesh/primitives_gallery.png)
+![Ten primitives in five columns, one for each family. Curves: a helix and a
+spiral. Planar: an annulus and an L-shape. Surfaces: a torus and a Möbius
+strip. Volumes: a cube and a ball, cut open to show their tetrahedra.
+Procedural: a lumpy sphere and a jittered planar
+grid.](../../../docs/img/mesh/primitives_gallery.png)
 
 ## Quick Start
 

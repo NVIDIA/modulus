@@ -176,7 +176,7 @@ following dropdown:
 .. dropdown:: Backend search and initialization controls
 
    For advanced tuning, you can adjust the backend search and initialization
-   policy through the tensor functional. These backend-specific parameters may
+   policy through the tensor functional. These backend-specific parameters can
    change as the implementation evolves:
 
    .. code:: python
@@ -323,8 +323,6 @@ For more information, refer to the following resources:
 
 - :doc:`subdivision` to refine a mesh by splitting its cells, keeping its
   existing vertices.
-- Tutorial: `Quality, Validation, and Repair
-  <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_7_quality_repair.ipynb>`_
 
 API Reference
 -------------
