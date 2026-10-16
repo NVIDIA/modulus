@@ -18,7 +18,7 @@ A ``Mesh`` has five fields:
   ``(n_cells, n_manifold_dims + 1)`` and an integer dtype.
 - ``point_data``, ``cell_data``, and ``global_data``: ``TensorDict``
   containers for fields of any rank and with nested keys, one value for each
-  point, for each cell, or for the whole mesh. Refer to :doc:`fields`.
+  point, for each cell, or for the whole mesh. Refer to :doc:`fields` for details.
 
 ``Mesh`` and ``DomainMesh`` are
 `tensorclasses <https://pytorch.org/tensordict/stable/reference/tensorclass.html>`_,
@@ -60,7 +60,7 @@ Example
     print(mesh.point_data["T_gradient"].shape)  # torch.Size([3, 2])
 
 To build a triangle mesh from a surface whose cells are arbitrary polygons,
-use :meth:`Mesh.from_polygons`. Refer to :doc:`tessellation`.
+use :meth:`Mesh.from_polygons`, described in :doc:`tessellation`.
 
 Cache-Aware Functional Updates
 ------------------------------

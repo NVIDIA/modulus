@@ -20,7 +20,7 @@ The following resources document the library:
   <https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh.html>`_
   explains the data model (manifold dimension, spatial dimension, and
   codimension), helps you choose between methods, and shows how meshes fit
-  into an ML pipeline.
+  into a machine learning (ML) pipeline.
 - The `tutorial notebooks
   <https://github.com/NVIDIA/physicsnemo/tree/main/examples/minimal/mesh>`_
   teach the library step by step, from a first mesh to an ML pipeline.
@@ -86,8 +86,8 @@ Each submodule has its own page:
    * - :doc:`curvature`
      - Gaussian and mean curvature.
    * - :doc:`calculus`
-     - Gradient, divergence, curl, and Laplacian, by discrete exterior
-       calculus (DEC) and least squares (LSQ), and integration.
+     - Integration, and the gradient, divergence, curl, and Laplacian by
+       discrete exterior calculus (DEC) and least squares (LSQ).
    * - :doc:`boundaries`
      - Boundary detection, facet extraction, and watertight and manifold
        checks.

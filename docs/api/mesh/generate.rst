@@ -46,25 +46,23 @@ Volume Meshing of Implicit Domains
 
 :func:`mesh_implicit_domain` generates a simplex volume mesh of
 ``{x : phi(x) < 0}`` for an arbitrary implicit function ``phi`` (a signed
-distance function, or any level set with a usable gradient, including
-neural implicit fields), in *any spatial dimension*, entirely in PyTorch
-tensor operations on CPU or CUDA. The meshed set is ``{phi < 0}`` intersected
-with the bounding box. Where the domain reaches the box, the generator
-treats its faces as a boundary, so external-flow "box minus obstacle"
-domains work directly. Every optimization step is validity-gated, so when
-the function returns, the mesh is positively oriented and has a
-closed-manifold boundary. Difficult inputs lower element quality, which
-``full_output=True`` reports in a diagnostics dictionary, but do not by
-themselves stop generation. The function raises ``ValueError`` when no
-lattice cell fits inside the domain at this ``h``, or when the coverage guard
-trips. The
-coverage guard raises the error, rather than dropping geometry, when the
-domain has features below the target edge length ``h`` or when coverage
-cannot be certified. The latter can happen, for example, if a neural
-field returns NaN inside the box when queried outside its training range.
-Without ``feature_points``, sharp convex corners are rounded off at the
-``h`` scale. Pass the corners as ``feature_points`` to interpolate them
-exactly.
+distance function, or any level set with a usable gradient, including neural
+implicit fields), in *any spatial dimension*, entirely in PyTorch tensor
+operations on CPU or CUDA. The meshed set is ``{phi < 0}`` intersected with the
+bounding box. Where the domain reaches the box, the generator treats its faces
+as a boundary, so external-flow "box minus obstacle" domains work directly.
+Every optimization step is validity-gated, so when the function returns, the
+mesh is positively oriented and has a closed-manifold boundary. Difficult
+inputs lower element quality, which ``full_output=True`` reports in a
+diagnostics dictionary, but do not by themselves stop generation. The function
+raises ``ValueError`` when no lattice cell fits inside the domain at this
+``h``, or when the coverage guard trips. The coverage guard raises the error,
+rather than dropping geometry, when the domain has features below the target
+edge length ``h`` or when coverage cannot be certified. The latter can happen,
+for example, if a neural field returns NaN inside the box when queried outside
+its training range. Without ``feature_points``, sharp convex corners are
+rounded off at the ``h`` scale. Pass the corners as ``feature_points`` to
+interpolate them exactly.
 
 :func:`refit_mesh_to_implicit` is the differentiable companion. It
 re-projects a mesh's boundary onto ``phi = 0`` with graph-preserving

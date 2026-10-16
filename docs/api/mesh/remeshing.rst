@@ -120,8 +120,8 @@ positive constant leaves the remeshing objective unchanged. The values are
 relative inverse edge lengths, not exact edge lengths or guaranteed local
 vertex counts. For the 2D squared-distance centroidal Voronoi tessellation
 (CVT) objective, the implementation converts linear resolution ``r`` to
-integration density ``r**4``. Ideal local point density therefore scales approximately as ``r**2``. A constant field
-follows the uniform remeshing path. ``n_clusters`` remains the global budget.
+integration density ``r**4``. Ideal local point density therefore scales
+approximately as ``r**2``. A constant field follows the uniform remeshing path. ``n_clusters`` remains the global budget.
 
 A resolution field can encode a region of interest, a solver error indicator,
 or an importance field derived from physical point data. The second figure
@@ -239,7 +239,8 @@ Keep the following behavior and limitations in mind:
 * Point-data transfer requires a valid closest source triangle for every
   output vertex. A surface feature that is numerically degenerate in the
   ``float32`` Warp projection can still remesh geometrically, but field
-  transfer raises ``RuntimeError`` when its source-triangle provenance is unavailable.
+  transfer raises ``RuntimeError`` when its source-triangle provenance is
+  unavailable.
 * Warp floating-point atomics can introduce small run-to-run differences in
   vertex positions and, near assignment ties, topology, even though centroid
   sampling uses a fixed random seed. Do not rely on bitwise reproducibility.

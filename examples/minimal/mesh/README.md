@@ -107,7 +107,7 @@ pipelines need. It includes the following topics:
   and cell to points
 - The `Adjacency` class for ragged neighbor lists, and the `edge_index` tensor
   of graph libraries, built with `expand_to_pairs`
-- Finding the cells that contain a point with a bounding volume hierarchy (BVH)
+- Finding the cells that contain a point with a BVH
 - Sampling random points on cells, and interpolating fields at any point
 - Signed distance to a closed surface with `signed_distance_field`
 

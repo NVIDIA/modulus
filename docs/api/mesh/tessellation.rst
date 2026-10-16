@@ -38,9 +38,9 @@ area. The signed *vector* area of a vertex-0 fan telescopes to the polygon's
 total area regardless of convexity, but the sum of the *unsigned* triangle
 areas does not.
 
-Every ``k``-gon yields exactly ``k - 2`` triangles, so the returned
-``parent_index`` broadcasts per-polygon data to the output identically in both
-paths. The following example triangulates one quad:
+Every ``k``-gon yields exactly ``k - 2`` triangles, so indexing with the
+returned ``parent_index`` broadcasts per-polygon data to the output identically
+in both paths. The following example triangulates one quad:
 
 .. code:: python
 

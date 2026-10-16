@@ -4,8 +4,8 @@ Fields and Schemas
 .. currentmodule:: physicsnemo.mesh.fields
 
 A mesh has named fields, such as ``"pressure"``, ``"velocity"``, and
-``"stress"``. Each field has a tensor rank: zero for a scalar, one for a
-vector, two for a rank-2 tensor, and so on. The rank sets the transformation
+``"stress"``. Each field has a tensor rank: 0 for a scalar, 1 for a vector,
+2 for a rank-2 tensor, and so on. The rank sets the transformation
 law of the field, which is how its values change when you rotate or reflect
 the frame.
 A scalar does not change. A vector :math:`v` becomes :math:`R v`, and a

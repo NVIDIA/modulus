@@ -627,8 +627,8 @@ Domain point weights must instead be a point-data key, or a nested tuple key,
 present in every component. Raw weight tensors are rejected because component
 point counts can differ. Every resolved field must use one common dtype across
 the domain: ``bool`` for a hard mask, or the same floating dtype as the mesh
-points. Coincident points remain coincident under a point-weight key only when their
-resolved values also match.
+points. Coincident points remain coincident under a point-weight key only when
+their resolved values also match.
 
 :meth:`~physicsnemo.mesh.domain_mesh.DomainMesh.radial_basis_function_deform`
 follows the same component and point-weight rules while fitting one global RBF

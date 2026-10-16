@@ -361,7 +361,7 @@ The following table gives an overview of PhysicsNeMo-Mesh capabilities:
 | Resolution-field control | ✅ | Relative linear resolution for each vertex |
 | Point-data transfer | ✅ | Autograd with respect to source field values |
 | **Tessellation and Generation** | | |
-| Polygon-soup triangulation | ✅ | Convex fan and ear-clip. `Mesh.from_polygons` |
+| Polygon-soup triangulation | ✅ | Convex fan and ear-clip, through `Mesh.from_polygons` |
 | Fill a closed boundary | ✅ | `fill_interior`: constrained Delaunay with Ruppert refinement (2D) |
 | Isosurface extraction | ✅ | `marching_cubes` |
 | Implicit-domain volume meshing | ✅ | `mesh_implicit_domain`, from signed distance functions |

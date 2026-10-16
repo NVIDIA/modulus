@@ -171,7 +171,7 @@ noise_4d = perlin_noise_nd(points_4d, scale=2.0, seed=123)
 ### `pyvista_datasets/`: PyVista Examples
 
 PyVista downloads some of its example datasets on first use and caches them.
-The following functions wrap these datasets:
+The following functions wrap PyVista's example datasets:
 
 | Function | Dimensions | Description |
 | ---------- | ------------ | ------------- |

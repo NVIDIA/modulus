@@ -545,9 +545,10 @@ print(f"max |div(curl v)| = {div_curl_v.abs().max():.2f}")  # 0.35
 
 ## Dimension Support
 
-Codimension is $d - n$. Entries list the supported spatial dimensions. A "-"
-means that the call raises an error. The following table shows which
-operators run, by manifold dimension $n$ (columns) and spatial dimension $d$:
+The following table shows which operators run, by manifold dimension $n$
+(columns) and spatial dimension $d$. Codimension is $d - n$. Each entry lists
+the supported spatial dimensions, and a "-" means that the call raises an
+error:
 
 <!-- markdownlint-disable MD013 -->
 | Operator | $n = 1$ | $n = 2$ | $n = 3$ | $n \geq 4$ |

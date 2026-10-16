@@ -67,7 +67,7 @@ Use the following guidelines to choose a function:
 - To repair a mesh from an outside source, use :func:`repair_mesh`. Its
   ``tolerance`` default is ``1e-6``. It does not remove duplicate cells, so
   run :func:`clean_mesh` first if the mesh can have them.
-- :func:`fill_holes` works only on meshes with a manifold dimension of two,
+- :func:`fill_holes` works only on meshes with a manifold dimension of 2,
   and only closes loops of at most ``max_hole_edges`` edges (default 10).
 
 Summary
