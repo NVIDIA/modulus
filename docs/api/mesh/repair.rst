@@ -3,38 +3,99 @@ Repair
 
 .. currentmodule:: physicsnemo.mesh.repair
 
-``physicsnemo.mesh.repair`` fixes common mesh problems. Each repair is a
-separate function, and two functions combine them:
+``physicsnemo.mesh.repair`` fixes common mesh problems, such as duplicate
+points, degenerate cells, inconsistent winding, and holes. Each repair
+function returns the repaired mesh and a ``dict`` of statistics.
 
-- :func:`clean_mesh`, also ``mesh.clean()``, merges duplicate points,
-  removes duplicate cells, and removes unused points.
-- :func:`repair_mesh` runs a configurable sequence: remove degenerate cells,
-  merge duplicate points, remove isolated points, and, if you enable them,
-  fix the orientation and fill holes.
+:bdg-success:`GPU` :bdg-warning:`hole filling for triangle meshes only`
 
-The single repairs are:
+.. figure:: ../../img/mesh/mesh_defects.png
+   :alt: A grid of small mesh panels, one column for each defect: duplicate
+         points, a degenerate cell, a reversed cell, and a hole. The top row
+         shows each defect highlighted in orange, the middle row what the
+         validation check reports, and the bottom row the mesh after the
+         repair.
+   :align: center
+   :width: 100%
 
-- :func:`remove_degenerate_cells`: remove cells with zero area or volume, or
-  with a repeated point.
-- :func:`remove_isolated_points`: remove points that no cell uses.
-- :func:`fix_orientation`: give all cells a consistent winding.
-- :func:`fill_holes`: close boundary loops of a triangle mesh.
-- :func:`merge_duplicate_points`, :func:`remove_duplicate_cells`, and
-  :func:`remove_unused_points`: tensor-level steps that take ``points``,
-  ``cells``, and data, not a ``Mesh``.
+   Common mesh defects, the check in :doc:`validation` that finds each one,
+   and the repair function that fixes it.
+
+.. rubric:: Most Used
+
+.. grid:: 1 2 2 2
+   :gutter: 2
+
+   .. grid-item-card:: Clean
+      :link: physicsnemo.mesh.repair.clean_mesh
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``mesh.clean()`` merges duplicate points, removes duplicate cells, and
+      removes unused points.
+
+   .. grid-item-card:: Repair Pipeline
+      :link: physicsnemo.mesh.repair.repair_mesh
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``repair_mesh(mesh)`` runs a configurable sequence of repairs.
+
+   .. grid-item-card:: Fix Orientation
+      :link: physicsnemo.mesh.repair.fix_orientation
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``fix_orientation(mesh)`` gives all cells a consistent winding.
+
+   .. grid-item-card:: Fill Holes
+      :link: physicsnemo.mesh.repair.fill_holes
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``fill_holes(mesh)`` closes small boundary loops of a triangle mesh.
+
+The single repairs are the following functions:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Function
+     - Fixes
+   * - :func:`remove_degenerate_cells`
+     - Cells with zero area or volume, or with a repeated point
+   * - :func:`remove_isolated_points`
+     - Points that no cell uses
+   * - :func:`fix_orientation`
+     - Cells whose winding disagrees with their neighbors
+   * - :func:`fill_holes`
+     - Boundary loops of a triangle mesh
+   * - :func:`merge_duplicate_points`, :func:`remove_duplicate_cells`,
+       :func:`remove_unused_points`
+     - Duplicates and unused points, as tensor-level steps that take
+       ``points``, ``cells``, and data, not a ``Mesh``
+
+:func:`repair_mesh` runs remove degenerate cells, merge duplicate points, and
+remove isolated points by default. Pass ``fix_orientation=True`` or
+``fill_holes=True`` to add the other two.
 
 Example
 -------
 
 The following example cleans and repairs a mesh made of two copies of one
-sphere:
+sphere, then fills a hole in it:
 
 .. code:: python
 
     import torch
     from physicsnemo.mesh import Mesh
     from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
-    from physicsnemo.mesh.repair import clean_mesh, fill_holes, fix_orientation, repair_mesh
+    from physicsnemo.mesh.repair import clean_mesh, fill_holes, repair_mesh
 
     # Two copies of one sphere: every point and every cell appears twice.
     sphere = sphere_icosahedral.load(subdivisions=1)  # 42 points, 80 triangles
@@ -54,8 +115,16 @@ sphere:
     repaired, repair_stats = repair_mesh(cleaned, fix_orientation=True)
     print(list(repair_stats))  # ['degenerates', 'merge_points', 'clean', 'isolated', 'orientation']
 
-    oriented, orientation_stats = fix_orientation(cleaned)
-    filled, hole_stats = fill_holes(cleaned)
+    # Cut one triangle out, then fill the hole.
+    holed = cleaned.slice_cells(torch.arange(1, cleaned.n_cells))
+    filled, hole_stats = fill_holes(holed)
+    print(holed.is_watertight(), filled.is_watertight())  # False True
+    print(hole_stats)
+
+.. code-block:: text
+   :caption: Output
+
+   {'n_holes_detected': 1, 'n_holes_filled': 1, 'n_holes_skipped': 0, 'n_faces_added': 3, 'n_points_added': 1}
 
 Choosing a Function
 -------------------
@@ -65,10 +134,14 @@ Use the following guidelines to choose a function:
 - To remove duplicates after a merge or a file import, use ``mesh.clean()``.
   It merges points closer than ``tolerance`` (default ``1e-12``).
 - To repair a mesh from an outside source, use :func:`repair_mesh`. Its
-  ``tolerance`` default is ``1e-6``. It does not remove duplicate cells, so
-  run :func:`clean_mesh` first if the mesh can have them.
+  ``tolerance`` default is ``1e-6``.
 - :func:`fill_holes` works only on meshes with a manifold dimension of 2,
   and only closes loops of at most ``max_hole_edges`` edges (default 10).
+
+.. note::
+
+   :func:`repair_mesh` does not remove duplicate cells. Run
+   :func:`clean_mesh` first if the mesh can have them.
 
 Summary
 -------

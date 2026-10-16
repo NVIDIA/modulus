@@ -4,27 +4,10 @@ Boundaries and Topology
 .. currentmodule:: physicsnemo.mesh.boundaries
 
 ``physicsnemo.mesh.boundaries`` finds the boundary of a mesh, extracts its
-facets, and checks its topology. A facet is a face of a cell with one
-dimension less than the cell. The facets of a triangle are its three edges,
-and the facets of a tetrahedron are its four triangles. A boundary facet
-belongs to exactly one cell. An interior facet is shared by two cells.
+facets, and checks its topology. Its results are masks, index pairs, booleans,
+or new meshes that keep the point indices of the parent.
 
-The module has three groups of functions:
-
-- Boundary detection: the points, edges, or cells on the boundary.
-- Facet extraction: a new mesh of the facets, with data aggregated from the
-  parent cells.
-- Topology checks: whether a mesh is
-  `watertight <https://en.wikipedia.org/wiki/Watertight_(3D_modeling)>`_ or
-  `manifold <https://en.wikipedia.org/wiki/Manifold>`_. A watertight mesh has
-  no boundary facets. A manifold mesh looks locally like Euclidean space, so
-  that, for example, each facet belongs to one or two cells.
-
-The most common operations are also ``Mesh`` methods:
-:meth:`~physicsnemo.mesh.mesh.Mesh.get_boundary_mesh`,
-:meth:`~physicsnemo.mesh.mesh.Mesh.get_facet_mesh`,
-:meth:`~physicsnemo.mesh.mesh.Mesh.is_watertight`, and
-:meth:`~physicsnemo.mesh.mesh.Mesh.is_manifold`.
+:bdg-success:`GPU` :bdg-secondary:`any dimension`
 
 .. figure:: ../../img/mesh/boundaries_facets.png
    :alt: Top row: a triangulated ring, the same ring faded with its outer
@@ -38,6 +21,80 @@ The most common operations are also ``Mesh`` methods:
    circles), and its facet mesh of all 168 edges. Bottom: a tetrahedral ball,
    cut open with its tetrahedra shrunk, and its boundary surface of 320
    triangles.
+
+.. rubric:: Most Used
+
+.. grid:: 1 2 2 4
+   :gutter: 2
+
+   .. grid-item-card:: Boundary Mesh
+      :link: physicsnemo.mesh.mesh.Mesh.get_boundary_mesh
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``mesh.get_boundary_mesh()``
+
+   .. grid-item-card:: Facet Mesh
+      :link: physicsnemo.mesh.mesh.Mesh.get_facet_mesh
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``mesh.get_facet_mesh()``
+
+   .. grid-item-card:: Watertight
+      :link: physicsnemo.mesh.boundaries.is_watertight
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``mesh.is_watertight()``
+
+   .. grid-item-card:: Manifold
+      :link: physicsnemo.mesh.boundaries.is_manifold
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``mesh.is_manifold()``
+
+A facet is a face of a cell with one dimension less than the cell. The facets
+of a triangle are its three edges, and the facets of a tetrahedron are its
+four triangles. A boundary facet belongs to exactly one cell. An interior
+facet is shared by two cells. The module has three groups of functions:
+
+- Boundary detection: the points, edges, or cells on the boundary.
+- Facet extraction: a new mesh of the facets, with data aggregated from the
+  parent cells.
+- Topology checks: whether a mesh is
+  `watertight <https://en.wikipedia.org/wiki/Watertight_(3D_modeling)>`_ or
+  `manifold <https://en.wikipedia.org/wiki/Manifold>`_. A watertight mesh has
+  no boundary facets. A manifold mesh looks locally like Euclidean space, so
+  that, for example, each facet belongs to one or two cells.
+
+The most common operations are ``Mesh`` methods and functions in this module:
+
+.. tab-set::
+
+   .. tab-item:: Mesh method
+
+      .. code:: python
+
+          from physicsnemo.mesh.primitives.planar import unit_square
+
+          square = unit_square.load(subdivisions=2)
+          print(square.is_watertight(), square.is_manifold())  # False True
+
+   .. tab-item:: Function
+
+      .. code:: python
+
+          from physicsnemo.mesh.boundaries import is_manifold, is_watertight
+          from physicsnemo.mesh.primitives.planar import unit_square
+
+          square = unit_square.load(subdivisions=2)
+          print(is_watertight(square), is_manifold(square))  # False True
 
 Example
 -------

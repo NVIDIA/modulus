@@ -4,36 +4,48 @@ Curvature
 .. currentmodule:: physicsnemo.mesh.curvature
 
 ``physicsnemo.mesh.curvature`` computes discrete curvature at the points and
-cells of a simplicial mesh. It has two kinds:
+cells of a simplicial mesh. Each function takes a mesh and returns one value
+for each point or cell, and the same values are cached ``Mesh`` properties.
 
-- Gaussian curvature :math:`K` is intrinsic. It depends only on lengths
-  measured in the mesh (Gauss's Theorema Egregium), so it works for any
-  codimension. It uses the
-  `angle defect <https://en.wikipedia.org/wiki/Angular_defect>`_:
-  :math:`K_i = (\theta_{\text{full}} - \sum_j \theta_{ij}) / A_i^*`, where
-  :math:`\theta_{ij}` are the angles of the cells at point :math:`i` and
-  :math:`A_i^*` is the dual (Voronoi) area of the point. It is available at
-  points and at cells.
-- Mean curvature :math:`H` is extrinsic. It depends on how the mesh bends in
-  its ambient space. It uses the
-  `cotangent Laplacian <https://en.wikipedia.org/wiki/Discrete_Laplace_operator#Mesh_Laplacians>`_
-  :math:`L` of the point positions :math:`\mathbf{x}`:
-  :math:`H_i = \|L \mathbf{x}\|_i / (2 A_i^*)`. It needs codimension 1
-  (``n_spatial_dims == n_manifold_dims + 1``), so that the mesh has normals.
-  Its sign follows the normals. It is positive where the surface bulges
-  toward them. Boundary points get ``NaN`` unless you pass
-  ``include_boundary=True``.
+:bdg-success:`GPU` :bdg-info:`autograd` :bdg-secondary:`any dimension` :bdg-warning:`mean curvature needs codimension 1`
 
-The same quantities are cached ``Mesh`` properties:
-``mesh.gaussian_curvature_vertices``, ``mesh.gaussian_curvature_cells``, and
-``mesh.mean_curvature_vertices``.
-
-.. figure:: ../../img/mesh/airplane_mean_curvature.png
-   :alt: Mean curvature on the surface of an airplane model
+.. figure:: ../../img/mesh/curvature_torus.png
+   :alt: Three panels. Left: a torus colored by Gaussian curvature, red on the
+         outer rim, blue on the inner rim, and white on the top and bottom
+         circles. Middle: the same torus colored by mean curvature. Right: five
+         triangles around one vertex of an icosahedron laid flat, with a
+         60-degree gap labeled as the angle defect.
    :align: center
-   :width: 80%
+   :width: 100%
 
-   Mean curvature on the PyVista airplane surface.
+   Gaussian curvature :math:`K` and mean curvature :math:`H` on a torus, each
+   on a color scale centered at zero. :math:`K` changes sign between the outer
+   rim, which curves like a sphere, and the inner rim, which curves like a
+   saddle. Right: the angle defect at one vertex of an icosahedron, the gap
+   left when its triangles are laid flat.
+
+.. rubric:: Most Used
+
+.. grid:: 1 1 2 2
+   :gutter: 2
+
+   .. grid-item-card:: Gaussian Curvature
+      :link: physicsnemo.mesh.curvature.gaussian_curvature_vertices
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``mesh.gaussian_curvature_vertices`` gives :math:`K` at each point.
+      ``mesh.gaussian_curvature_cells`` gives it at each cell.
+
+   .. grid-item-card:: Mean Curvature
+      :link: physicsnemo.mesh.curvature.mean_curvature_vertices
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``mesh.mean_curvature_vertices`` gives :math:`H` at each point of a
+      surface in 3D or a curve in 2D.
 
 Example
 -------
@@ -52,6 +64,45 @@ Example
     # The cached Mesh properties give the same values.
     K = mesh.gaussian_curvature_vertices
     H = mesh.mean_curvature_vertices
+
+Choosing a Curvature
+--------------------
+
+The two kinds of curvature answer different questions:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 40 40
+
+   * - Property
+     - Gaussian Curvature :math:`K`
+     - Mean Curvature :math:`H`
+   * - Depends on
+     - Lengths measured in the mesh only (intrinsic, after Gauss's Theorema
+       Egregium)
+     - How the mesh bends in its ambient space (extrinsic)
+   * - Formula
+     - `Angle defect <https://en.wikipedia.org/wiki/Angular_defect>`_,
+       :math:`K_i = (\theta_{\text{full}} - \sum_j \theta_{ij}) / A_i^*`
+     - `Cotangent Laplacian <https://en.wikipedia.org/wiki/Discrete_Laplace_operator#Mesh_Laplacians>`_
+       of the positions, :math:`H_i = \|L \mathbf{x}\|_i / (2 A_i^*)`
+   * - Works on
+     - Any codimension
+     - Codimension 1 only (``n_spatial_dims == n_manifold_dims + 1``)
+   * - At
+     - Points and cells
+     - Points
+   * - Sign
+     - Positive on a sphere, negative on a saddle
+     - Follows the normals, positive where the surface bulges toward them
+
+In both formulas, :math:`\theta_{ij}` are the angles of the cells at point
+:math:`i`, and :math:`A_i^*` is the dual (Voronoi) area of the point.
+
+.. note::
+
+   Mean curvature is ``NaN`` at boundary points, because their neighborhood
+   is one-sided. Pass ``include_boundary=True`` to compute it there anyway.
 
 Summary
 -------

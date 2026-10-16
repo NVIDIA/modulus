@@ -4,21 +4,84 @@ Geometry
 .. currentmodule:: physicsnemo.mesh.geometry
 
 ``physicsnemo.mesh.geometry`` computes the geometric quantities that the
-:doc:`calculus` and :doc:`curvature` modules build on:
+:doc:`calculus` and :doc:`curvature` modules build on. Each function returns a
+tensor with one value for each cell, point, or edge.
 
-- Cell areas (the n-dimensional volume of each simplex) and cell normals
-- Interior angles of each cell at each of its vertices
-- Circumcenters of each cell, which define the circumcentric dual mesh that
-  discrete exterior calculus (DEC) uses
-- Dual volumes: the Voronoi region around each vertex and the dual cell of
-  each edge
-- Cotangent weights, the standard edge weights of the finite element method
-  (FEM) and DEC Laplacian
+:bdg-success:`GPU` :bdg-info:`autograd` :bdg-secondary:`any dimension` :bdg-warning:`cell normals need codimension 1`
+
+.. figure:: ../../img/mesh/dec_primal_dual.png
+   :alt: Two panels of one small jittered triangle patch. Left: an orange
+         vertex with arrows to its blue neighbor vertices. Right: dots at the
+         circumcenters of the triangles around the vertex, which bound its
+         shaded dual cell. One primal edge is crossed by its dual edge.
+   :align: center
+   :width: 100%
+
+   The circumcenters of the cells around a vertex bound its dual cell, whose
+   area :func:`compute_dual_volumes_0` returns. Each primal edge has a dual
+   edge between two circumcenters, and :func:`compute_cotan_weights_fem`
+   gives its weight.
+
+.. rubric:: Most Used
+
+.. grid:: 1 1 3 3
+   :gutter: 2
+
+   .. grid-item-card:: Cell Areas
+      :link: physicsnemo.mesh.geometry.compute_cell_areas
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``mesh.cell_areas`` caches the length, area, or volume of each cell.
+
+   .. grid-item-card:: Dual Volumes
+      :link: physicsnemo.mesh.geometry.compute_dual_volumes_0
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``compute_dual_volumes_0(mesh)`` gives the Voronoi area of each point.
+
+   .. grid-item-card:: Cotangent Weights
+      :link: physicsnemo.mesh.geometry.compute_cotan_weights_fem
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``compute_cotan_weights_fem(mesh)`` gives one weight for each edge.
+
+The module computes the following quantities:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 38 62
+
+   * - Quantity
+     - Functions
+   * - Cell areas (the n-dimensional volume of each simplex) and cell normals
+     - :func:`compute_cell_areas`, :func:`compute_cell_normals`
+   * - Interior angles of each cell at each of its vertices
+     - :func:`compute_vertex_angles`, :func:`compute_vertex_angle_sums`
+   * - Circumcenters, which define the circumcentric dual mesh of discrete
+       exterior calculus (DEC)
+     - :func:`compute_circumcenters`
+   * - Dual volumes of each vertex (its Voronoi region) and of each edge
+     - :func:`compute_dual_volumes_0`, :func:`compute_dual_volumes_1`
+   * - Cotangent weights, the edge weights of the finite element method (FEM)
+       and DEC Laplacian
+     - :func:`compute_cotan_weights_fem`
 
 Most of the time, you do not call these functions directly. The ``Mesh``
 properties (``mesh.cell_areas``, ``mesh.cell_normals``) and the calculus and
 curvature functions call them and cache the results. Use them to write your
 own DEC operators or FEM assembly.
+
+.. important::
+
+   ``mesh.cell_normals`` and :func:`compute_cell_normals` need a mesh of
+   codimension 1, such as a surface in 3D or a curve in 2D. Other meshes
+   have no unique normal direction.
 
 Some functions take a mesh. Others take tensors, so that you can call them
 on cell geometry without a ``Mesh``:
