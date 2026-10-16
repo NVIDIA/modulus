@@ -419,9 +419,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Eleven PhysicsNeMo-Mesh API pages that listed no functions now document them,
   and the pages of tensorclasses such as `Mesh` no longer list every TensorDict
   method.
-- PhysicsNeMo-Mesh examples that raised and claims that the code contradicts,
-  such as the sign of the Laplacian and the dimensions each calculus operator
-  supports, are corrected across the API reference, READMEs, and docstrings.
+- PhysicsNeMo-Mesh examples that raised an error, and claims that the code
+  contradicts, are corrected across the API reference, READMEs, and docstrings.
+  The corrected claims include the sign of the Laplacian and the dimensions
+  that each calculus operator supports.
 
 ### Security
 

@@ -1,10 +1,10 @@
 # Mesh Visualization
 
 `Mesh.draw()` plots a mesh with matplotlib or PyVista, optionally colored by
-point or cell data. For the API reference, see the
+point or cell data. For the API reference, refer to the
 [visualization page](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/visualization.html).
 
-The examples on this page run in order: the first block defines the mesh that
+The examples on this page run in order. The first block defines the mesh that
 the later blocks use.
 
 ## Quick Start
@@ -69,7 +69,7 @@ scalars = torch.randn(mesh.n_cells)
 mesh.draw(cell_scalars=scalars)
 ```
 
-### Vector Fields (Automatic Norming)
+### Vector Fields (automatic norming)
 
 `draw()` colors by the L2 norm of multi-dimensional data:
 
@@ -173,7 +173,7 @@ except ValueError as error:
 
 ## Return Values
 
-`draw()` returns the axes or plotter whether or not it shows the plot.
+`draw()` returns the axes or plotter whether or not it shows the plot:
 
 ```python
 # Matplotlib: returns a matplotlib Axes
@@ -280,14 +280,14 @@ The visualization code has four files:
 - `physicsnemo/mesh/visualization/draw_mesh.py`: main dispatcher with backend
   selection.
 - `physicsnemo/mesh/visualization/_matplotlib_impl.py`: matplotlib backend
-  (0D to 3D space; volume meshes are drawn as their boundary surface).
+  for 0D to 3D space. It draws volume meshes as their boundary surface.
 - `physicsnemo/mesh/visualization/_pyvista_impl.py`: PyVista backend.
 - `physicsnemo/mesh/visualization/_scalar_utils.py`: scalar data processing.
 
-Features:
+The visualization code provides the following features:
 
 - L2 norm of multi-dimensional data.
 - Nested TensorDict key lookup.
 - Neutral colors chosen from the active scalars.
 - Validation of the scalar arguments.
-- 3D plots in matplotlib via `mpl_toolkits.mplot3d`.
+- 3D plots in matplotlib through `mpl_toolkits.mplot3d`.

@@ -3,12 +3,12 @@
 `physicsnemo.mesh.primitives` is a collection of canonical meshes for
 tutorials, testing, and experimentation. Each mesh module generates its mesh
 at runtime with a `load()` function. The modules are grouped by family and by
-dimensional configuration: the manifold dimension of the cells, and the
-dimension of the space they live in (written `2D→3D` for a surface in 3D).
-For the API reference, see the
+dimensional configuration. The configuration is the manifold dimension of the
+cells and the dimension of the space they live in, written `2D→3D` for a
+surface in 3D. For the API reference, refer to the
 [primitives page](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/primitives.html).
 
-The examples on this page run in order: the first block defines the names that
+The examples on this page run in order. The first block defines the names that
 the later blocks use.
 
 ## Quick Start
@@ -33,9 +33,10 @@ module needs `matplotlib`.
 
 ## Categories
 
-### basic/ - Minimal Test Meshes
+### `basic/`: Minimal Test Meshes
 
-Simple meshes with one or few cells for unit testing and validation.
+The following simple meshes have one or few cells, for unit testing and
+validation:
 
 | Function | Dimensions | Description |
 | ---------- | ------------ | ------------- |
@@ -54,9 +55,9 @@ Simple meshes with one or few cells for unit testing and validation.
 | `single_tetrahedron` | 3D→3D | Single tetrahedron |
 | `two_tetrahedra` | 3D→3D | Two tetrahedra sharing a face |
 
-### curves/ - 1D Manifolds
+### `curves/`: 1D Manifolds
 
-Curves embedded in 1D, 2D, and 3D spaces.
+The following curves are embedded in 1D, 2D, and 3D spaces:
 
 | Function | Dimensions | Description | Properties |
 | ---------- | ------------ | ------------- | ------------ |
@@ -74,9 +75,9 @@ Curves embedded in 1D, 2D, and 3D spaces.
 | `trefoil_knot_3d` | 1D→3D | Trefoil knot in 3D | Closed, knotted |
 | `spline_3d` | 1D→3D | PyVista's `load_spline` curve, built without PyVista | Open |
 
-### planar/ - 2D Manifolds in 2D Space
+### `planar/`: 2D Manifolds in 2D Space
 
-Triangulated 2D shapes in the plane.
+The following triangulated 2D shapes lie in the plane:
 
 | Function | Dimensions | Description | Properties |
 | ---------- | ------------ | ------------- | ------------ |
@@ -85,20 +86,20 @@ Triangulated 2D shapes in the plane.
 | `equilateral_triangle` | 2D→2D | Equilateral triangle | Has boundary |
 | `regular_polygon` | 2D→2D | Regular n-sided polygon | Has boundary |
 | `circle_2d` | 2D→2D | Filled disk | Has boundary |
-| `annulus_2d` | 2D→2D | Ring (annulus) | Has inner/outer boundaries |
+| `annulus_2d` | 2D→2D | Ring (annulus) | Has inner and outer boundaries |
 | `l_shape` | 2D→2D | L-shaped domain | Non-convex, has boundary |
 | `structured_grid` | 2D→2D | Regular triangular grid | Has boundary |
 
-### surfaces/ - 2D Manifolds in 3D Space
+### `surfaces/`: 2D Manifolds in 3D Space
 
-Surface meshes embedded in 3D.
+The following surface meshes are embedded in 3D:
 
 <!-- markdownlint-disable MD013 -->
 | Function | Dimensions | Description | Properties |
 | ---------- | ------------ | ------------- | ------------ |
 | **Spheres** | | | |
-| `sphere_icosahedral` | 2D→3D | Sphere via icosahedron subdivision | Closed, uniform triangulation |
-| `sphere_uv` | 2D→3D | Sphere via lat/long (UV) parametrization | Closed, polar singularities |
+| `sphere_icosahedral` | 2D→3D | Sphere from icosahedron subdivision | Closed, uniform triangulation |
+| `sphere_uv` | 2D→3D | Sphere from latitude-longitude (UV) parametrization | Closed, polar singularities |
 | **Cylinders** | | | |
 | `cylinder` | 2D→3D | Cylinder with caps | Closed |
 | `cylinder_open` | 2D→3D | Cylinder without caps | Has boundary circles |
@@ -117,9 +118,9 @@ Surface meshes embedded in 3D.
 | `mobius_strip` | 2D→3D | Möbius strip | Non-orientable, has boundary |
 <!-- markdownlint-enable MD013 -->
 
-### volumes/ - 3D Manifolds in 3D Space
+### `volumes/`: 3D Manifolds in 3D Space
 
-Tetrahedral volume meshes.
+This module has the following tetrahedral volume meshes:
 
 | Function | Dimensions | Description | Properties |
 | ---------- | ------------ | ------------- | ------------ |
@@ -128,11 +129,12 @@ Tetrahedral volume meshes.
 | `cylinder_volume` | 3D→3D | Tetrahedral cylinder mesh | Unstructured |
 | `tetrahedron_volume` | 3D→3D | Single tetrahedron | Minimal volume mesh |
 
-### procedural/ - Mesh Variations and Noise Generation
+### `procedural/`: Mesh Variations and Noise Generation
 
-Functions for creating modified versions of meshes and standalone noise generation.
+This module has functions for creating modified versions of meshes and for
+standalone noise generation.
 
-Mesh variations:
+The following functions create mesh variations:
 
 <!-- markdownlint-disable MD013 -->
 | Function | Description | Use Case |
@@ -143,7 +145,8 @@ Mesh variations:
 | `perturbed_grid` | Structured grid with random perturbations (2D→2D) | Testing on nearly-regular grids |
 <!-- markdownlint-enable MD013 -->
 
-Procedural noise functions, in `physicsnemo.mesh.primitives.procedural.noise`:
+The following procedural noise functions are in
+`physicsnemo.mesh.primitives.procedural.noise`:
 
 | Function | Description | Dimensions | GPU |
 | ---------- | ------------- | ------------ | ----- |
@@ -165,27 +168,30 @@ points_4d = torch.randn(100, 4)
 noise_4d = perlin_noise_nd(points_4d, scale=2.0, seed=123)
 ```
 
-### pyvista_datasets/ - PyVista Examples
+### `pyvista_datasets/`: PyVista Examples
 
-Wrappers for PyVista's example datasets. PyVista downloads some of them on
-first use and caches them.
+PyVista downloads some of its example datasets on first use and caches them.
+The following functions wrap these datasets:
 
 | Function | Dimensions | Description |
 | ---------- | ------------ | ------------- |
 | `airplane` | 2D→3D | Classic airplane surface mesh |
 | `bunny` | 2D→3D | Stanford bunny (computer graphics classic) |
 | `ant` | 2D→3D | Ant surface mesh |
-| `cow` | 2D→3D | Cow mesh (mixed cell types, auto-triangulated) |
+| `cow` | 2D→3D | Cow mesh (mixed cell types, automatically triangulated) |
 | `globe` | 2D→3D | Earth globe surface |
-| `tetbeam` | 3D→3D | Tetrahedral beam (FEA test case) |
-| `hexbeam` | 3D→3D | Hexahedral beam (auto-tessellated to tets) |
+| `tetbeam` | 3D→3D | Tetrahedral beam (finite element analysis test case) |
+| `hexbeam` | 3D→3D | Hexahedral beam (automatically tessellated to tetrahedra) |
 
-### text - Text as Meshes
+### `text`: Text as Meshes
 
 `physicsnemo.mesh.primitives.text` renders a string into a mesh with
-matplotlib's fonts: `text_1d_2d` (outlines), `text_2d_2d` (filled glyphs),
-`text_2d_3d` (the surface of extruded glyphs), and `text_3d_3d` (extruded
-volume).
+matplotlib's fonts, through the following functions:
+
+- `text_1d_2d`: outlines
+- `text_2d_2d`: filled glyphs
+- `text_2d_3d`: the surface of extruded glyphs
+- `text_3d_3d`: extruded volume
 
 ```python
 from physicsnemo.mesh.primitives.text import text_2d_2d
@@ -199,10 +205,10 @@ The primitives cover these dimensional configurations:
 
 - 0D→2D, 0D→3D: point clouds (in `basic`)
 - 1D→1D: line segments on the real number line
-- 1D→2D: curves in the plane (circles, spirals, etc.)
-- 1D→3D: space curves (helix, knots, etc.)
+- 1D→2D: curves in the plane (such as circles and spirals)
+- 1D→3D: space curves (such as helices and knots)
 - 2D→2D: planar triangulations (squares, circles, polygons)
-- 2D→3D: surface meshes (spheres, cylinders, tori, etc.)
+- 2D→3D: surface meshes (such as spheres, cylinders, and tori)
 - 3D→3D: volume meshes (tetrahedral solids)
 
 ## Usage Patterns
@@ -254,19 +260,21 @@ lumpy = primitives.procedural.lumpy_sphere.load(noise_amplitude=0.1, seed=42)
 
 ## Design Principles
 
-1. One file per mesh: each mesh type is in its own module.
-2. Consistent interface: every mesh module has a `load()` function. (The
-   `text` module and `procedural.noise` provide functions instead.)
-3. Runtime generation: no stored mesh files (PyVista caches its own
-   downloads).
-4. Parametric: most meshes accept resolution and size parameters.
-5. Device-aware: every `load()` accepts `device`, except
-   `procedural.noisy_mesh`, which keeps the device of its `base_mesh`.
-6. Documented: each module states its manifold and spatial dimensions.
+The primitives follow these design principles:
+
+- One file per mesh: each mesh type is in its own module.
+- Consistent interface: every mesh module has a `load()` function. The
+  `text` module and `procedural.noise` provide functions instead.
+- Runtime generation: no stored mesh files (PyVista caches its own
+  downloads).
+- Parametric: most meshes accept resolution and size parameters.
+- Device-aware: every `load()` accepts `device`, except
+  `procedural.noisy_mesh`, which keeps the device of its `base_mesh`.
+- Documented: each module states its manifold and spatial dimensions.
 
 ## Testing
 
-The physicsnemo.mesh test suite uses these primitives throughout. You can also
+The `physicsnemo.mesh` test suite uses these primitives throughout. You can also
 use them in your own tests:
 
 ```python

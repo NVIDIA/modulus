@@ -1,17 +1,20 @@
 # PhysicsNeMo-Mesh Tutorials
 
 These notebooks teach PhysicsNeMo-Mesh, the PyTorch mesh library of PhysicsNeMo,
-in nine steps: from a first mesh to meshes in a machine learning pipeline.
+in nine steps, from a first mesh to meshes in a machine learning (ML)
+pipeline.
 
 PhysicsNeMo-Mesh stores simplicial meshes (point clouds, curves, triangle
 surfaces, and tetrahedral volumes) as PyTorch tensors, with data on the points,
 on the cells, and on the whole mesh. Its operations are batched tensor
 operations, so they run on a GPU and work with autograd. For an overview of the
-module, see the [physicsnemo.mesh README](../../../physicsnemo/mesh/README.md).
+module, refer to the
+[physicsnemo.mesh README](../../../physicsnemo/mesh/README.md).
 
 ## Tutorials
 
-Work through the tutorials in order. Each one assumes the earlier ones.
+Work through the tutorials in order. Each one assumes the earlier ones. The
+following table lists them:
 
 <!-- markdownlint-disable MD013 -->
 | # | Notebook | Topics |
@@ -21,7 +24,7 @@ Work through the tutorials in order. Each one assumes the earlier ones.
 | 3 | [Primitives and Mesh Generation](tutorial_3_primitives_generation.ipynb) | Example meshes, filling a boundary, meshing implicit shapes, isosurfaces |
 | 4 | [Mesh Operations](tutorial_4_operations.ipynb) | Transformations, subdivision, slicing, merging, boundaries, edge graphs |
 | 5 | [Discrete Calculus and Curvature](tutorial_5_calculus.ipynb) | Gradients, divergence, curl, the Laplacian, curvature, physics losses |
-| 6 | [Neighbors, Adjacency, and Spatial Queries](tutorial_6_neighbors_spatial.ipynb) | Adjacency, BVH queries, sampling, interpolation, signed distance |
+| 6 | [Neighbors, Adjacency, and Spatial Queries](tutorial_6_neighbors_spatial.ipynb) | Adjacency, bounding volume hierarchy (BVH) queries, sampling, interpolation, signed distance |
 | 7 | [Quality, Validation, and Repair](tutorial_7_quality_repair.ipynb) | Quality metrics, validation, topology checks, repair |
 | 8 | [Simulation Domains with DomainMesh](tutorial_8_domain_mesh.ipynb) | An interior mesh with named boundaries, as one object |
 | 9 | [Meshes in ML Pipelines](tutorial_9_ml_integration.ipynb) | Batching, features, a trained graph model, `torch.compile`, field schemas, performance |
@@ -29,7 +32,8 @@ Work through the tutorials in order. Each one assumes the earlier ones.
 
 ### 1. Getting Started
 
-The `Mesh` class: what its five fields hold, and how to use them.
+This tutorial covers the `Mesh` class, what its five fields hold, and how to
+use them. It includes the following topics:
 
 - Build a mesh from a `points` tensor and a `cells` tensor
 - Manifold dimension, spatial dimension, and codimension
@@ -40,7 +44,8 @@ The `Mesh` class: what its five fields hold, and how to use them.
 
 ### 2. Loading, Converting, and Saving Meshes
 
-How to bring meshes in and out of PhysicsNeMo-Mesh.
+This tutorial shows how to bring meshes in and out of PhysicsNeMo-Mesh. It
+includes the following topics:
 
 - Why importing a mesh means splitting its cells into simplices
 - `from_pyvista` and `to_pyvista`, including the dual graph of a mesh
@@ -54,7 +59,8 @@ How to bring meshes in and out of PhysicsNeMo-Mesh.
 
 ### 3. Primitives and Mesh Generation
 
-How to get a mesh without a mesh file.
+This tutorial shows how to get a mesh without a mesh file. It includes the
+following topics:
 
 - The seven families of example meshes in `physicsnemo.mesh.primitives`
 - Filling closed 2D boundary loops with quality triangles (`fill_interior`)
@@ -65,7 +71,8 @@ How to get a mesh without a mesh file.
 
 ### 4. Mesh Operations
 
-How to change a mesh before it reaches a model.
+This tutorial shows how to change a mesh before it reaches a model. It
+includes the following topics:
 
 - Translation, scaling, rotation, and general linear maps, with vector fields
   rotated together with the geometry
@@ -78,7 +85,8 @@ How to change a mesh before it reaches a model.
 
 ### 5. Discrete Calculus and Curvature
 
-Derivatives of fields on a mesh, and how accurate they are.
+This tutorial covers derivatives of fields on a mesh, and how accurate they
+are. It includes the following topics:
 
 - Gradients of scalar and vector fields with `compute_point_derivatives`
 - Choosing between least squares (LSQ) and discrete exterior calculus (DEC),
@@ -92,7 +100,8 @@ Derivatives of fields on a mesh, and how accurate they are.
 
 ### 6. Neighbors, Adjacency, and Spatial Queries
 
-The lookups that graph neural networks and training pipelines need.
+This tutorial covers the lookups that graph neural networks and training
+pipelines need. It includes the following topics:
 
 - The four adjacency queries: point to points, point to cells, cell to cells,
   and cell to points
@@ -104,7 +113,8 @@ The lookups that graph neural networks and training pipelines need.
 
 ### 7. Quality, Validation, and Repair
 
-How to find and fix defects in a mesh.
+This tutorial shows how to find and fix defects in a mesh. It includes the
+following topics:
 
 - Per-cell quality metrics and summary statistics
 - What `validate()` checks, and what it does not check
@@ -115,10 +125,11 @@ How to find and fix defects in a mesh.
 
 ### 8. Simulation Domains with DomainMesh
 
-How to keep the parts of one simulation sample together.
+This tutorial shows how to keep the parts of one simulation sample together.
+It includes the following topics:
 
-- Building a `DomainMesh` from a CFD result: an interior mesh, named boundary
-  meshes, and case parameters
+- Building a `DomainMesh` from a computational fluid dynamics (CFD) result:
+  an interior mesh, named boundary meshes, and case parameters
 - Inspecting and iterating over the interior and the boundaries
 - Checking a domain with `validate()` and `is_boundary_watertight()`
 - Drawing the interior colored by a field, with the boundary curves over it
@@ -128,7 +139,8 @@ How to keep the parts of one simulation sample together.
 
 ### 9. Meshes in ML Pipelines
 
-How to turn meshes into model inputs.
+This tutorial shows how to turn meshes into model inputs. It includes the
+following topics:
 
 - Padding meshes of different sizes for batching and `torch.compile`
 - Geometric features (normals and curvature) and boundary conditions stored as
@@ -194,10 +206,12 @@ The `assets/` directory holds meshes that the tutorials load:
 - `bunny.pt`: a coarse Stanford bunny, saved with `torch.save`. Refine it with
   `.subdivide()`.
 
-## More information
+## More Information
+
+The following pages have more information:
 
 - [PhysicsNeMo-Mesh User Guide](https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh.html)
-- [PhysicsNeMo-Mesh API reference](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/index.html)
+- [PhysicsNeMo-Mesh API Reference](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/index.html)
 - [physicsnemo.mesh README](../../../physicsnemo/mesh/README.md)
 - [TensorDict](https://github.com/pytorch/tensordict) and
   [PyVista](https://pyvista.org/)
