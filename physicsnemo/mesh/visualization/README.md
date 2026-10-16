@@ -4,6 +4,11 @@
 point or cell data. For the API reference, refer to the
 [visualization page](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/visualization.html).
 
+![Four drawings, each titled with its draw() call. An annulus colored by cell
+pressure, and the same annulus colored by point temperature. A sphere drawn
+with PyVista and colored by height, and the annulus colored by the magnitude
+of a velocity field.](../../../docs/img/mesh/draw_gallery.png)
+
 The examples on this page run in order. The first block defines the mesh that
 the later blocks use.
 
@@ -140,36 +145,21 @@ ax.set_title("Custom Title")
 plt.show()
 ```
 
-## Color Logic
-
-The neutral colors depend on which scalars are active:
-
-- Points: black when `point_scalars=None`.
-- Cells:
-  - No scalars (`point_scalars=None`, `cell_scalars=None`): light blue.
-  - Point scalars active: colored by the point scalars. Matplotlib fills each
-    triangle with the mean of its vertex colors. PyVista interpolates the point
-    scalars across each cell. Line segments that matplotlib draws in 1D or 3D
-    space stay light gray.
-  - Cell scalars active: colored by the cell scalars.
-
-## Mutual Exclusivity
+## Colors
 
 `point_scalars` and `cell_scalars` are mutually exclusive, so that one
-colormap describes the plot:
+colormap describes the plot. Passing both raises a `ValueError`. The neutral
+colors depend on which scalars are active:
 
-```python
-# Valid
-mesh.draw(point_scalars="temperature")
-mesh.draw(cell_scalars="pressure")
-mesh.draw()  # No scalars
+<!-- markdownlint-disable MD013 -->
+| Active Scalars | Points | Cells |
+| -------------- | ------ | ----- |
+| None | Black | Light blue |
+| `point_scalars` | Colored by the scalars | Matplotlib fills each triangle with the mean of its vertex colors. PyVista interpolates across each cell. |
+| `cell_scalars` | Black | Colored by the scalars |
+<!-- markdownlint-enable MD013 -->
 
-# Invalid: raises ValueError
-try:
-    mesh.draw(point_scalars="temperature", cell_scalars="pressure")
-except ValueError as error:
-    print(error)  # point_scalars and cell_scalars are mutually exclusive.
-```
+Line segments that matplotlib draws in 1D or 3D space stay light gray.
 
 ## Return Values
 
@@ -186,28 +176,8 @@ plotter.camera_position = "xy"
 plotter.show()
 ```
 
-## Complete API Reference
-
-The signature of `Mesh.draw()`, with its defaults:
-
-```python
-mesh.draw(
-    backend="auto",  # "auto", "matplotlib", "pyvista"
-    show=True,  # Display immediately
-    point_scalars=None,  # Point scalar data: tensor, key, or nested key
-    cell_scalars=None,  # Cell scalar data: tensor, key, or nested key
-    cmap="viridis",  # Colormap name
-    vmin=None,  # Colormap min value
-    vmax=None,  # Colormap max value
-    alpha_points=1.0,  # Point opacity
-    alpha_cells=1.0,  # Cell opacity
-    alpha_edges=1.0,  # Edge opacity (matplotlib only)
-    show_edges=True,  # Display edges
-    ax=None,  # Existing matplotlib Axes or pyvista Plotter to draw on
-    backend_options=None,  # Dict of extra arguments for PyVista's add_mesh()
-)
-```
-
+The full signature of `Mesh.draw()`, with every default, is on the
+[visualization page](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/visualization.html).
 The matplotlib backend ignores `backend_options` and warns when it is set.
 
 ## Examples
@@ -272,22 +242,3 @@ surface.draw(
     backend_options={"smooth_shading": True},
 )
 ```
-
-## Implementation Details
-
-The visualization code has four files:
-
-- `physicsnemo/mesh/visualization/draw_mesh.py`: main dispatcher with backend
-  selection.
-- `physicsnemo/mesh/visualization/_matplotlib_impl.py`: matplotlib backend
-  for 0D to 3D space. It draws volume meshes as their boundary surface.
-- `physicsnemo/mesh/visualization/_pyvista_impl.py`: PyVista backend.
-- `physicsnemo/mesh/visualization/_scalar_utils.py`: scalar data processing.
-
-The visualization code provides the following features:
-
-- L2 norm of multi-dimensional data.
-- Nested TensorDict key lookup.
-- Neutral colors chosen from the active scalars.
-- Validation of the scalar arguments.
-- 3D plots in matplotlib through `mpl_toolkits.mplot3d`.

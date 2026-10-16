@@ -8,24 +8,36 @@ cells and the dimension of the space they live in, written `2D→3D` for a
 surface in 3D. For the API reference, refer to the
 [primitives page](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/primitives.html).
 
-The examples on this page run in order. The first block defines the names that
-the later blocks use.
+![Ten primitives in five columns, curves, planar, surfaces, volumes, and
+procedural. A helix and a spiral, an annulus and an L-shape, a torus and a
+Möbius strip, a tetrahedral cube and a tetrahedron, and a lumpy sphere and a
+lumpy ball.](../../../docs/img/mesh/primitives_gallery.png)
 
 ## Quick Start
+
+Every mesh module has a `load()` function. Most take resolution and size
+parameters, and all but `procedural.noisy_mesh` take a `device`:
 
 ```python
 import torch
 from physicsnemo.mesh import primitives
 
-# Load a simple sphere
-mesh = primitives.surfaces.sphere_icosahedral.load(radius=1.0, subdivisions=2)
+# A sphere, coarse or fine, on the CPU or a GPU
+sphere = primitives.surfaces.sphere_icosahedral.load(radius=1.0, subdivisions=2)
+fine = primitives.surfaces.sphere_icosahedral.load(subdivisions=4, device="cpu")
 
-# Load the Stanford bunny
+# The Stanford bunny
 mesh = primitives.pyvista_datasets.bunny.load()
 
-# Create a lumpy sphere with noise
-mesh = primitives.procedural.lumpy_sphere.load(noise_amplitude=0.1)
+# A sphere with radial noise, or noise added to any mesh
+lumpy = primitives.procedural.lumpy_sphere.load(noise_amplitude=0.1, seed=42)
+noisy = primitives.procedural.noisy_mesh.load(
+    base_mesh=sphere, noise_scale=0.05, seed=42
+)
 ```
+
+The examples on this page run in order, so later blocks reuse `mesh` and
+`primitives` from this one.
 
 The `pyvista_datasets` modules, `volumes.sphere_volume`, and
 `volumes.cylinder_volume` need the optional `pyvista` package. The `text`
@@ -35,25 +47,12 @@ module needs `matplotlib`.
 
 ### `basic/`: Minimal Test Meshes
 
-The following simple meshes have one or few cells, for unit testing and
-validation:
-
-| Function | Dimensions | Description |
-| ---------- | ------------ | ------------- |
-| `single_point_2d` | 0D→2D | Single point in 2D space |
-| `single_point_3d` | 0D→3D | Single point in 3D space |
-| `three_points_2d` | 0D→2D | Three points in 2D space |
-| `three_points_3d` | 0D→3D | Three points in 3D space |
-| `single_edge_2d` | 1D→2D | Single edge in 2D space |
-| `single_edge_3d` | 1D→3D | Single edge in 3D space |
-| `three_edges_2d` | 1D→2D | Polyline with three edges in 2D |
-| `three_edges_3d` | 1D→3D | Polyline with three edges in 3D |
-| `single_triangle_2d` | 2D→2D | Single triangle in 2D space |
-| `single_triangle_3d` | 2D→3D | Single triangle in 3D space |
-| `two_triangles_2d` | 2D→2D | Two triangles sharing an edge (2D) |
-| `two_triangles_3d` | 2D→3D | Two triangles sharing an edge (3D) |
-| `single_tetrahedron` | 3D→3D | Single tetrahedron |
-| `two_tetrahedra` | 3D→3D | Two tetrahedra sharing a face |
+The `basic` module holds meshes of one to three cells for unit tests.
+`single_point`, `three_points`, `single_edge`, `three_edges`,
+`single_triangle`, and `two_triangles` each come in a `_2d` and a `_3d`
+version, for example `single_triangle_2d`. `single_tetrahedron` and
+`two_tetrahedra` complete the set. The point clouds among the primitives
+(0D→2D and 0D→3D) are all in this module.
 
 ### `curves/`: 1D Manifolds
 
@@ -197,65 +196,6 @@ matplotlib's fonts, through the following functions:
 from physicsnemo.mesh.primitives.text import text_2d_2d
 
 label = text_2d_2d("mesh")
-```
-
-## Dimensional Coverage
-
-The primitives cover these dimensional configurations:
-
-- 0D→2D, 0D→3D: point clouds (in `basic`)
-- 1D→1D: line segments on the real number line
-- 1D→2D: curves in the plane (such as circles and spirals)
-- 1D→3D: space curves (such as helices and knots)
-- 2D→2D: planar triangulations (squares, circles, polygons)
-- 2D→3D: surface meshes (such as spheres, cylinders, and tori)
-- 3D→3D: volume meshes (tetrahedral solids)
-
-## Usage Patterns
-
-### Basic Loading
-
-```python
-# Every mesh module has a load() function
-mesh = primitives.surfaces.sphere_icosahedral.load(device="cpu")
-```
-
-### Parametric Control
-
-```python
-# Adjust resolution
-sphere_coarse = primitives.surfaces.sphere_icosahedral.load(subdivisions=1)
-sphere_fine = primitives.surfaces.sphere_icosahedral.load(subdivisions=4)
-
-# Adjust size
-cylinder_small = primitives.surfaces.cylinder.load(radius=0.5, height=1.0)
-cylinder_large = primitives.surfaces.cylinder.load(radius=2.0, height=5.0)
-```
-
-### Device Selection
-
-```python
-# CPU
-mesh_cpu = primitives.pyvista_datasets.bunny.load(device="cpu")
-
-# GPU, if one is present
-if torch.cuda.is_available():
-    mesh_gpu = primitives.pyvista_datasets.bunny.load(device="cuda")
-```
-
-### Procedural Variations
-
-```python
-# Create base mesh
-base_sphere = primitives.surfaces.sphere_icosahedral.load(subdivisions=3)
-
-# Add noise
-noisy_sphere = primitives.procedural.noisy_mesh.load(
-    base_mesh=base_sphere, noise_scale=0.05, seed=42
-)
-
-# Or use pre-made lumpy sphere
-lumpy = primitives.procedural.lumpy_sphere.load(noise_amplitude=0.1, seed=42)
 ```
 
 ## Design Principles
