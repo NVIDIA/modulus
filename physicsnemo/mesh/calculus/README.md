@@ -6,22 +6,23 @@ This module implements differential operators (gradient, divergence, curl,
 Laplacian) and integration for simplicial meshes. It uses two complementary
 approaches:
 
-1. Discrete Exterior Calculus (DEC): a differential-geometry framework based
-   on Desbrun et al. (2005) and Hirani (2003). Fields live on vertices, edges,
-   and dual cells, and the operators follow the discrete Stokes theorem.
-2. Weighted least squares (LSQ): the standard CFD approach. Each vertex or
-   cell fits a local linear model to the values at its neighbors.
+- Discrete Exterior Calculus (DEC): a differential-geometry framework based
+  on Desbrun et al. (2005) and Hirani (2003). Fields live on vertices, edges,
+  and dual cells, and the operators follow the discrete Stokes theorem.
+- Weighted least squares (LSQ): the standard computational fluid dynamics
+  (CFD) approach. Each vertex or cell fits a local linear model to the values
+  at its neighbors.
 
-For a guide to choosing between them, see
+For a guide to choosing between them, refer to
 [Choosing Between DEC and LSQ](#choosing-between-dec-and-lsq). For the API
-reference, see the
+reference, refer to the
 [calculus page](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/calculus.html).
 
 ### Setup
 
 The examples on this page run in order. This block defines the mesh and the
-fields that the later blocks use: a sphere (a 2D surface in 3D) with a scalar
-field and a vector field at its vertices.
+fields that the later blocks use. The mesh is a sphere (a 2D surface in 3D)
+with a scalar field and a vector field at its vertices.
 
 ```python
 import torch
@@ -64,20 +65,21 @@ $+2$, and the operator is negative semidefinite.
 
 Properties:
 
-- Uses cotangent weights derived from the FEM stiffness matrix (see below).
+- Uses cotangent weights derived from the finite element method (FEM)
+  stiffness matrix, as described below.
 - In 2D: equivalent to $\tfrac{1}{2}(\cot \alpha + \cot \beta)$[^meyer2003-eq5].
 - In 1D: gives $1/|e|$ (standard finite-difference second derivative).
 - In 3D and higher: gives the dihedral-angle cotangent weights, computed from
   the inverse Gram matrix.
 - Normalized by the dual 0-cell volumes $|\star v|$: circumcentric (Voronoi)
-  volumes in 1D and 2D, a barycentric approximation in 3D and higher (see
+  volumes in 1D and 2D, a barycentric approximation in 3D and higher (refer to
   [Circumcentric Dual Volumes](#circumcentric-dual-volumes-voronoi-cells)).
 - Exact for linear functions at interior vertices of flat meshes
   (codimension 0, where the manifold dimension equals the spatial dimension).
   Boundary vertices have an incomplete 1-ring and give large errors.
 - Works on manifolds of any dimension embedded in any ambient space.
 
-Cotangent weights via the FEM stiffness matrix (n-dimensional):
+Cotangent weights through the FEM stiffness matrix (n-dimensional):
 
 For an $n$-simplex with vertices $v_0, \ldots, v_n$, the cotangent weight
 for edge $(i, j)$ is
@@ -102,7 +104,7 @@ G &= E E^\top
 $$
 
 This generalizes the classical 2D cotangent formula to arbitrary
-dimensions. See [^hirani2003-eq642] and [^meyer2003-eq8].
+dimensions. Refer to [^hirani2003-eq642] and [^meyer2003-eq8].
 
 #### Exterior Derivative
 
@@ -128,7 +130,7 @@ Properties:
   $\langle d\alpha, c\rangle = \langle \alpha, \partial c\rangle$
   (true by definition).
 
-See [^desbrun2005-s5] and [^hirani2003-ch3].
+Refer to [^desbrun2005-s5] and [^hirani2003-ch3].
 
 #### Hodge Star
 
@@ -145,7 +147,8 @@ star_df = hodge_star_1(mesh, edge_1form, edges)
 
 Properties:
 
-- Preserves averages between primal and dual cells (see equation below).
+- Preserves averages between primal and dual cells, as the following equation
+  shows.
 - $\star\star\alpha = (-1)^{k(n-k)} \alpha$.
 - Uses circumcentric (Voronoi) dual cells in 1D and 2D, with mixed areas for
   obtuse triangles, and a barycentric approximation in 3D and higher.
@@ -155,7 +158,7 @@ $$
   = \frac{\langle \star\alpha, \star\sigma\rangle}{|\star\sigma|}
 $$
 
-See [^hirani2003-def411] and [^desbrun2005-s6].
+Refer to [^hirani2003-def411] and [^desbrun2005-s6].
 
 #### Sharp and Flat Operators
 
@@ -179,9 +182,9 @@ Sharp and flat are not exact inverses in discrete
 DEC[^hirani2003-prop553]. This is a property of the discrete theory, not a
 bug.
 
-See [^hirani2003-ch5].
+Refer to [^hirani2003-ch5].
 
-### Gradient via DEC
+### Gradient Using DEC
 
 ```python
 from physicsnemo.mesh.calculus.gradient import compute_gradient_points_dec
@@ -194,7 +197,7 @@ This composes the exterior derivative and the sharp operator. It is exact for
 linear functions on flat meshes (codimension 0), including at boundary
 vertices.
 
-### Divergence via DEC
+### Divergence Using DEC
 
 ```python
 from physicsnemo.mesh.calculus.divergence import compute_divergence_points_dec
@@ -205,7 +208,7 @@ div_v = compute_divergence_points_dec(mesh, vector_field)  # (n_points,)
 This computes $\star_0^{-1}\, d^{\ast}\, \star_1\, \flat(X)$: the net flux
 through the boundary of each dual cell, per unit dual volume. It is exact for
 linear vector fields at interior vertices of uniform grids and of 1D meshes.
-On irregular triangle or tetrahedral meshes it is not exact, and its pointwise
+On irregular triangle or tetrahedral meshes, it is not exact, and its pointwise
 error does not shrink as the mesh refines.
 
 ---
@@ -242,8 +245,8 @@ Properties:
 - First-order accurate, $O(h)$, for smooth fields.
 - Supports intrinsic (tangent-space) gradients for curves and surfaces in any
   spatial dimension. Codimension-1 meshes (curves in 2D, surfaces in 3D) use
-  the vertex normals; higher codimensions use a PCA estimate of the tangent
-  space.
+  the vertex normals. Higher codimensions use a principal component analysis
+  (PCA) estimate of the tangent space.
 - Works for scalar and tensor fields: a field of shape `(n_points, ...)` gives
   a gradient of shape `(n_points, n_spatial_dims, ...)`.
 - Extrinsic LSQ (the default, `intrinsic=False`) requires
@@ -266,7 +269,7 @@ $$
 as the trace of the LSQ Jacobian. `compute_divergence_cells_lsq` does the same
 at cell centers.
 
-### Curl (3D Only)
+### Curl (3D only)
 
 ```python
 from physicsnemo.mesh.calculus.curl import compute_curl_points_lsq
@@ -313,7 +316,7 @@ $$
 \end{cases}
 $$
 
-3D and higher manifolds (tetrahedra, etc.):
+3D and higher manifolds (such as tetrahedra):
 
 - Barycentric approximation: $|\star v| = \sum_{\sigma \ni v} |\sigma| / (n + 1)$.
 - A rigorous circumcentric dual requires "well-centered"
@@ -322,17 +325,17 @@ $$
 In every dimension, the dual volumes tile the mesh:
 $\sum_v |\star v| = |M|$ up to floating-point rounding.
 
-See [^meyer2003-s32_34], [^desbrun2005-s3], and [^hirani2003-def245].
+Refer to [^meyer2003-s32_34], [^desbrun2005-s3], and [^hirani2003-def245].
 
 ---
 
-### Known Behavior (Not Bugs)
+### Known Behavior (not bugs)
 
 $\operatorname{div}(\nabla f)$ is close to $\Delta f$, but not equal to it:
 
 - In discrete DEC, sharp ($\sharp$) and flat ($\flat$) are not exact
   inverses[^hirani2003-prop553].
-- Therefore the composed operator differs from
+- Therefore, the composed operator differs from
   `compute_laplacian_points_dec`. Away from the boundary of a regular mesh,
   both converge to $\Delta f$ as the mesh refines. On irregular meshes, the
   pointwise error of either one need not go to zero.
@@ -542,9 +545,9 @@ print(f"max |div(curl v)| = {div_curl_v.abs().max():.2f}")  # 0.35
 
 ## Dimension Support
 
-Which operators run, by manifold dimension $n$ (columns) and spatial
-dimension $d$. Codimension is $d - n$. Entries list the supported spatial
-dimensions; "-" means the call raises an error.
+Codimension is $d - n$. Entries list the supported spatial dimensions. A "-"
+means that the call raises an error. The following table shows which
+operators run, by manifold dimension $n$ (columns) and spatial dimension $d$:
 
 <!-- markdownlint-disable MD013 -->
 | Operator | $n = 1$ | $n = 2$ | $n = 3$ | $n \geq 4$ |
@@ -575,7 +578,7 @@ Use DEC when:
 
 - You need operators with discrete structure: $d \circ d = 0$ and the
   discrete Stokes theorem.
-- You work with differential geometry (curvatures, etc.).
+- You work with differential geometry, such as curvatures.
 - You compute a Laplacian on a manifold.
 - You work in more than three spatial dimensions (DEC divergence and
   Laplacian).
@@ -591,9 +594,9 @@ Use LSQ when:
 Both methods:
 
 - Are first-order accurate, $O(h)$, for gradients of smooth fields.
-- Compute gradients on irregular meshes. (On irregular meshes, the pointwise
+- Compute gradients on irregular meshes. On irregular meshes, the pointwise
   error of DEC divergence and of the DEC Laplacian does not shrink as the
-  mesh refines.)
+  mesh refines.
 - Are fully vectorized.
 - Run on the GPU.
 
@@ -603,33 +606,37 @@ Both methods:
 
 ### Current Limitations
 
-1. 3D and higher dual volumes use the barycentric approximation (standard
-   practice).
-   - A rigorous circumcentric dual requires "well-centered" meshes.
-   - A mixed volume for obtuse tetrahedra is an open research problem.
-   - The Laplacian cotangent weights are exact in all dimensions (FEM
-     stiffness matrix). Only the normalization by dual volume is an
-     approximation.
+The module has the following limitations:
 
-2. Sharp and flat are not exact inverses: $\sharp \circ \flat \neq \mathrm{id}$
-   in discrete DEC.
-   - This is fundamental to the discrete theory[^hirani2003-prop553].
-   - It makes $\operatorname{div}(\nabla f)$ differ from $\Delta f$.
+- 3D and higher dual volumes use the barycentric approximation (standard
+  practice).
+  - A rigorous circumcentric dual requires "well-centered" meshes.
+  - A mixed volume for obtuse tetrahedra is an open research problem.
+  - The Laplacian cotangent weights are exact in all dimensions (FEM
+    stiffness matrix). Only the normalization by dual volume is an
+    approximation.
 
-3. Boundary effects: the cotangent Laplacian assumes complete 1-ring
-   neighborhoods.
-   - Boundary vertices give large errors.
-   - `mean_curvature_vertices` returns `NaN` at boundary vertices by default
-     (`include_boundary=False`).
+- Sharp and flat are not exact inverses: $\sharp \circ \flat \neq \mathrm{id}$
+  in discrete DEC.
+  - This is fundamental to the discrete theory[^hirani2003-prop553].
+  - It makes $\operatorname{div}(\nabla f)$ differ from $\Delta f$.
+
+- Boundary effects: the cotangent Laplacian assumes complete 1-ring
+  neighborhoods.
+  - Boundary vertices give large errors.
+  - `mean_curvature_vertices` returns `NaN` at boundary vertices by default
+    (`include_boundary=False`).
 
 ### Future Enhancements
 
-1. Well-centered mesh detection for rigorous 3D dual volumes.
-2. Additional DEC operators: wedge product, interior product, Lie
-   derivative.
-3. Higher-order LSQ with extended stencils.
-4. Convergence analysis: verify $O(h^2)$ error as the mesh refines.
-5. Alternative sharp and flat combinations (DPP-flat, etc.).
+Future work includes the following:
+
+- Well-centered mesh detection for rigorous 3D dual volumes.
+- Additional DEC operators: wedge product, interior product, Lie
+  derivative.
+- Higher-order LSQ with extended stencils.
+- Convergence analysis: verify $O(h^2)$ error as the mesh refines.
+- Alternative sharp and flat combinations, such as DPP-flat.
 
 ---
 
@@ -639,8 +646,8 @@ Both methods:
 
 - Exterior forms as cochains[^hirani2003-ch3].
 - Circumcentric dual complexes[^desbrun2005-s3][^hirani2003-s24].
-- Hodge star via volume ratios[^hirani2003-def411].
-- Sharp/flat with support volumes[^hirani2003-ch5].
+- Hodge star through volume ratios[^hirani2003-def411].
+- Sharp and flat with support volumes[^hirani2003-ch5].
 
 ### Discrete Differential Geometry
 
@@ -656,7 +663,7 @@ Both methods:
 - Conservation of dual volumes (exact up to floating-point rounding).
 - The vector calculus identities $\nabla \times \nabla f = 0$ and
   $\nabla \cdot (\nabla \times v) = 0$ hold only approximately for the
-  LSQ operators (see Example 3).
+  LSQ operators (refer to Example 3).
 
 ---
 
@@ -664,13 +671,13 @@ Both methods:
 
 The three primary works are:
 
-1. Meyer, M., Desbrun, M., Schröder, P., & Barr, A. H. (2003).
-   *Discrete Differential-Geometry Operators for Triangulated 2-Manifolds*.
-   In: Visualization and Mathematics III, pp. 35-57.
-2. Desbrun, M., Hirani, A. N., Leok, M., & Marsden, J. E. (2005).
-   *Discrete Exterior Calculus*. arXiv:math/0508341v2.
-3. Hirani, A. N. (2003). *Discrete Exterior Calculus*. PhD thesis,
-   California Institute of Technology.
+- Meyer, M., Desbrun, M., Schröder, P., & Barr, A. H. (2003).
+  *Discrete Differential-Geometry Operators for Triangulated 2-Manifolds*.
+  In: Visualization and Mathematics III, pp. 35-57.
+- Desbrun, M., Hirani, A. N., Leok, M., & Marsden, J. E. (2005).
+  *Discrete Exterior Calculus*. arXiv:math/0508341v2.
+- Hirani, A. N. (2003). *Discrete Exterior Calculus*. PhD thesis,
+  California Institute of Technology.
 
 Footnotes throughout this document point to specific sections and equations
 in these works.
