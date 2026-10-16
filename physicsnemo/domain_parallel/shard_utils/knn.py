@@ -145,8 +145,10 @@ def ring_knn(
         # The local_idx indexes into the _local_ tensor, but for
         # Correctness we need it to index into the _global_ tensor.
         # Make sure to index using the rank the points came from!
+        # Index -1 marks a missing neighbor (for example, the Warp backend's
+        # result for a non-finite query), so it stays -1.
         offset = points_strides_along_ring[source_rank]
-        local_idx = local_idx + offset
+        local_idx = torch.where(local_idx >= 0, local_idx + offset, local_idx)
 
         if current_dists is None:
             current_dists = local_distances
