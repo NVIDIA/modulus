@@ -3,76 +3,58 @@ Generate
 
 .. currentmodule:: physicsnemo.mesh.generate
 
-``physicsnemo.mesh.generate`` generates meshes from implicit
-representations. It provides isosurface extraction and dimension-generic
-volume meshing.
+``physicsnemo.mesh.generate`` makes meshes from implicit shapes. It meshes the
+inside of an implicit function in any dimension, and it extracts isosurfaces
+from a 3D grid.
 
-Choosing a Mesher
------------------
+:bdg-success:`CPU and GPU` :bdg-info:`differentiable refit` :bdg-secondary:`any dimension`
+:bdg-warning:`marching cubes in 3D only`
 
-PhysicsNeMo-Mesh has three generation tools with distinct contracts:
+.. figure:: ../../img/mesh/mesh_generators.png
+   :alt: Three columns, each from an input to an output. Left: two circles
+         filled with triangles that keep the circle vertices. Middle: a
+         filled contour plot of a box minus a circle, then its triangle mesh.
+         Right: a slice of a 3D scalar field, then its isosurface.
+   :align: center
+   :width: 100%
 
-.. list-table::
-   :header-rows: 1
+   Three ways to make a mesh from a shape. ``fill_interior`` keeps the given
+   boundary, ``mesh_implicit_domain`` meshes an implicit function, and
+   ``marching_cubes`` returns only the surface.
 
-   * - Tool
-     - Input
-     - Output
-     - Use When
-   * - ``physicsnemo.mesh.tessellation.fill_interior``
-     - closed boundary ``Mesh`` (2D today)
-     - volume ``Mesh``, exact boundary, deterministic, a guaranteed
-       minimum angle of up to 33 degrees for input corners of 60 degrees or
-       more (refer to :doc:`tessellation`)
-     - the boundary discretization is the contract (coupling, boundary
-       conditions on each boundary, guaranteed worst-element quality)
-   * - :func:`mesh_implicit_domain`
-     - implicit function :math:`\varphi(x)`, such as a signed distance
-       function (SDF), a level set, or a neural field
-     - volume ``Mesh`` in any dimension, boundary approximated to
-       :math:`O(h^2)` where it is smooth (sharp corners are rounded at the
-       ``h`` scale unless passed as ``feature_points``), GPU-native,
-       differentiable refit
-     - geometry is implicit, you need 3D or ND volumes, GPU scale, or
-       gradients with regard to shape
-   * - :func:`marching_cubes`
-     - 3D scalar field on a grid
-     - surface ``Mesh`` (the isosurface only, no interior)
-     - the boundary surface itself is the deliverable, for visualization or
-       boundary representation (B-rep) export
+The most-used functions are the following:
 
-Volume Meshing of Implicit Domains
-----------------------------------
+.. grid:: 1 1 3 3
+   :gutter: 2
 
-:func:`mesh_implicit_domain` generates a simplex volume mesh of
-``{x : phi(x) < 0}`` for an arbitrary implicit function ``phi`` (a signed
-distance function, or any level set with a usable gradient, including neural
-implicit fields), in *any spatial dimension*, entirely in PyTorch tensor
-operations on CPU or CUDA. The meshed set is ``{phi < 0}`` intersected with the
-bounding box. Where the domain reaches the box, the generator treats its faces
-as a boundary, so external-flow "box minus obstacle" domains work directly.
-Every optimization step is validity-gated, so when the function returns, the
-mesh is positively oriented and has a closed-manifold boundary. Difficult
-inputs lower element quality, which ``full_output=True`` reports in a
-diagnostics dictionary, but do not by themselves stop generation. The function
-raises ``ValueError`` when no lattice cell fits inside the domain at this
-``h``, or when the coverage guard trips. The coverage guard raises the error,
-rather than dropping geometry, when the domain has features below the target
-edge length ``h`` or when coverage cannot be certified. The latter can happen,
-for example, if a neural field returns NaN inside the box when queried outside
-its training range. Without ``feature_points``, sharp convex corners are
-rounded off at the ``h`` scale. Pass the corners as ``feature_points`` to
-interpolate them exactly.
+   .. grid-item-card:: mesh_implicit_domain
+      :link: physicsnemo.mesh.generate.mesh_implicit_domain
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
 
-:func:`refit_mesh_to_implicit` is the differentiable companion. It
-re-projects a mesh's boundary onto ``phi = 0`` with graph-preserving
-Newton steps at fixed topology, so gradients flow from mesh coordinates to
-shape parameters inside ``phi``. This enables meshing as a
-differentiable layer for shape optimization. For a box-minus-obstacle mesh,
-pass the same box as ``bounds=``, so that the vertices on the box faces stay
-on them.
+      A simplex volume mesh of the inside of an implicit function.
 
-The following example meshes a spherical shell and differentiates its volume
+   .. grid-item-card:: refit_mesh_to_implicit
+      :link: physicsnemo.mesh.generate.refit_mesh_to_implicit
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Gradients from mesh geometry to the shape parameters.
+
+   .. grid-item-card:: Signed Distance Functions
+      :link: mesh-generate-sdf
+      :link-type: ref
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Spheres, boxes, polygons, and their unions and differences.
+
+Example
+-------
+
+This example meshes a spherical shell and differentiates its volume
 with respect to the outer radius:
 
 .. code:: python
@@ -103,6 +85,93 @@ The refit does not gate its Newton steps, so that it stays differentiable. It
 warns when the projection inverts cells. On this coarse mesh, it warns that
 about two percent of the cells inverted, most of them near the outer sphere.
 
+Choosing a Mesher
+-----------------
+
+PhysicsNeMo-Mesh has three ways to make a mesh from a shape:
+
+.. grid:: 1 1 3 3
+   :gutter: 3
+
+   .. grid-item-card:: fill_interior
+      :link: mesh-tessellation-fill
+      :link-type: ref
+      :shadow: md
+      :class-card: sd-card-hover
+
+      - **Input:** a closed boundary ``Mesh``, 2D today.
+      - **Output:** a volume ``Mesh`` with exactly that boundary, and a
+        minimum angle of up to 33 degrees.
+      - **Use when** the boundary discretization is fixed, for example for
+        coupling or boundary conditions.
+
+   .. grid-item-card:: mesh_implicit_domain
+      :link: mesh-implicit-domain
+      :link-type: ref
+      :shadow: md
+      :class-card: sd-card-hover
+
+      - **Input:** an implicit function :math:`\varphi(x)`, such as a signed
+        distance function (SDF), a level set, or a neural field.
+      - **Output:** a volume ``Mesh`` in any dimension, with the boundary
+        within :math:`O(h^2)` where it is smooth.
+      - **Use when** the geometry is implicit, or you need GPU scale or
+        gradients with regard to shape.
+
+   .. grid-item-card:: marching_cubes
+      :link: mesh-isosurface
+      :link-type: ref
+      :shadow: md
+      :class-card: sd-card-hover
+
+      - **Input:** a 3D scalar field on a grid.
+      - **Output:** a surface ``Mesh`` of the isosurface, with no interior.
+      - **Use when** the surface itself is the result, for visualization or
+        boundary representation (B-rep) export.
+
+.. _mesh-implicit-domain:
+
+Volume Meshing of Implicit Domains
+----------------------------------
+
+:func:`mesh_implicit_domain` generates a simplex volume mesh of
+``{x : phi(x) < 0}`` for an implicit function ``phi``, such as a signed
+distance function or a neural implicit field. It works in any spatial
+dimension, entirely in PyTorch on CPU or CUDA. The meshed set is ``{phi < 0}``
+intersected with the bounding box, so external-flow "box minus obstacle"
+domains work directly.
+
+.. tip::
+
+   Without ``feature_points``, sharp convex corners are rounded off at the
+   ``h`` scale. Pass the corners as ``feature_points`` to keep them exactly.
+
+.. dropdown:: Validity and coverage guarantees
+
+   Every optimization step is validity-gated, so when the function returns,
+   the mesh is positively oriented and has a closed-manifold boundary.
+   Difficult inputs lower element quality, which ``full_output=True``
+   reports in a diagnostics dictionary, but do not by themselves stop
+   generation. The function raises ``ValueError`` when no lattice cell fits
+   inside the domain at this ``h``, or when the coverage guard trips. The
+   coverage guard raises the error, rather than dropping geometry, when the
+   domain has features below the target edge length ``h`` or when coverage
+   cannot be certified. The latter can happen, for example, if a neural
+   field returns NaN inside the box when queried outside its training range.
+
+:func:`refit_mesh_to_implicit` is the differentiable companion. It
+re-projects a mesh's boundary onto ``phi = 0`` with graph-preserving
+Newton steps at fixed topology, so gradients flow from mesh coordinates to
+shape parameters inside ``phi``. This enables meshing as a
+differentiable layer for shape optimization. For a box-minus-obstacle mesh,
+pass the same box as ``bounds=``, so that the vertices on the box faces stay
+on them.
+
+.. _mesh-generate-sdf:
+
+Signed Distance Functions
+-------------------------
+
 The module also provides the following signed-distance building blocks for
 convenience:
 
@@ -121,6 +190,8 @@ if it meets the following conditions:
 - It is differentiable, almost everywhere, under autograd.
 - It has a nonzero gradient near ``phi = 0``.
 - It does not return NaN inside the bounds.
+
+.. _mesh-isosurface:
 
 Isosurface Extraction
 ---------------------
