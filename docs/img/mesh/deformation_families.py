@@ -113,7 +113,6 @@ def main():
     resolution = (4, 4, 2)
     lattice = torch.zeros(*resolution, 3)
     lattice[1:3, 1:3, :, 2] = 0.5
-    lattice[3, 0, :, 2] = -0.25
 
     target = sphere_icosahedral.load(radius=1.6, subdivisions=4).translate(
         torch.tensor([0.0, 0.0, -1.3])
