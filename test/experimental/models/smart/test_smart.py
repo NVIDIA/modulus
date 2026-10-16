@@ -134,6 +134,10 @@ def test_geometry_sampling_uses_full_pool_without_dense_embeddings():
         assert (sample[..., 0] > points[0, 149, 0]).any()
         assert (sample < 1).all()
         assert torch.isin(sample[..., 0], points[..., 0]).all()
+        assert sample[0, :, 0].unique().numel() == sample.shape[1]
+        # Gather complete rows so all three coordinate components stay aligned.
+        indices = (sample[0, :, 0] * 200).round().long()
+        torch.testing.assert_close(sample, points[:, indices], rtol=0, atol=0)
     assert not torch.equal(embedded[1], embedded[2])
     repeat = model(points, queries, geometry_generator=torch.Generator().manual_seed(0))
     assert torch.equal(output[0], repeat[0])

@@ -92,18 +92,13 @@ class _CrossAttention(nn.Module):
             self.register_parameter("temperature_logit", None)
         self.query_norm = nn.LayerNorm(width)
         self.context_norm = nn.LayerNorm(width)
-        # need_weights=False selects PyTorch's optimized SDPA implementation.
+        # Retain MultiheadAttention projection names for checkpoint compatibility.
         self.attention = nn.MultiheadAttention(width, heads, batch_first=True)
 
     def forward(self, queries: Tensor, context: Tensor) -> Tensor:
         normalized = self.context_norm(context)
         query = self.query_norm(queries)
-        if self.qk_normalization:
-            update = self._projected_attention(query, normalized)
-        else:
-            update, _ = self.attention(
-                query, normalized, normalized, need_weights=False
-            )
+        update = self._projected_attention(query, normalized)
         return queries + update
 
     def _projected_attention(self, queries: Tensor, context: Tensor) -> Tensor:
@@ -259,11 +254,15 @@ class SMART(Module):
     Notes
     -----
     Mixed precision follows the caller's :func:`torch.autocast` context.
-    Coordinates must be finite and consistently scaled. Padding is not supported;
-    use fixed-size sampled batches or batch size one for ragged clouds. Sampling
-    is without replacement. Evaluation is repeatable for a fixed ordered cloud.
-    A permutation can change the selected subset; permutation invariance holds
-    when all geometry points are retained, up to floating-point rounding.
+    Coordinates must be finite. Apply the same coordinate normalization to geometry
+    and field queries before calling the model. The positional embedding does not
+    normalize coordinates internally. Padding is not supported. Use fixed-size
+    sampled batches or batch size one for ragged clouds. Sampling is without
+    replacement. Evaluation is repeatable for a fixed ordered cloud.
+    Random-key sampling selects different subsets from earlier randperm-based
+    versions for the same seed. A permutation can change the selected subset.
+    Permutation invariance holds when all geometry points are retained, up to
+    floating-point rounding.
 
     :meth:`decode_queries` can be compiled independently and evaluated in chunks
     against cached latents. Cache validity depends on geometry, parameters,
@@ -472,14 +471,14 @@ class SMART(Module):
         count = min(count, points.shape[1])
         if count == points.shape[1]:
             return points
-        indices = torch.stack(
-            [
-                torch.randperm(
-                    points.shape[1], device=points.device, generator=generator
-                )[:count]
-                for _ in range(points.shape[0])
-            ]
-        )
+        # Select random keys without constructing a full permutation per cloud.
+        # Keep keys in fp32 even when the default dtype is a reduced precision.
+        indices = torch.rand(
+            points.shape[:2],
+            device=points.device,
+            dtype=torch.float32,
+            generator=generator,
+        ).topk(count, dim=1, sorted=False).indices
         return points.gather(1, indices.unsqueeze(-1).expand(-1, -1, 3))
 
     def encode_geometry(
