@@ -45,9 +45,18 @@ logger = PythonLogger("globe.model")
 def _column_runs(layout: PackLayout) -> tuple[tuple[int, int, int], ...]:
     r"""Maximal column ranges of a packed layout whose fields share one shape.
 
-    Returns ``(start, stop, n_dims)`` triples, ``n_dims`` being 0 for scalar
-    fields and the vector length otherwise, so that an operation defined per
-    field runs once per range.
+    An operation defined per field then runs once per range.
+
+    Parameters
+    ----------
+    layout : PackLayout
+        Layout of scalar and vector fields.
+
+    Returns
+    -------
+    tuple[tuple[int, int, int], ...]
+        ``(start, stop, n_dims)`` column ranges, ``n_dims`` being 0 for scalar
+        fields and the vector length otherwise.
     """
     runs: list[tuple[int, int, int]] = []
     for shape, offset in zip(layout.shapes, layout.offsets):
@@ -466,7 +475,7 @@ class GLOBE(Module):
         dict[str, DualInteractionPlan],
         dict[str, torch.Tensor | None],
     ]:
-        """Build per-BC-type cluster trees and cross-BC dual interaction plans.
+        r"""Build per-BC-type cluster trees and cross-BC dual interaction plans.
 
         Builds one :class:`ClusterTree` per BC type (O(B) trees), then plans
         the interactions of every (source BC, destination BC) pair: one dual
@@ -712,8 +721,9 @@ class GLOBE(Module):
         Returns
         -------
         Float[torch.Tensor, "n_targets n_features"]
-            Kernel outputs summed over all boundary condition types, packed
-            as the layer's kernels' ``output_layout`` describes.
+            Kernel outputs summed over all boundary condition types, of shape
+            :math:`(N_{targets}, F)`, packed as the layer's kernels'
+            ``output_layout`` describes.
         """
         result: torch.Tensor | None = None
 
@@ -774,6 +784,17 @@ class GLOBE(Module):
         O(10^4) intermediate values.  Uses arcsinh for C-infinity smooth
         logarithmic compression: of each scalar, and of each vector's
         magnitude (keeping its direction).
+
+        Parameters
+        ----------
+        packed : Float[torch.Tensor, "n_cells n_features"]
+            Communication-layer outputs, of shape :math:`(N_{cells}, F)`,
+            packed as ``self._intermediate_layout`` describes.
+
+        Returns
+        -------
+        Float[torch.Tensor, "n_cells n_features"]
+            The compressed outputs, of shape :math:`(N_{cells}, F)`.
         """
         C = self.latent_compression_scale
         eps_sq = self.smoothing_radius**2
@@ -807,6 +828,28 @@ class GLOBE(Module):
         with the joined plans of :meth:`_build_trees_and_plans`.  The packed
         result is split back into one block of rows per BC type, and each
         block's fields become that boundary mesh's new ``cell_data``.
+
+        Parameters
+        ----------
+        layer_idx : int
+            Index into ``self.kernel_layers``.
+        boundary_meshes : dict[str, Mesh["n-1", "n"]]
+            Boundary meshes whose ``cell_data`` holds the physical features,
+            strengths, and (after layer 0) latent state.
+        reference_lengths : dict[str, Float[torch.Tensor, ""]]
+            Reference length names to 0-d tensors.
+        global_data : TensorDict or None
+            Problem-level features.
+        cluster_trees : dict[str, ClusterTree]
+            Per-BC-type source trees.
+        comm_plans : dict[str, DualInteractionPlan]
+            Per-source-BC plans to the cell centroids of all BC types (see
+            :meth:`_build_trees_and_plans`).
+        comm_target_centroids : dict[str, torch.Tensor or None]
+            Per-source-BC target-node centroids of ``comm_plans``, each of
+            shape :math:`(M, D)` or ``None``.
+        source_areas : dict[str, torch.Tensor]
+            Per-BC-type source areas, each of shape :math:`(N_{cells},)`.
 
         Returns
         -------

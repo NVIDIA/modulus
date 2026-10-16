@@ -122,6 +122,16 @@ def _sort_key(key: NestedKey) -> str:
     changing it would scramble the columns of every trained checkpoint.
     (:meth:`TensorDict.pack <tensordict.TensorDictBase.pack>` sorts nested
     keys as dotted strings, which disagrees for some keys.)
+
+    Parameters
+    ----------
+    key : NestedKey
+        A feature's key: a string, or a tuple of strings for a nested key.
+
+    Returns
+    -------
+    str
+        The ``str`` of the key as a tuple below a common prefix.
     """
     return str(("_", *((key,) if isinstance(key, str) else key)))
 
@@ -132,24 +142,25 @@ def _pack_features(
     r"""Pack the scalar leaves of ``td``, then its vector leaves, into one tensor.
 
     Each group is ordered by :func:`_sort_key`.  Vector leaves keep their
-    components together, so the vector columns reshape to
-    ``(*batch, n_vectors, n_dims)``.  One gather of the packed tensor replaces
-    one per leaf, and the evaluation code works on the packed groups instead
-    of on a TensorDict per leaf.
+    components together, so the :math:`N_v D` vector columns reshape to
+    :math:`(*, N_v, D)`.  One gather of the packed tensor replaces one per
+    leaf, and the evaluation code works on the packed groups instead of on a
+    TensorDict per leaf.
 
     Parameters
     ----------
     td : TensorDict
-        Features with scalar leaves of shape ``td.batch_size`` and vector
-        leaves of shape ``(*td.batch_size, n_dims)``.
+        Features with :math:`N_s` scalar leaves of shape :math:`(*)`, the
+        batch shape of ``td``, and :math:`N_v` vector leaves of shape
+        :math:`(*, D)`.
     device : torch.device
         Device of the empty result when ``td`` has no leaves.
 
     Returns
     -------
     tuple[torch.Tensor, int, int]
-        The packed ``(*batch, n_scalars + n_vectors * n_dims)`` tensor, the
-        number of scalar leaves, and the number of vector leaves.
+        The packed tensor of shape :math:`(*, N_s + N_v D)`, :math:`N_s`, and
+        :math:`N_v`.
 
     Raises
     ------
@@ -194,6 +205,18 @@ def _dipole_directions(
     :func:`~physicsnemo.nn.functional.equivariant_ops.polar_and_dipole_basis`
     in 2D, both with ``normalize_basis_vectors=False``: the only directions
     of those bases that the kernels use.  It is zero where ``r_hat`` is.
+
+    Parameters
+    ----------
+    r_hat : Float[torch.Tensor, "... n_dims"]
+        Unit or zero displacement directions, of shape :math:`(*, D)`.
+    n_hats : Float[torch.Tensor, "... n_vectors n_dims"]
+        Unit directions of the other vectors, of shape :math:`(*, N_v, D)`.
+
+    Returns
+    -------
+    Float[torch.Tensor, "... n_vectors n_dims"]
+        Unnormalized dipole directions, of shape :math:`(*, N_v, D)`.
     """
     e = vector_project(-n_hats, r_hat.unsqueeze(-2))
     return e.masked_fill(torch.all(r_hat == 0.0, dim=-1)[..., None, None], 0.0)
@@ -211,6 +234,23 @@ def _aggregate_features(
 
     Averaging is linear in each column, so the packed features aggregate as
     one TensorDict leaf, in one pass, and stay packed.
+
+    Parameters
+    ----------
+    cluster_tree : ClusterTree
+        Tree over ``source_points``.
+    source_points : Float[torch.Tensor, "n_sources n_dims"]
+        Source coordinates, of shape :math:`(N_{sources}, D)`.
+    source_areas : Float[torch.Tensor, "n_sources"]
+        Source weights, of shape :math:`(N_{sources},)`.
+    source_features : Float[torch.Tensor, "n_sources n_features"]
+        Packed source features, of shape :math:`(N_{sources}, F)`.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor]
+        Node centroids of shape :math:`(N_{nodes}, D)`, and mean node features
+        of shape :math:`(N_{nodes}, F)`.
     """
     aggregates = cluster_tree.compute_source_aggregates(
         source_points=source_points,
@@ -237,6 +277,23 @@ def _target_node_centroids(
     For self-interaction (``target_tree is cluster_tree``) these are the
     source tree's area-weighted ``node_centroids``; otherwise the plain mean
     of each target node's points.
+
+    Parameters
+    ----------
+    cluster_tree : ClusterTree
+        Source tree of the plan.
+    target_tree : ClusterTree
+        Target tree of the plan, over ``target_points``.
+    target_points : Float[torch.Tensor, "n_targets n_dims"]
+        Target coordinates, of shape :math:`(N_{targets}, D)`.
+    node_centroids : Float[torch.Tensor, "n_nodes n_dims"]
+        Area-weighted centroids of the source tree's nodes, of shape
+        :math:`(N_{nodes}, D)`.
+
+    Returns
+    -------
+    Float[torch.Tensor, "n_target_nodes n_dims"]
+        Centroids of the :math:`M` target-tree nodes, of shape :math:`(M, D)`.
     """
     if target_tree is cluster_tree:
         return node_centroids
@@ -260,6 +317,21 @@ def _output_layout(
     ``n_spatial_dims``.  Leaves are keyed by the dotted field names, or, with
     ``nested=True``, by the nested keys of :meth:`FieldSchema.key
     <physicsnemo.mesh.FieldSchema.key>`.
+
+    Parameters
+    ----------
+    schema : FieldSchema
+        The kernel's output fields.
+    n_spatial_dims : int
+        Number of components of each vector field.
+    nested : bool, optional, default=False
+        Whether to key the leaves by nested keys instead of dotted names.
+
+    Returns
+    -------
+    PackLayout
+        Layout whose ``unpack`` turns a packed tensor of shape
+        :math:`(*, F_{out})` into the named fields.
     """
     ranks = schema.ranks
     names = tuple(sorted(ranks))
@@ -529,7 +601,7 @@ class Kernel(Module):
 
     @cached_property
     def _floats_per_interaction(self) -> int:
-        """Identifiable float allocations per (target, source) interaction.
+        r"""Identifiable float allocations per (target, source) interaction.
 
         Counts tensor elements from feature engineering, MLP evaluation,
         and post-processing that coexist at peak during ``Kernel.forward``.
@@ -539,6 +611,11 @@ class Kernel(Module):
         saving input tensors for backward through each element-wise
         operation.  The caller applies a runtime multiplier to account for
         this (see ``BarnesHutKernel._auto_chunk_count``).
+
+        Returns
+        -------
+        int
+            The number of floats per interaction.
         """
         n_vec = 1 + self.source_schema.count(1) + self.global_schema.count(1)
         n_pairs = comb(n_vec, 2)
@@ -607,7 +684,24 @@ class Kernel(Module):
         n_global_scalars: int,
         n_global_vectors: int,
     ) -> None:
-        """Raise if the packed features do not match the kernel's schemas."""
+        r"""Raise if the packed features do not match the kernel's schemas.
+
+        Parameters
+        ----------
+        n_source_scalars : int
+            Number of scalar source features given.
+        n_source_vectors : int
+            Number of vector source features given.
+        n_global_scalars : int
+            Number of scalar global features given.
+        n_global_vectors : int
+            Number of vector global features given.
+
+        Raises
+        ------
+        ValueError
+            If a count differs from the kernel's schemas.
+        """
         for name, (actual, expected) in {
             "source scalars": (n_source_scalars, self._n_source_scalars),
             "source vectors": (n_source_vectors, self._n_source_vectors),
@@ -626,7 +720,19 @@ class Kernel(Module):
         Float[torch.Tensor, "*batch n_scalars"],
         Float[torch.Tensor, "*batch n_vectors n_dims"],
     ]:
-        """Views of packed source features as scalars and vectors."""
+        r"""Views of packed source features as scalars and vectors.
+
+        Parameters
+        ----------
+        features : Float[torch.Tensor, "*batch n_features"]
+            Packed source features, of shape :math:`(*, N_s + N_v D)`.
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor]
+            Scalars of shape :math:`(*, N_s)`, and vectors of shape
+            :math:`(*, N_v, D)`.
+        """
         n = self._n_source_scalars
         return features[..., :n], features[..., n:].unflatten(
             -1, (self._n_source_vectors, self.n_spatial_dims)
@@ -637,7 +743,19 @@ class Kernel(Module):
     ) -> tuple[
         Float[torch.Tensor, " n_scalars"], Float[torch.Tensor, "n_vectors n_dims"]
     ]:
-        """Views of packed global features as scalars and vectors."""
+        r"""Views of packed global features as scalars and vectors.
+
+        Parameters
+        ----------
+        features : Float[torch.Tensor, "n_features"]
+            Packed global features, of shape :math:`(G_s + G_v D,)`.
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor]
+            Scalars of shape :math:`(G_s,)`, and vectors of shape
+            :math:`(G_v, D)`.
+        """
         n = self._n_global_scalars
         return features[..., :n], features[..., n:].unflatten(
             -1, (self._n_global_vectors, self.n_spatial_dims)
@@ -774,9 +892,9 @@ class Kernel(Module):
         r"""Core kernel computation: feature engineering, network, and post-processing.
 
         Operates on packed feature tensors with arbitrary leading interaction
-        dimensions. Both ``Kernel.forward()`` (with dense
-        ``(N_{tgt}, N_{src})`` interactions) and ``BarnesHutKernel`` (with
-        sparse ``(N_{pairs},)`` interactions) call this method.
+        dimensions :math:`(*)`. Both ``Kernel.forward()`` (with dense
+        :math:`(N_{tgt}, N_{src})` interactions) and ``BarnesHutKernel`` (with
+        sparse :math:`(N_{pairs},)` interactions) call this method.
 
         Each feature group is one tensor, so every step below is one tensor
         operation for all of the group's leaves, where a TensorDict of
@@ -788,22 +906,27 @@ class Kernel(Module):
         Parameters
         ----------
         source_scalars : Float[torch.Tensor, "*interaction_dims n_source_scalars"]
-            Per-interaction source scalars, in :func:`_sort_key` order.
+            Per-interaction source scalars in :func:`_sort_key` order, of
+            shape :math:`(*, N_s)`.
         source_vectors : Float[torch.Tensor, "*interaction_dims n_source_vectors n_spatial_dims"]
-            Per-interaction source vectors, in :func:`_sort_key` order.
+            Per-interaction source vectors in :func:`_sort_key` order, of
+            shape :math:`(*, N_v, D)`.
         global_scalars : Float[torch.Tensor, "n_global_scalars"]
-            Global scalars, broadcast to every interaction.
+            Global scalars, broadcast to every interaction, of shape
+            :math:`(G_s,)`.
         global_vectors : Float[torch.Tensor, "n_global_vectors n_spatial_dims"]
-            Global vectors, broadcast to every interaction.
+            Global vectors, broadcast to every interaction, of shape
+            :math:`(G_v, D)`.
         r : Float[torch.Tensor, "*interaction_dims n_spatial_dims"]
-            Target-minus-source displacement divided by the reference length.
-            All inputs must be dimensionless.
+            Target-minus-source displacement divided by the reference length,
+            of shape :math:`(*, D)`.  All inputs must be dimensionless.
 
         Returns
         -------
         Float[torch.Tensor, "*interaction_dims n_output_features"]
-            Per-interaction output fields packed as :attr:`output_layout`
-            describes, NOT aggregated over sources.
+            Per-interaction output fields of shape :math:`(*, F_{out})`,
+            packed as :attr:`output_layout` describes, NOT aggregated over
+            sources.
         """
         # Cast to autocast dtype after the fp32-critical r computation
         if torch.is_autocast_enabled(r.device.type):
@@ -926,6 +1049,19 @@ class Kernel(Module):
         other input vector (in the order of ``_evaluate_packed``) its
         direction and its dipole direction around ``r_hat``, both scaled by
         its log-magnitude.
+
+        Parameters
+        ----------
+        vectors_hat : Float[torch.Tensor, "*interaction_dims n_vectors_in n_dims"]
+            Unit directions of the :math:`V` input vectors, ``r_hat`` last,
+            of shape :math:`(*, V, D)`.
+        vectors_log_mag : Float[torch.Tensor, "*interaction_dims n_vectors_in"]
+            Log-magnitudes of the input vectors, of shape :math:`(*, V)`.
+
+        Returns
+        -------
+        Float[torch.Tensor, "*interaction_dims n_dims n_basis"]
+            The basis vectors as columns, of shape :math:`(*, D, 2V - 1)`.
         """
         r_hat = vectors_hat[..., -1, :]
         n_hats = vectors_hat[..., :-1, :]
@@ -1229,33 +1365,40 @@ class BarnesHutKernel(Kernel):
         Parameters
         ----------
         reference_length : Float[torch.Tensor, ""]
-            Reference length scale for nondimensionalization.
-        source_points, target_points : torch.Tensor
-            Source and target coordinates, :math:`(N, D)`.
+            Reference length scale for nondimensionalization, a 0-d tensor.
+        source_points : Float[torch.Tensor, "n_sources n_dims"]
+            Source coordinates, of shape :math:`(N_{sources}, D)`.
+        target_points : Float[torch.Tensor, "n_targets n_dims"]
+            Target coordinates, of shape :math:`(N_{targets}, D)`.
         source_strengths : Float[torch.Tensor, "n_sources"]
-            Per-source strength weights.
+            Per-source strength weights, of shape :math:`(N_{sources},)`.
         source_features : Float[torch.Tensor, "n_sources n_source_features"]
-            Source features packed by :func:`_pack_features`.
+            Source features packed by :func:`_pack_features`, of shape
+            :math:`(N_{sources}, F_{src})`.
         global_features : Float[torch.Tensor, "n_global_features"]
-            Global features packed by :func:`_pack_features`.
+            Global features packed by :func:`_pack_features`, of shape
+            :math:`(F_{glob},)`.
         dual_plan : DualInteractionPlan
             Interaction plan from ``cluster_tree`` to the targets.
         cluster_tree : ClusterTree
             Source tree, for per-node strength totals.
         node_centroids : Float[torch.Tensor, "n_nodes n_dims"]
-            Area-weighted source-node centroids.
+            Area-weighted source-node centroids, of shape
+            :math:`(N_{nodes}, D)`.
         node_features : Float[torch.Tensor, "n_nodes n_source_features"]
-            Area-weighted mean ``source_features`` per source node.
+            Area-weighted mean ``source_features`` per source node, of shape
+            :math:`(N_{nodes}, F_{src})`.
         target_centroids : Float[torch.Tensor, "n_target_nodes n_dims"] or None
-            Target-node centroids; required if the plan has far-target
-            (``far`` or ``fn``) pairs.
+            Centroids of the :math:`M` target nodes, of shape :math:`(M, D)`;
+            required if the plan has far-target (``far`` or ``fn``) pairs.
         near_chunk_count : int or None
             Number of chunks for the near-field phase (see :meth:`forward`).
 
         Returns
         -------
         Float[torch.Tensor, "n_targets n_output_features"]
-            Output fields at the targets, packed as :attr:`output_layout`
+            Output fields at the targets, of shape
+            :math:`(N_{targets}, F_{out})`, packed as :attr:`output_layout`
             describes.
         """
         n_sources = source_points.shape[0]
@@ -1441,7 +1584,7 @@ class BarnesHutKernel(Kernel):
         return packed_buf
 
     def _maybe_checkpointed_evaluate(self, *args: object) -> torch.Tensor:
-        """Run :meth:`_gather_and_evaluate` with optional gradient checkpointing.
+        r"""Run :meth:`_gather_and_evaluate` with optional gradient checkpointing.
 
         The four BH-kernel phases (near, far_node, nf, fn) all wrap the
         same ``_gather_and_evaluate`` call in an
@@ -1454,6 +1597,16 @@ class BarnesHutKernel(Kernel):
         ``torch.no_grad()``), so ``checkpoint(use_reentrant=False)``
         degenerates to a near-no-op forward call - no recompute, no
         extra memory, no extra compute.
+
+        Parameters
+        ----------
+        *args : object
+            Positional arguments of :meth:`_gather_and_evaluate`.
+
+        Returns
+        -------
+        torch.Tensor
+            The packed per-pair outputs of :meth:`_gather_and_evaluate`.
         """
         if self.use_gradient_checkpointing:
             return checkpoint(
@@ -1470,7 +1623,7 @@ class BarnesHutKernel(Kernel):
         *,
         broadcast_pair_ids: Int[torch.Tensor, " n_pairs_or_expanded"] | None = None,
     ) -> None:
-        """Weight one phase's packed outputs and ``index_add_`` them into ``packed_buf``.
+        r"""Weight one phase's packed outputs and ``index_add_`` them into ``packed_buf``.
 
         One scatter covers every output field, so the backward of the
         scatter (the largest GPU cost in profiling) runs once per phase
@@ -1479,22 +1632,26 @@ class BarnesHutKernel(Kernel):
         Parameters
         ----------
         chunk_result : Float[torch.Tensor, "n_pairs n_output_features"]
-            Output of one ``_evaluate_packed`` call.
+            Output of one ``_evaluate_packed`` call, of shape
+            :math:`(P, F_{out})`.
         weights : Float[torch.Tensor, "n_pairs"]
-            Per-pair scalar multipliers (e.g. source strengths).
+            Per-pair scalar multipliers (e.g. source strengths), of shape
+            :math:`(P,)`.
         tgt_ids : Int[torch.Tensor, "n_pairs_or_expanded"]
-            Target index for each scatter contribution.  When
-            ``broadcast_pair_ids`` is ``None``, length matches
-            ``n_pairs``; otherwise it matches the broadcast-expanded
+            Target index for each scatter contribution, of shape
+            :math:`(E,)`.  When ``broadcast_pair_ids`` is ``None``,
+            :math:`E = P`; otherwise :math:`E` is the broadcast-expanded
             length and ``broadcast_pair_ids`` indexes back into the
-            ``n_pairs`` dimension.
+            :math:`P` pairs.
         packed_buf : Float[torch.Tensor, "n_targets n_output_features"]
-            Shared output buffer for the four-phase loop.
+            Shared output buffer for the four-phase loop, of shape
+            :math:`(N_{targets}, F_{out})`, updated in place.
         broadcast_pair_ids : Int[torch.Tensor, "n_pairs_or_expanded"] | None
             Used by Phase B and Phase D, where each evaluated pair is
-            broadcast to many targets via a ragged-arange mapping.  When
-            given, weighting is applied first (over ``n_pairs``) and
-            broadcasting second (lower memory than the reverse).
+            broadcast to many targets via a ragged-arange mapping, of shape
+            :math:`(E,)`.  When given, weighting is applied first (over the
+            :math:`P` pairs) and broadcasting second (lower memory than the
+            reverse).
         """
         weighted = chunk_result * weights.unsqueeze(-1)
         if broadcast_pair_ids is not None:
@@ -1568,7 +1725,7 @@ class BarnesHutKernel(Kernel):
         global_vectors: Float[torch.Tensor, "n_global_vectors n_dims"],
         reference_length: Float[torch.Tensor, ""],
     ) -> Float[torch.Tensor, "n_pairs n_output_features"]:
-        """Gather source/target data by index and evaluate interactions.
+        r"""Gather source/target data by index and evaluate interactions.
 
         This function is the checkpoint boundary for memory-efficient
         training.  By wrapping both the gather (indexing into shared
@@ -1581,6 +1738,35 @@ class BarnesHutKernel(Kernel):
         gather fetches every scalar and vector feature of each pair's
         source, and the gathered rows split into scalars and vectors as
         views.
+
+        Parameters
+        ----------
+        tgt_ids : Int[torch.Tensor, "n_pairs"]
+            Row of ``target_positions`` for each pair, of shape :math:`(P,)`.
+        src_ids : Int[torch.Tensor, "n_pairs"]
+            Row of ``source_positions`` and ``source_features`` for each pair,
+            of shape :math:`(P,)`.
+        target_positions : Float[torch.Tensor, "n_target_rows n_dims"]
+            Target points or target-node centroids, of shape
+            :math:`(N_t, D)`.
+        source_positions : Float[torch.Tensor, "n_source_rows n_dims"]
+            Source points or source-node centroids, of shape
+            :math:`(N_s, D)`.
+        source_features : Float[torch.Tensor, "n_source_rows n_source_features"]
+            Packed features of the source rows, of shape
+            :math:`(N_s, F_{src})`.
+        global_scalars : Float[torch.Tensor, "n_global_scalars"]
+            Global scalars, of shape :math:`(G_s,)`.
+        global_vectors : Float[torch.Tensor, "n_global_vectors n_dims"]
+            Global vectors, of shape :math:`(G_v, D)`.
+        reference_length : Float[torch.Tensor, ""]
+            Reference length scale, a 0-d tensor.
+
+        Returns
+        -------
+        Float[torch.Tensor, "n_pairs n_output_features"]
+            Per-pair packed outputs of :meth:`_evaluate_packed`, of shape
+            :math:`(P, F_{out})`.
         """
         ### ``index_select`` rather than ``x[idx]``: same forward, but its
         ### backward is an ``index_add_`` instead of the sort-based
@@ -1602,7 +1788,7 @@ class BarnesHutKernel(Kernel):
         )
 
     def _auto_chunk_count(self, n_total_pairs: int, device: torch.device) -> int:
-        """Determine the number of chunks for pair-batched kernel evaluation.
+        r"""Determine the number of chunks for pair-batched kernel evaluation.
 
         Sizes chunks to fit within a fixed fraction of total device memory
         from the kernel's per-pair feature-engineering footprint estimate.
@@ -1626,7 +1812,19 @@ class BarnesHutKernel(Kernel):
         well under the remaining 75%.
 
         On CPU the same algorithm runs against system RAM (debug-only;
-        production runs on CUDA).  Returns at least 1.
+        production runs on CUDA).
+
+        Parameters
+        ----------
+        n_total_pairs : int
+            Number of interaction pairs to evaluate.
+        device : torch.device
+            Device that evaluates the pairs.
+
+        Returns
+        -------
+        int
+            The number of chunks, a power of two and at least 1.
         """
         element_bytes = (
             torch.get_autocast_dtype(device.type).itemsize
@@ -1857,7 +2055,7 @@ class MultiscaleKernel(Module):
     def forward(
         self,
         *,
-        reference_lengths: dict[str, torch.Tensor],
+        reference_lengths: dict[str, Float[torch.Tensor, ""]],
         source_points: Float[torch.Tensor, "n_sources n_dims"],
         target_points: Float[torch.Tensor, "n_targets n_dims"],
         source_strengths: TensorDict[str, Float[torch.Tensor, " n_sources"]]
@@ -1881,8 +2079,8 @@ class MultiscaleKernel(Module):
 
         Parameters
         ----------
-        reference_lengths : dict[str, torch.Tensor]
-            Mapping of reference length names to scalar tensors.
+        reference_lengths : dict[str, Float[torch.Tensor, ""]]
+            Mapping of reference length names to 0-d tensors.
         source_points : Float[torch.Tensor, "n_sources n_dims"]
             Source point coordinates, shape :math:`(N_{sources}, D)`.
         target_points : Float[torch.Tensor, "n_targets n_dims"]
@@ -1941,7 +2139,7 @@ class MultiscaleKernel(Module):
     def forward_packed(
         self,
         *,
-        reference_lengths: dict[str, torch.Tensor],
+        reference_lengths: dict[str, Float[torch.Tensor, ""]],
         source_points: Float[torch.Tensor, "n_sources n_dims"],
         target_points: Float[torch.Tensor, "n_targets n_dims"],
         source_strengths: TensorDict[str, Float[torch.Tensor, " n_sources"]]
@@ -1965,6 +2163,50 @@ class MultiscaleKernel(Module):
         :class:`~physicsnemo.experimental.models.globe.GLOBE` does over its
         boundary-condition types, add one tensor per kernel instead of one
         per field.
+
+        Parameters
+        ----------
+        reference_lengths : dict[str, Float[torch.Tensor, ""]]
+            Mapping of reference length names to 0-d tensors.
+        source_points : Float[torch.Tensor, "n_sources n_dims"]
+            Source point coordinates, of shape :math:`(N_{sources}, D)`.
+        target_points : Float[torch.Tensor, "n_targets n_dims"]
+            Target point coordinates, of shape :math:`(N_{targets}, D)`.
+        source_strengths : TensorDict or None, optional
+            Per-source, per-branch strength values of shape
+            :math:`(N_{sources},)`. Defaults to all ones.
+        source_data : TensorDict or None, optional
+            Per-source features with ``batch_size=(N_sources,)``.
+        global_data : TensorDict or None, optional
+            Problem-level features with ``batch_size=()``.
+        theta : float
+            Barnes-Hut opening angle (larger = more aggressive).
+        cluster_tree : ClusterTree or None, optional
+            Precomputed source tree. Built from ``source_points`` if ``None``.
+        target_tree : ClusterTree or None, optional
+            Precomputed target tree. Built from ``target_points`` if ``None``
+            and needed: to plan, or for the target-node centroids of a plan
+            with far-target pairs.
+        dual_plan : DualInteractionPlan or None, optional
+            Precomputed dual traversal plan. Computed if ``None``.
+        source_areas : Float[torch.Tensor, "n_sources"] or None, optional
+            Per-source areas for aggregate weighting, of shape
+            :math:`(N_{sources},)`. Defaults to ones.
+        expand_far_targets : bool, optional, default=False
+            If ``True``, expands far-field node pairs to individual target
+            points. Passed through to
+            :meth:`ClusterTree.find_dual_interaction_pairs`.
+        target_centroids : Float[torch.Tensor, "n_target_nodes n_dims"] or None, optional
+            Centroids of the :math:`M` target nodes that ``dual_plan`` refers
+            to, of shape :math:`(M, D)`. If ``None``, derived from
+            ``target_tree`` when the plan needs them.
+
+        Returns
+        -------
+        Float[torch.Tensor, "n_targets n_output_features"]
+            Results summed over all kernel branches, of shape
+            :math:`(N_{targets}, F_{out})`, packed as :attr:`output_layout`
+            describes.
         """
         from physicsnemo.mesh.spatial.cluster_tree import ClusterTree
 

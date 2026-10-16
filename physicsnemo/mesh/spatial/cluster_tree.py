@@ -917,7 +917,8 @@ class ClusterTree(TensorClass):
         forest : ClusterTree
             The combined trees; its ``max_depth`` is the largest of theirs.
         roots : Int[torch.Tensor, "n_roots"]
-            The root node of each nonempty tree, in order.
+            The root node of each of the :math:`R` nonempty trees, in order,
+            of shape :math:`(R,)`.
 
         Examples
         --------
@@ -1169,10 +1170,11 @@ class ClusterTree(TensorClass):
             norm of their node average (:meth:`compute_source_aggregates`)
             is about ``1 - s**2 / 2``, so ``norm >= 1 - tol**2 / 2`` admits
             nodes whose normals spread by at most about ``tol`` radians.
-        target_roots : torch.Tensor or None, optional
-            Nodes of ``target_tree`` to start from, one per tree when
-            ``target_tree`` is a forest from :meth:`merge` (pass the roots it
-            returns). ``None`` starts from node 0, the root of a single tree.
+        target_roots : Int[torch.Tensor, "n_roots"] or None, optional
+            Nodes of ``target_tree`` to start from, of shape :math:`(R,)`: one
+            per tree when ``target_tree`` is a forest from :meth:`merge` (pass
+            the roots it returns). ``None`` starts from node 0, the root of a
+            single tree.
 
         Returns
         -------
