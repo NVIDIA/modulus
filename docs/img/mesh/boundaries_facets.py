@@ -86,7 +86,11 @@ def _render(dataset, color):
         show_edges=True,
         edge_color=EDGE_COLOR,
         line_width=0.6,
-        ambient=0.35,
+        # Lower diffuse and no specular keep a saturated color, such as the
+        # vermillion boundary, on its hue instead of washing it out to orange.
+        ambient=0.5,
+        diffuse=0.55,
+        specular=0.0,
     )
     plotter.set_background("white")
     plotter.view_vector(VIEW_VECTOR, viewup=(0.0, 0.0, 1.0))

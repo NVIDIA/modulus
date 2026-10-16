@@ -33,6 +33,7 @@ from physicsnemo.mesh.primitives.procedural import perturbed_grid
 OUTPUT = Path(__file__).parent / "calculus_lsq_vs_dec.png"
 
 METHODS = {"lsq": ("LSQ", "#0072b2"), "dec": ("DEC", "#d55e00")}
+PANELS = ("(a)", "(b)")
 MAP_RESOLUTION = 17
 RESOLUTIONS = (9, 17, 33, 65, 129)
 
@@ -83,15 +84,18 @@ def main():
     points = mesh.points.numpy()
     triangulation = Triangulation(points[:, 0], points[:, 1], mesh.cells.numpy())
     norm = LogNorm(1.0e-3, 2.0e-1, clip=True)
-    for axis, (method, (label, _)) in zip(map_axes, METHODS.items(), strict=True):
+    for axis, panel, (method, (label, _)) in zip(
+        map_axes, PANELS, METHODS.items(), strict=True
+    ):
+        # Flat shading shows one error value per triangle (the mean of its vertices).
         image = axis.tripcolor(
             triangulation,
             errors[method].clamp_min(norm.vmin).numpy(),
             cmap="cividis",
             norm=norm,
-            shading="gouraud",
+            shading="flat",
         )
-        axis.set_title(f"(a) {label} error, h = 1/{MAP_RESOLUTION - 1}")
+        axis.set_title(f"{panel} {label} error, h = 1/{MAP_RESOLUTION - 1}")
         axis.set_aspect("equal")
         axis.set_axis_off()
     colorbar = figure.colorbar(
@@ -123,14 +127,14 @@ def main():
     )
     convergence_axis.set_xlabel("mesh spacing $h$")
     convergence_axis.set_ylabel("RMS gradient error")
-    convergence_axis.set_title("(b) error against mesh size")
+    convergence_axis.set_title("(c) error against mesh size")
     convergence_axis.grid(True, which="both", alpha=0.3)
     convergence_axis.set_ylim(5.0e-4, 1.0)
     convergence_axis.legend(fontsize=11.5, loc="upper left")
 
     figure.suptitle(
         r"Gradient of $f(x, y) = \sin 2x \, \cos y + y^2$ on a jittered grid",
-        fontsize=15,
+        fontsize=13,
         y=1.02,
     )
     figure.savefig(OUTPUT, dpi=160, facecolor="white", bbox_inches="tight")

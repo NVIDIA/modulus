@@ -151,8 +151,11 @@ def main():
             color=VECTOR_COLOR,
             angles="xy",
             scale_units="xy",
-            scale=4.0,
+            scale=5.0,
             width=0.012,
+            # Center each arrow on its point, so the arrows of the right column
+            # stay within the panel.
+            pivot="middle",
             zorder=3,
         )
         _draw_mesh(axes[row, 2], panel_mesh)
