@@ -176,8 +176,13 @@ def _register_sphinx_design_fallbacks(app):
     from sphinx.util.docutils import SphinxDirective
 
     class _AnyOption(dict):
+        """Accept every option. docutils parses options only when the spec is truthy."""
+
         def __missing__(self, key):
             return directives.unchanged
+
+        def __bool__(self):
+            return True
 
     class _PlainBlock(SphinxDirective):
         """Show the title, if any, as a rubric and the body as plain content."""
