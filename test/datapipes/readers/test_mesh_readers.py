@@ -479,6 +479,54 @@ class TestDomainMeshReaderExtraBoundaries:
             _ = reader[0]
 
 
+class TestReadersKeepDatasetFilesUnchanged:
+    """Readers map saved meshes copy-on-write: an in-place edit of a loaded
+    sample stays in memory and never reaches the dataset on disk."""
+
+    def test_mesh_reader(self, tmp_path):
+        mesh = single_triangle_3d.load()
+        mesh.point_data["p"] = torch.ones(mesh.n_points)
+        mesh.save(tmp_path / "m.pmsh")
+
+        loaded, _ = MeshReader(tmp_path, pattern="*.pmsh")[0]
+        loaded.points.add_(1.0)
+        loaded.point_data["p"].mul_(0.0)
+
+        reloaded = Mesh.load(tmp_path / "m.pmsh")
+        torch.testing.assert_close(reloaded.points, mesh.points)
+        torch.testing.assert_close(reloaded.point_data["p"], mesh.point_data["p"])
+
+    def test_domain_mesh_reader_with_extra_boundary(self, tmp_path):
+        case_dir = tmp_path / "case"
+        case_dir.mkdir()
+        dm = DomainMesh(
+            interior=Mesh(points=torch.randn(10, 3)),
+            boundaries={"wall": single_triangle_3d.load()},
+        )
+        dm.save(case_dir / "domain.pdmsh")
+        farfield = Mesh(points=torch.randn(7, 3))
+        farfield.save(case_dir / "farfield.pmsh")
+
+        reader = DomainMeshReader(
+            tmp_path,
+            pattern="**/*.pdmsh",
+            extra_boundaries={"farfield": {"pattern": "farfield*.pmsh"}},
+        )
+        loaded, _ = reader[0]
+        loaded.interior.points.add_(1.0)
+        loaded.boundaries["wall"].points.add_(1.0)
+        loaded.boundaries["farfield"].points.add_(1.0)
+
+        reloaded = DomainMesh.load(case_dir / "domain.pdmsh")
+        torch.testing.assert_close(reloaded.interior.points, dm.interior.points)
+        torch.testing.assert_close(
+            reloaded.boundaries["wall"].points, dm.boundaries["wall"].points
+        )
+        torch.testing.assert_close(
+            Mesh.load(case_dir / "farfield.pmsh").points, farfield.points
+        )
+
+
 class TestTensorDictMeshApply:
     """Verifies the recipe-pipeline contract: ``td.apply(transform,
     call_on_nested=True)`` invokes the transform on each top-level
