@@ -38,8 +38,8 @@ Matplotlib ``Axes`` or a PyVista ``Plotter`` that you can keep drawing on.
       it.
 
    .. grid-item-card:: Custom Rendering
-      :link: io
-      :link-type: doc
+      :link: physicsnemo.mesh.io.to_pyvista
+      :link-type: any
       :shadow: md
       :class-card: sd-card-hover
 
@@ -48,6 +48,8 @@ Matplotlib ``Axes`` or a PyVista ``Plotter`` that you can keep drawing on.
 
 Example
 -------
+
+The following example draws a planar mesh and a surface:
 
 .. code:: python
 

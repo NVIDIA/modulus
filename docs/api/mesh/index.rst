@@ -12,13 +12,15 @@ its points, its cells, and the mesh as a whole.
 :bdg-secondary:`torch.compile`
 
 .. figure:: ../../img/mesh/mesh_hero_strip.png
-   :alt: Four objects in a row, each one Mesh: a point cloud labeled Mesh[0, 3],
-         a curve labeled Mesh[1, 3], a surface labeled Mesh[2, 3], and a
-         tetrahedral volume labeled Mesh[3, 3].
+   :alt: One lumpy blob shown four ways, each one Mesh object. A point cloud,
+         Mesh[0, 3]. An edge graph of blue edges and dark nodes, Mesh[1, 3].
+         A triangle surface, Mesh[2, 3]. A tetrahedral volume with a quarter
+         cut away to show the cells inside, Mesh[3, 3].
    :align: center
    :width: 100%
 
-   One ``Mesh`` type for point clouds, curves, surfaces, and volumes.
+   One shape gives four meshes. A point cloud, a graph, a surface, and a
+   volume are all the same ``Mesh`` type.
 
 Where to Start
 --------------
@@ -94,6 +96,7 @@ task:
 
    .. grid-item-card:: Mesh
       :img-top: ../../img/mesh/thumbnails/core.png
+      :img-alt: A small triangle mesh with its points marked and one cell highlighted
       :link: core
       :link-type: doc
       :shadow: md
@@ -103,6 +106,7 @@ task:
 
    .. grid-item-card:: Fields and Schemas
       :img-top: ../../img/mesh/thumbnails/fields.png
+      :img-alt: A rotated square mesh colored by a scalar field, with velocity arrows that turn with it
       :link: fields
       :link-type: doc
       :shadow: md
@@ -112,11 +116,12 @@ task:
 
 .. rubric:: Building Meshes
 
-.. grid:: 1 2 3 3
+.. grid:: 1 2 2 4
    :gutter: 3
 
    .. grid-item-card:: Primitives
       :img-top: ../../img/mesh/thumbnails/primitives.png
+      :img-alt: A shaded Mobius strip mesh
       :link: primitives
       :link-type: doc
       :shadow: md
@@ -126,6 +131,7 @@ task:
 
    .. grid-item-card:: I/O
       :img-top: ../../img/mesh/thumbnails/io.png
+      :img-alt: A cube of eight voxels drawn as a wire cage, filled with small separated tetrahedra
       :link: io
       :link-type: doc
       :shadow: md
@@ -135,6 +141,7 @@ task:
 
    .. grid-item-card:: Tessellation
       :img-top: ../../img/mesh/thumbnails/tessellation.png
+      :img-alt: Three outlined polygons, a quad, a hexagon, and an arrow, each split into triangles
       :link: tessellation
       :link-type: doc
       :shadow: md
@@ -144,6 +151,7 @@ task:
 
    .. grid-item-card:: Generate
       :img-top: ../../img/mesh/thumbnails/generate.png
+      :img-alt: A rectangle with a round hole filled with even triangles, its boundary outlined in orange
       :link: generate
       :link-type: doc
       :shadow: md
@@ -158,6 +166,7 @@ task:
 
    .. grid-item-card:: Geometry
       :img-top: ../../img/mesh/thumbnails/geometry.png
+      :img-alt: A gray triangle mesh overlaid with a blue network of dual cells, one cell filled around an orange vertex
       :link: geometry
       :link-type: doc
       :shadow: md
@@ -167,6 +176,7 @@ task:
 
    .. grid-item-card:: Curvature
       :img-top: ../../img/mesh/thumbnails/curvature.png
+      :img-alt: A torus colored red on its outer rim and blue on its inner rim by Gaussian curvature
       :link: curvature
       :link-type: doc
       :shadow: md
@@ -176,20 +186,23 @@ task:
 
    .. grid-item-card:: Discrete Calculus
       :img-top: ../../img/mesh/thumbnails/calculus.png
+      :img-alt: A sphere shaded by a scalar field, covered with small orange arrows tangent to the surface
       :link: calculus
       :link-type: doc
       :shadow: md
       :class-card: sd-card-hover
 
-      Gradient, divergence, curl, Laplacian, and integrals, by DEC or LSQ.
+      Gradient, divergence, curl, Laplacian, and integrals, by discrete
+      exterior calculus (DEC) or least squares (LSQ).
 
 .. rubric:: Topology and Queries
 
-.. grid:: 1 2 3 3
+.. grid:: 1 2 2 4
    :gutter: 3
 
    .. grid-item-card:: Boundaries and Topology
       :img-top: ../../img/mesh/thumbnails/boundaries.png
+      :img-alt: A pale triangulated ring with its inner and outer boundaries drawn in thick orange
       :link: boundaries
       :link-type: doc
       :shadow: md
@@ -199,6 +212,7 @@ task:
 
    .. grid-item-card:: Neighbors and Adjacency
       :img-top: ../../img/mesh/thumbnails/neighbors.png
+      :img-alt: A triangle mesh with one orange point, blue lines to its neighbor points, and its surrounding cells shaded blue
       :link: neighbors
       :link-type: doc
       :shadow: md
@@ -208,6 +222,7 @@ task:
 
    .. grid-item-card:: Spatial Queries
       :img-top: ../../img/mesh/thumbnails/spatial.png
+      :img-alt: A red-and-blue distance map with an orange closed curve where the distance is zero
       :link: spatial
       :link-type: doc
       :shadow: md
@@ -217,6 +232,7 @@ task:
 
    .. grid-item-card:: Sampling and Interpolation
       :img-top: ../../img/mesh/thumbnails/sampling.png
+      :img-alt: A gray torus sprinkled with small dots colored from purple to yellow
       :link: sampling
       :link-type: doc
       :shadow: md
@@ -231,6 +247,7 @@ task:
 
    .. grid-item-card:: Transformations and Projections
       :img-top: ../../img/mesh/thumbnails/transformations.png
+      :img-alt: A flat triangle sheet pulled up into a smooth bump by one orange control handle
       :link: transformations
       :link-type: doc
       :shadow: md
@@ -240,6 +257,7 @@ task:
 
    .. grid-item-card:: Differentiable Deformation Energies
       :img-top: ../../img/mesh/thumbnails/deformation.png
+      :img-alt: A sphere stretched upward into an egg shape by an orange handle, with green fixed anchors
       :link: deformation
       :link-type: doc
       :shadow: md
@@ -249,6 +267,7 @@ task:
 
    .. grid-item-card:: Subdivision
       :img-top: ../../img/mesh/thumbnails/subdivision.png
+      :img-alt: An orange wireframe cube around the smooth sphere-like surface that Loop subdivision makes from it
       :link: subdivision
       :link-type: doc
       :shadow: md
@@ -258,6 +277,7 @@ task:
 
    .. grid-item-card:: Smoothing
       :img-top: ../../img/mesh/thumbnails/smoothing.png
+      :img-alt: A sphere whose left side is rough and faceted and whose right side is smooth
       :link: smoothing
       :link-type: doc
       :shadow: md
@@ -267,6 +287,7 @@ task:
 
    .. grid-item-card:: Remeshing
       :img-top: ../../img/mesh/thumbnails/remeshing.png
+      :img-alt: An orange lumpy sphere made of even, evenly sized triangles
       :link: remeshing
       :link-type: doc
       :shadow: md
@@ -276,6 +297,7 @@ task:
 
    .. grid-item-card:: Repair
       :img-top: ../../img/mesh/thumbnails/repair.png
+      :img-alt: A triangulated sphere with one patch of new orange triangles that fills a hole
       :link: repair
       :link-type: doc
       :shadow: md
@@ -290,6 +312,7 @@ task:
 
    .. grid-item-card:: Validation and Quality
       :img-top: ../../img/mesh/thumbnails/validation.png
+      :img-alt: A jittered triangle grid with each triangle shaded by its quality score, dark blue to yellow
       :link: validation
       :link-type: doc
       :shadow: md
@@ -299,6 +322,7 @@ task:
 
    .. grid-item-card:: Visualization
       :img-top: ../../img/mesh/thumbnails/visualization.png
+      :img-alt: A lumpy sphere with black triangle edges, colored by height from green to yellow
       :link: visualization
       :link-type: doc
       :shadow: md
@@ -324,7 +348,7 @@ in order:
 
       Build a mesh, attach fields, and compute a gradient.
 
-   .. grid-item-card:: 2. Loading, Converting, and Saving
+   .. grid-item-card:: 2. Loading, Converting, and Saving Meshes
       :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_2_io_interop.ipynb
       :shadow: md
       :class-card: sd-card-hover
@@ -343,7 +367,7 @@ in order:
       :shadow: md
       :class-card: sd-card-hover
 
-      Transform, deform, subdivide, and remesh.
+      Transform, subdivide, slice, and merge meshes.
 
    .. grid-item-card:: 5. Discrete Calculus and Curvature
       :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_5_calculus.ipynb

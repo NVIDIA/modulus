@@ -11,8 +11,8 @@ PhysicsNeMo-Mesh brings meshes into PyTorch:
 - **One class for every mesh.** Point clouds, curves, graphs, surfaces, and
   volumes are all a `Mesh`, with data of any rank on points, cells, and the
   whole mesh.
-- **Plain PyTorch underneath.** Every operation is a batched tensor operation,
-  so it runs on the GPU and works with autograd and `torch.compile`.
+- **Plain PyTorch underneath.** Mesh data are tensors, so operations run on
+  the GPU, and the numerical ones work with autograd and `torch.compile`.
 - **From file to model input in one place.** Geometry, calculus, curvature,
   repair, spatial queries, and graphs all work on the same object.
 
@@ -31,6 +31,10 @@ PyVista, and VTK for drawing and file I/O:
 pip install "nvidia-physicsnemo[mesh-extras]"
 ```
 
+`RankSpec` and `FieldSchema` are new in PhysicsNeMo 2.3. Until version 2.3.0
+is released, install PhysicsNeMo from its main branch to use them, as the
+[tutorials README](../../examples/minimal/mesh/README.md#install) shows.
+
 Load a surface, refine it, and color it by its Gaussian curvature:
 
 ```python
@@ -40,7 +44,7 @@ from physicsnemo.mesh.primitives.pyvista_datasets import airplane
 mesh = airplane.load()  # Mesh[2, 3]: triangles in 3D space
 mesh = mesh.subdivide(levels=2, filter="loop")
 mesh.point_data["gaussian_curvature"] = mesh.gaussian_curvature_vertices
-mesh.draw(point_scalars="gaussian_curvature", show_edges=False, cmap="coolwarm")
+mesh.draw(point_scalars="gaussian_curvature", show_edges=False, cmap="RdBu_r")
 ```
 
 ![An airplane surface colored by Gaussian curvature, warm on the dome-like nose
@@ -59,8 +63,8 @@ fluid dynamics (CFD), finite element analysis, graphics, and point cloud
 processing:
 
 ![A grid of meshes by manifold dimension in columns and spatial dimension in
-rows, each labeled Mesh[m, s]. Shaded bands mark codimension zero, one, and
-two.](../../docs/img/mesh/mesh_dimensions.png)
+rows, each labeled Mesh[m, s]. Panel tints mark codimension 0, 1, and 2 or
+more.](../../docs/img/mesh/mesh_dimensions.png)
 
 Cells are always simplices: points, edges, triangles, tetrahedra, and their
 higher-dimensional versions. This restriction makes discrete calculus and
@@ -245,9 +249,12 @@ A bounding volume hierarchy (BVH) also speeds up point containment and
 
 ### Neighbors
 
-![Four adjacency queries on a planar mesh. The six neighbor points of a point
+<!-- markdownlint-disable MD033 -->
+<img src="../../docs/img/mesh/neighbors_adjacency.png" width="70%"
+alt="Four adjacency queries on a planar mesh. The six neighbor points of a point
 and the six cells around it. The three cells that share an edge with a cell,
-and the three points of that cell.](../../docs/img/mesh/neighbors_adjacency.png)
+and the three points of that cell.">
+<!-- markdownlint-enable MD033 -->
 
 Topological neighbors come back as an `Adjacency`, a compact ragged encoding
 with `indices` and `offsets`:
@@ -282,8 +289,8 @@ batch = Mesh.merge([graph, graph.translate([3.0, 0.0, 0.0])])  # Two graphs, one
 
 For mesh-based graph work, `Mesh` covers what a deep learning graph library
 usually provides: construction, geometric features, batching, augmentation,
-and device moves. It has no built-in aggregation layers or neighbor-sampling
-loaders.
+and device moves. It has no built-in aggregation layers, neighbor-sampling
+loaders, or batch vector. Build a batch vector with `torch.repeat_interleave`.
 [Tutorial 6](../../examples/minimal/mesh/tutorial_6_neighbors_spatial.ipynb)
 and [Tutorial 9](../../examples/minimal/mesh/tutorial_9_ml_integration.ipynb)
 build a graph model this way.
@@ -298,7 +305,7 @@ kernels across meshes of different sizes, pad them with
 
 ## Feature Overview
 
-Each area has a page in the API reference:
+Each area links to its reference:
 
 <!-- markdownlint-disable MD013 -->
 | Area | What It Provides |

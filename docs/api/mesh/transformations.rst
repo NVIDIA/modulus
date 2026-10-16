@@ -7,14 +7,15 @@ projections between spatial dimensions, and each returns a new
 :class:`~physicsnemo.mesh.mesh.Mesh`.
 
 :bdg-success:`CPU and GPU` :bdg-info:`autograd` :bdg-secondary:`any dimension`
-:bdg-warning:`shrinkwrap in 3D only`
+:bdg-warning:`rotate in 2D and 3D` :bdg-warning:`shrinkwrap in 3D only`
 
 .. figure:: ../../img/mesh/deformation_families.png
    :alt: Six panels of the same flat square sheet, deformed six ways. They
          show a noisy dense displacement, the same displacement smoothed with
          a fixed boundary, and one orange handle that lifts a round patch.
-         Then four green anchored corners with one lifted handle, a sheet bent
-         by a gray control lattice, and a sheet wrapped onto a curved surface.
+         Then a sheet with one lifted handle and five green anchors, four at
+         the corners and one below the front edge. Last, a sheet bent by a
+         gray control lattice, and a sheet wrapped onto a curved surface.
    :align: center
    :width: 100%
 
@@ -792,6 +793,19 @@ For optimization-time geometric penalties on a fixed topology, refer to
 Projections
 -----------
 
+These functions change the spatial dimension of a mesh, or extrude it into a
+mesh one manifold dimension higher:
+
+- :func:`~physicsnemo.mesh.projections.embed`: add spatial dimensions without loss, for example from 2D to
+  3D by appending zero coordinates.
+- :func:`~physicsnemo.mesh.projections.extrude`: sweep each cell along a vector into a prism, and split the
+  prism into simplices. A triangle mesh becomes a tetrahedral mesh.
+- :func:`~physicsnemo.mesh.projections.project`: remove spatial dimensions by dropping coordinate axes.
+  This loses information.
+
+The following example embeds a square in 3D, extrudes it into tetrahedra,
+and projects it back to 2D:
+
 .. code:: python
 
     from physicsnemo.mesh.primitives.planar import unit_square
@@ -804,25 +818,21 @@ Projections
     print(in_3d.n_spatial_dims, prism.n_manifold_dims, flat.n_spatial_dims)  # 3 3 2
 
 .. figure:: ../../img/mesh/projections_embed_extrude.png
-   :alt: Two rows of panels joined by arrows. Top: a flat square mesh, the
-         same square tilted in 3D, and a slab of tetrahedra. Bottom: a circle,
-         the circle in 3D, a tube, and the flat shadow of a bumpy sheet.
+   :alt: A grid of eight small panels joined by arrows. The top row shows a
+         flat square of eight triangles, Mesh[2, 2], then the same square
+         tilted in 3D, Mesh[2, 3], then a slab of 24 separated tetrahedra,
+         Mesh[3, 3]. The bottom row shows a circle of 24 edges, Mesh[1, 2],
+         and the same circle tilted in 3D, Mesh[1, 3]. Last comes an open
+         cylinder of 48 triangles, Mesh[2, 3]. The right column sits behind a
+         thin divider. In it, a bumpy sheet colored by height, Mesh[2, 3],
+         points down to a flat uncolored grid of the same 512 triangles,
+         Mesh[2, 2].
    :align: center
    :width: 100%
 
    ``embed``, ``extrude``, and ``project`` change the two numbers of
-   ``Mesh[m, s]``. ``embed`` raises ``s``, ``extrude`` raises ``m`` and ``s``
-   when needed, and ``project`` lowers ``s``.
-
-These functions change the spatial dimension of a mesh, or extrude it into a
-mesh one manifold dimension higher:
-
-- :func:`~physicsnemo.mesh.projections.embed`: add spatial dimensions without loss, for example from 2D to
-  3D by appending zero coordinates.
-- :func:`~physicsnemo.mesh.projections.extrude`: sweep each cell along a vector into a prism, and split the
-  prism into simplices. A triangle mesh becomes a tetrahedral mesh.
-- :func:`~physicsnemo.mesh.projections.project`: remove spatial dimensions by dropping coordinate axes.
-  This loses information.
+   ``Mesh[m, s]``. ``embed`` raises ``s``, ``extrude`` raises ``m`` by one,
+   and ``project`` lowers ``s``. Only ``project`` loses information.
 
 Summary
 -------

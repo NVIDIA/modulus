@@ -45,7 +45,8 @@ tensor with one value for each cell, point, or edge.
       :shadow: md
       :class-card: sd-card-hover
 
-      ``compute_dual_volumes_0(mesh)`` gives the Voronoi area of each point.
+      ``compute_dual_volumes_0(mesh)`` gives the Voronoi area or volume of each
+      point.
 
    .. grid-item-card:: Circumcenters
       :link: physicsnemo.mesh.geometry.get_or_compute_circumcenters

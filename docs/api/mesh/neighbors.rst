@@ -88,12 +88,15 @@ The following example runs the four queries on a small square mesh:
     sources, targets = p2p.expand_to_pairs()
     print(sources.shape, p2p.n_total_neighbors)  # torch.Size([32]) 32
 
-An :class:`Adjacency` stores the neighbors in compressed sparse row (CSR) form.
-The neighbors of source ``i`` are ``indices[offsets[i]:offsets[i + 1]]``, and
-``offsets`` has ``n_sources + 1`` entries. ``offsets`` are always ``int64``.
-``indices`` of the point-to-points and cell-to-points queries have the dtype
-of ``mesh.cells``, so an ``int32`` mesh gives ``int32`` indices. The other two
-queries give ``int64`` indices.
+.. dropdown:: Storage and Dtypes
+
+   An :class:`Adjacency` stores the neighbors in compressed sparse row (CSR)
+   form. The neighbors of source ``i`` are
+   ``indices[offsets[i]:offsets[i + 1]]``, and ``offsets`` has
+   ``n_sources + 1`` entries. ``offsets`` are always ``int64``. ``indices`` of
+   the point-to-points and cell-to-points queries have the dtype of
+   ``mesh.cells``, so an ``int32`` mesh gives ``int32`` indices. The other two
+   queries give ``int64`` indices.
 
 Each query is a ``Mesh`` method and a function in this module. The ``Mesh``
 method caches its result, and the cache stays valid through geometric
@@ -197,8 +200,8 @@ library usually provides:
    * - Batching
      - ``Mesh.merge(graphs)``, which offsets the edge indices
    * - Augmentation
-     - ``rotate``, ``translate``, and ``scale``, with
-       ``transform_point_data`` and ``transform_cell_data``
+     - ``rotate`` and ``scale``, with ``transform_point_data`` and
+       ``transform_cell_data``, and ``translate``
    * - Subgraph and edge dropout
      - ``slice_points`` and ``slice_cells``
 
@@ -239,10 +242,10 @@ from its geometry, and runs one step of mean aggregation on plain tensors:
          colored by length from dark purple to yellow. Bottom left, nodes
          colored by a noisy field that runs from blue on the left to red on the
          right. Bottom right, the same nodes after three steps of averaging
-         over neighbors with index_add_, where the noise is gone and a smooth
-         blue to red ramp remains.
+         over neighbors with index_add_, where most of the noise is gone and
+         a smooth blue to red ramp remains.
    :align: center
-   :width: 70%
+   :width: 100%
 
    Message passing on a mesh graph needs only tensors. ``expand_to_pairs()``
    gives two index pairs for each edge. ``cell_areas`` of a ``Mesh[1, n]``

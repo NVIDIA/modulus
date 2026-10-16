@@ -12,15 +12,20 @@ PLY, and OBJ, so it is the main way to load and save files.
 :bdg-info:`point and cell data`
 
 .. figure:: ../../img/mesh/io_cells_to_simplices.png
-   :alt: A grid of eight cubes, and three meshes made from it: the cubes split
-         into shrunk tetrahedra, the unique edges as a graph, and one point at
-         the center of each cube.
+   :alt: Left, a 2 by 2 by 2 grid of eight cubes, one of them orange. Right,
+         four results of from_pyvista. The cubes split into 48 tetrahedra,
+         with the six tetrahedra of the orange cube pulled apart. The edge
+         graph of the grid in blue, with 27 nodes and 54 edges. Eight orange
+         points at the cube centers. The dual graph, a small blue cube of 8
+         nodes and 12 edges joining neighboring cube centers.
    :align: center
    :width: 100%
 
-   One PyVista grid of hexahedra, read three ways. ``from_pyvista(grid)``
-   splits the cells into tetrahedra, ``manifold_dim=1`` keeps the edge graph,
-   and ``point_source="cell_centroids"`` gives a point cloud.
+   One voxel grid gives four meshes. ``from_pyvista`` splits each voxel into
+   six tetrahedra by default. With ``manifold_dim=1`` it returns the edge
+   graph of the cells. With ``point_source="cell_centroids"`` it returns one
+   point for each cell, and with ``manifold_dim=1`` as well it returns the
+   dual graph, which links cells that share a face.
 
 The module has the following functions:
 

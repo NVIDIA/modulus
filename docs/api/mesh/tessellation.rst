@@ -12,11 +12,15 @@ closed boundary without moving it.
 :bdg-secondary:`any polygon` :bdg-warning:`fill_interior in 2D only`
 
 .. figure:: ../../img/mesh/tessellation_fan_vs_ear.png
-   :alt: Three panels. Left: a quad, a convex hexagon, and a non-convex arrow
-         outlined. Middle: the same polygons split into triangles colored by
-         their parent polygon. Right: the arrow split two ways, a vertex-0 fan
-         whose triangles leave the polygon, and the ear clipping that stays
-         inside.
+   :alt: Four panels. First, three outlined polygons, a square, a hexagon,
+         and an arrow with four, six, and seven vertices, under the title
+         "polygon soup, Adjacency offsets = [0, 4, 10, 17]". Second, the same
+         polygons split into two, four, and five triangles, each polygon in its
+         own color.
+         Third, the arrow alone with a fan of triangles from one shaft vertex.
+         Two of them lie outside the arrow and are hatched in orange, under
+         the title "area 1.10 > 0.61". Fourth, the arrow split into triangles
+         that all stay inside it, titled "area 0.61 = 0.61".
    :align: center
    :width: 100%
 
@@ -102,11 +106,11 @@ integration, or total wetted area.
 
 .. note::
 
-   This is unrelated to the (now deprecated) ``Tessellation`` *geometry* class
-   in PhysicsNeMo-Sym (``physicsnemo.sym.geometry.tessellation``), which
-   represents a tessellated STL surface as a solid for sampling
-   surface and interior points and signed-distance values. The utilities here
-   instead split the polygonal cells of an existing mesh into simplices.
+   This module is unrelated to the deprecated ``Tessellation`` *geometry*
+   class in PhysicsNeMo-Sym (``physicsnemo.sym.geometry.tessellation``). That
+   class represents a tessellated STL surface as a solid for sampling surface
+   and interior points and signed-distance values. The utilities here split
+   the polygonal cells of an existing mesh into simplices.
 
 .. _mesh-tessellation-fill:
 

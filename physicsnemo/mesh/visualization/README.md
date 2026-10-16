@@ -74,7 +74,7 @@ scalars = torch.randn(mesh.n_cells)
 mesh.draw(cell_scalars=scalars)
 ```
 
-### Vector Fields (automatic norming)
+### Vector Fields (Automatic Norming)
 
 `draw()` colors by the L2 norm of multi-dimensional data:
 

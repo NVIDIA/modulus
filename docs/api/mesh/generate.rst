@@ -197,7 +197,10 @@ Isosurface Extraction
 ---------------------
 
 :func:`marching_cubes` extracts a triangle isosurface from a 3D scalar
-field.
+field at the value ``threshold``, which defaults to ``0.0`` for a signed
+distance field. It runs on NVIDIA Warp and returns a mesh with ``float32``
+points, in physical coordinates when you pass ``coords``. It is not
+differentiable.
 
 Summary
 -------

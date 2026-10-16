@@ -59,8 +59,9 @@ hold fields of any rank with nested keys. Refer to :doc:`fields` for details.
    ``Mesh`` and ``DomainMesh`` are
    `tensorclasses <https://pytorch.org/tensordict/stable/reference/tensorclass.html>`_.
    One ``mesh.to("cuda")`` call moves all points, cells, and data, and
-   ``.clone()``, ``.detach()``, and ``torch.stack`` work as they do on a
-   ``TensorDict``.
+   ``.clone()`` and ``.detach()`` work as they do on a ``TensorDict``. To
+   batch meshes, use ``Mesh.merge``, and pad them to a fixed size with
+   ``Mesh.pad``.
 
 The most-used members are the following:
 

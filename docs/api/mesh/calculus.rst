@@ -27,7 +27,7 @@ as a tensor, and returns a tensor.
 
 .. rubric:: Most Used
 
-.. grid:: 1 2 2 2
+.. grid:: 1 2 4 4
    :gutter: 2
 
    .. grid-item-card:: Gradient
@@ -69,24 +69,6 @@ as a tensor, and returns a tensor.
       :math:`\Delta\varphi = \nabla\cdot\nabla\varphi`, scalar to scalar
 
       ``mesh.laplacian("T")``
-
-   .. grid-item-card:: Derivatives of Named Fields
-      :link: physicsnemo.mesh.calculus.compute_point_derivatives
-      :link-type: any
-      :shadow: md
-      :class-card: sd-card-hover
-
-      ``mesh.compute_point_derivatives("T")`` stores the gradient of
-      ``point_data["T"]`` as ``"T_gradient"``.
-
-   .. grid-item-card:: Integration
-      :link: physicsnemo.mesh.calculus.integrate
-      :link-type: any
-      :shadow: md
-      :class-card: sd-card-hover
-
-      ``mesh.integrate(field)`` integrates cell or point values over the
-      mesh.
 
 Example
 -------
@@ -209,8 +191,9 @@ Use the following guidelines to choose a function:
 - For the Laplacian, use ``mesh.laplacian`` or
   :func:`compute_laplacian_points_dec`.
 - Expect larger errors at boundary points, where the neighborhood is
-  one-sided, as the error figure shows. The User Guide compares the two
-  methods in detail.
+  one-sided, as the error figure shows. The `User Guide
+  <https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh/using_mesh.html>`__
+  compares the two methods in detail.
 
 .. warning::
 

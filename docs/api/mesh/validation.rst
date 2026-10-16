@@ -76,6 +76,9 @@ quality value for each cell, and summary statistics.
 Example
 -------
 
+The following example validates a sphere and reads its quality metrics and
+statistics:
+
 .. code:: python
 
     from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
@@ -131,11 +134,13 @@ cost more time:
      - Points that coincide within ``tolerance``
    * - ``check_degenerate_cells``
      - on
-     - Cells with zero or negative area or volume
+     - Cells whose area or volume is below ``tolerance`` raised to the
+       manifold dimension
    * - ``check_inverted_cells``
      - off
-     - Cells with a negative signed volume, on meshes of codimension 0 such
-       as triangles in 2D or tetrahedra in 3D. Other meshes report ``-1``.
+     - Cells with a negative signed volume, on meshes of codimension 0 with a
+       manifold dimension of 2 or more. The sign depends on the vertex order,
+       so primitives can report many cells. Other meshes report ``-1``.
    * - ``check_manifoldness``
      - off
      - Edges that break manifold topology, on meshes with a manifold

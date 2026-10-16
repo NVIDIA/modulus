@@ -66,6 +66,8 @@ point positions and the same connectivity.
 Example
 -------
 
+The following example smooths a lumpy sphere:
+
 .. code:: python
 
     from physicsnemo.mesh.primitives.procedural import lumpy_sphere
