@@ -6,7 +6,7 @@ Curvature
 ``physicsnemo.mesh.curvature`` computes discrete curvature at the points and
 cells of a simplicial mesh. It has two kinds:
 
-- Gaussian curvature :math:`K` is intrinsic: it depends only on lengths
+- Gaussian curvature :math:`K` is intrinsic. It depends only on lengths
   measured in the mesh (Gauss's Theorema Egregium), so it works for any
   codimension. It uses the
   `angle defect <https://en.wikipedia.org/wiki/Angular_defect>`_:
@@ -14,14 +14,14 @@ cells of a simplicial mesh. It has two kinds:
   :math:`\theta_{ij}` are the angles of the cells at point :math:`i` and
   :math:`A_i^*` is the dual (Voronoi) area of the point. It is available at
   points and at cells.
-- Mean curvature :math:`H` is extrinsic: it depends on how the mesh bends in
+- Mean curvature :math:`H` is extrinsic. It depends on how the mesh bends in
   its ambient space. It uses the
   `cotangent Laplacian <https://en.wikipedia.org/wiki/Discrete_Laplace_operator#Mesh_Laplacians>`_
   :math:`L` of the point positions :math:`\mathbf{x}`:
   :math:`H_i = \|L \mathbf{x}\|_i / (2 A_i^*)`. It needs codimension 1
   (``n_spatial_dims == n_manifold_dims + 1``), so that the mesh has normals.
-  Its sign follows the normals: positive where the surface bulges toward
-  them. Boundary points get ``NaN`` unless you pass
+  Its sign follows the normals. It is positive where the surface bulges
+  toward them. Boundary points get ``NaN`` unless you pass
   ``include_boundary=True``.
 
 The same quantities are cached ``Mesh`` properties:
@@ -63,8 +63,10 @@ Summary
    gaussian_curvature_cells
    mean_curvature_vertices
 
-See Also
---------
+Related Topics
+--------------
+
+For more information, refer to the following resources:
 
 - :doc:`geometry` for the angles and dual areas behind these formulas.
 - Tutorial: `Discrete Calculus and Curvature

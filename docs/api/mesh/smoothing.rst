@@ -5,8 +5,8 @@ Smoothing
 
 ``physicsnemo.mesh.smoothing`` makes a mesh more regular by moving its
 points. It has one function, :func:`smooth_laplacian`, for
-`Laplacian smoothing <https://en.wikipedia.org/wiki/Laplacian_smoothing>`_:
-each iteration moves each point toward a weighted average of its neighbors.
+`Laplacian smoothing <https://en.wikipedia.org/wiki/Laplacian_smoothing>`_.
+Each iteration moves each point toward a weighted average of its neighbors.
 Meshes of codimension 1 with a manifold dimension of 2 or more use cotangent
 weights. Other meshes use uniform weights. The connectivity does not change.
 
@@ -28,10 +28,10 @@ Example
 
 ``relaxation_factor`` sets how far each point moves toward the average in one
 iteration. ``n_iter`` sets the number of iterations. Many iterations shrink a
-closed surface: 500 iterations with ``relaxation_factor=0.1`` reduce the mean
-radius of ``sphere_icosahedral.load(subdivisions=3)``, a unit sphere, to about
-0.57. Coarser meshes shrink faster. To change the connectivity,
-use :doc:`remeshing` or :doc:`subdivision`.
+closed surface. For example, 500 iterations with ``relaxation_factor=0.1``
+reduce the mean radius of ``sphere_icosahedral.load(subdivisions=3)``, a unit
+sphere, to about 0.57. Coarser meshes shrink faster. To change the
+connectivity, use :doc:`remeshing` or :doc:`subdivision`.
 
 Summary
 -------
@@ -41,8 +41,10 @@ Summary
 
    smooth_laplacian
 
-See Also
---------
+Related Topics
+--------------
+
+For more information, refer to the following resources:
 
 - Tutorial: `Quality, Validation, and Repair
   <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_7_quality_repair.ipynb>`_

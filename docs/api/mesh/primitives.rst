@@ -10,10 +10,10 @@ module with one ``load`` function. Its keyword arguments set the size and the
 resolution, and ``device`` sets where the tensors go.
 
 .. figure:: ../../img/mesh/primitives_gallery.png
-   :alt: A grid of five columns and two rows, one column per family. Curves:
-         a helix and a spiral. Planar: an annulus and an L-shape. Surfaces: a
-         torus and a Möbius strip. Volumes: a cube and a single tetrahedron.
-         Procedural: a lumpy sphere and a lumpy ball cut open.
+   :alt: A grid of five columns and two rows, one column for each family.
+         Curves: a helix and a spiral. Planar: an annulus and an L-shape.
+         Surfaces: a torus and a Möbius strip. Volumes: a cube and a single
+         tetrahedron. Procedural: a lumpy sphere and a lumpy ball cut open.
    :align: center
    :width: 100%
 
@@ -52,7 +52,7 @@ function, which lists the arguments and defaults.
 Curves
 ^^^^^^
 
-``physicsnemo.mesh.primitives.curves``: One-dimensional meshes (edges) in 1D, 2D, or 3D space: lines, arcs, closed curves, a helix, and a knot.
+``physicsnemo.mesh.primitives.curves``: One-dimensional meshes (edges) in 1D, 2D, or 3D space: lines, arcs, closed curves, a helix, and a knot. The following table lists its primitives:
 
 .. list-table::
    :header-rows: 1
@@ -104,7 +104,7 @@ Curves
 Planar Meshes
 ^^^^^^^^^^^^^
 
-``physicsnemo.mesh.primitives.planar``: Triangle meshes that fill a region of the plane: squares, rectangles, disks, an annulus, polygons, and a non-convex L shape.
+``physicsnemo.mesh.primitives.planar``: Triangle meshes that fill a region of the plane: squares, rectangles, disks, an annulus, polygons, and a non-convex L shape. The following table lists its primitives:
 
 .. list-table::
    :header-rows: 1
@@ -141,7 +141,7 @@ Planar Meshes
 Surfaces
 ^^^^^^^^
 
-``physicsnemo.mesh.primitives.surfaces``: Triangle meshes in 3D space: closed surfaces (spheres, a torus, Platonic solids, a cylinder with caps) and open ones (a plane, a disk, a hemisphere, an open cylinder, a cone, a Möbius strip).
+``physicsnemo.mesh.primitives.surfaces``: Triangle meshes in 3D space. The closed surfaces are spheres, a torus, Platonic solids, and a cylinder with caps. The open ones are a plane, a disk, a hemisphere, an open cylinder, a cone, and a Möbius strip. The following table lists its primitives:
 
 .. list-table::
    :header-rows: 1
@@ -185,7 +185,7 @@ Surfaces
      - A subdivided icosahedron projected onto a sphere
    * - :func:`sphere_uv <physicsnemo.mesh.primitives.surfaces.sphere_uv.load>`
      - ``Mesh[2, 3]``
-     - A UV sphere using latitude/longitude parameterization
+     - A UV sphere using latitude and longitude parameterization
    * - :func:`tetrahedron_surface <physicsnemo.mesh.primitives.surfaces.tetrahedron_surface.load>`
      - ``Mesh[2, 3]``
      - A regular tetrahedron surface in 3D space
@@ -196,7 +196,7 @@ Surfaces
 Volumes
 ^^^^^^^
 
-``physicsnemo.mesh.primitives.volumes``: Tetrahedral meshes that fill a solid in 3D space.
+``physicsnemo.mesh.primitives.volumes``: Tetrahedral meshes that fill a solid in 3D space. The following table lists its primitives:
 
 .. list-table::
    :header-rows: 1
@@ -221,7 +221,7 @@ Volumes
 Procedural Meshes
 ^^^^^^^^^^^^^^^^^
 
-``physicsnemo.mesh.primitives.procedural``: Meshes with seeded random perturbations, for tests that need irregular geometry. Each ``load`` function takes a ``seed`` argument. The helper module ``procedural.noise`` provides the Perlin noise they use (``perlin_noise_1d``, ``perlin_noise_2d``, ``perlin_noise_3d``, ``perlin_noise_nd``).
+``physicsnemo.mesh.primitives.procedural``: Meshes with seeded random perturbations, for tests that need irregular geometry. Each ``load`` function takes a ``seed`` argument. The helper module ``procedural.noise`` provides the Perlin noise functions that they use: ``perlin_noise_1d``, ``perlin_noise_2d``, ``perlin_noise_3d``, and ``perlin_noise_nd``. The following table lists its primitives:
 
 .. list-table::
    :header-rows: 1
@@ -246,7 +246,7 @@ Procedural Meshes
 Basic Meshes
 ^^^^^^^^^^^^
 
-``physicsnemo.mesh.primitives.basic``: Meshes with one to three cells, for unit tests and small examples.
+``physicsnemo.mesh.primitives.basic``: Meshes with one to three cells, for unit tests and small examples. The following table lists its primitives:
 
 .. list-table::
    :header-rows: 1
@@ -301,7 +301,7 @@ Basic Meshes
 PyVista Datasets
 ^^^^^^^^^^^^^^^^
 
-``physicsnemo.mesh.primitives.pyvista_datasets``: Example datasets from PyVista, converted to a ``Mesh``. These need ``pyvista``, and the first call downloads the file. Cells other than simplices are split into simplices on conversion.
+``physicsnemo.mesh.primitives.pyvista_datasets``: Example datasets from PyVista, converted to a ``Mesh``. These need ``pyvista``, and the first call downloads the file. Conversion splits cells other than simplices into simplices. The following table lists its primitives:
 
 .. list-table::
    :header-rows: 1
@@ -335,6 +335,8 @@ PyVista Datasets
 Choosing a Primitive
 --------------------
 
+Use the following guidelines to choose a primitive:
+
 - For a quick closed surface, use ``surfaces.sphere_icosahedral``. Its
   triangles are close to equilateral, so it suits calculus and curvature
   checks. ``surfaces.sphere_uv`` has small, thin triangles near its poles.
@@ -344,11 +346,13 @@ Choosing a Primitive
   ``planar.rectangle``, or ``planar.structured_grid``. ``planar.l_shape``
   has a re-entrant corner, and ``planar.annulus_2d`` has a hole.
 - For a unit test that needs exact values, use a mesh from ``basic``.
-- For a mesh of your own geometry, see :doc:`generate`, :doc:`tessellation`,
-  and :doc:`io`.
+- For a mesh of your own geometry, refer to :doc:`generate`,
+  :doc:`tessellation`, and :doc:`io`.
 
-See Also
---------
+Related Topics
+--------------
+
+For more information, refer to the following resources:
 
 - User Guide: `Using Mesh
   <https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh/using_mesh.html>`_

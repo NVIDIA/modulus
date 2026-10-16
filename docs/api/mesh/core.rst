@@ -17,20 +17,21 @@ A ``Mesh`` has five fields:
 - ``cells``: the point indices of each cell, with shape
   ``(n_cells, n_manifold_dims + 1)`` and an integer dtype.
 - ``point_data``, ``cell_data``, and ``global_data``: ``TensorDict``
-  containers for fields of any rank and with nested keys, one value per
-  point, per cell, or for the whole mesh. See :doc:`fields`.
+  containers for fields of any rank and with nested keys, one value for each
+  point, for each cell, or for the whole mesh. Refer to :doc:`fields`.
 
 ``Mesh`` and ``DomainMesh`` are
 `tensorclasses <https://pytorch.org/tensordict/stable/reference/tensorclass.html>`_,
 so they also support the TensorDict API, for example ``.to(device)``,
 ``.clone()``, ``.detach()``, and ``torch.stack``. One ``.to("cuda")`` call
-moves all points, cells, and data. Geometric quantities, such as centroids,
-areas, normals, and curvature, are computed on first access and cached.
+moves all points, cells, and data. ``Mesh`` computes geometric quantities,
+such as centroids, areas, normals, and curvature, on first access and caches
+them.
 
 Most mesh operations are available both as ``Mesh`` methods and as functions
 in the submodules. For many of them, the method is the function itself, and
-Python supplies the mesh as its first argument: ``mesh.rotate(...)`` is
-``rotate(mesh, ...)`` from :doc:`transformations`.
+Python supplies the mesh as its first argument. For example,
+``mesh.rotate(...)`` is ``rotate(mesh, ...)`` from :doc:`transformations`.
 
 Example
 -------
@@ -59,21 +60,22 @@ Example
     print(mesh.point_data["T_gradient"].shape)  # torch.Size([3, 2])
 
 To build a triangle mesh from a surface whose cells are arbitrary polygons,
-use :meth:`Mesh.from_polygons` (see :doc:`tessellation`).
+use :meth:`Mesh.from_polygons`. Refer to :doc:`tessellation`.
 
 Cache-Aware Functional Updates
 ------------------------------
 
 Use the cache-aware replacement methods to make a mesh that keeps the same
 point or cell indexing. Each method returns a new ``Mesh`` with independent
-``TensorDict`` containers that share their tensor leaves.
+``TensorDict`` containers that share their tensor leaves. The following table
+lists the methods:
 
 .. list-table::
    :header-rows: 1
 
    * - Method
-     - Intended change
-     - Default cache policy
+     - Intended Change
+     - Default Cache Policy
    * - :meth:`Mesh.with_data`
      - Replace point, cell, or global field data
      - Retain every geometry and topology cache
@@ -109,7 +111,7 @@ Summary
    Mesh
    ~physicsnemo.mesh.domain_mesh.DomainMesh
 
-.. rubric:: Construction and data
+.. rubric:: Construction and Data
 
 .. autosummary::
    :nosignatures:
@@ -127,7 +129,7 @@ Summary
    Mesh.cell_data_to_point_data
    Mesh.point_data_to_cell_data
 
-.. rubric:: Dimensions and geometry
+.. rubric:: Dimensions and Geometry
 
 .. autosummary::
    :nosignatures:
@@ -146,7 +148,7 @@ Summary
    Mesh.gaussian_curvature_cells
    Mesh.mean_curvature_vertices
 
-.. rubric:: Topology and conversion
+.. rubric:: Topology and Conversion
 
 .. autosummary::
    :nosignatures:
@@ -163,7 +165,7 @@ Summary
    Mesh.to_dual_graph
    Mesh.to_point_cloud
 
-.. rubric:: Calculus, integration, and sampling
+.. rubric:: Calculus, Integration, and Sampling
 
 .. autosummary::
    :nosignatures:
@@ -181,7 +183,7 @@ Summary
    Mesh.sample_random_points_on_cells
    Mesh.sample_data_at_points
 
-.. rubric:: Transformations and deformations
+.. rubric:: Transformations and Deformations
 
 .. autosummary::
    :nosignatures:
@@ -197,7 +199,7 @@ Summary
    Mesh.free_form_deform
    Mesh.shrinkwrap
 
-.. rubric:: Editing, checking, and viewing
+.. rubric:: Editing, Checking, and Viewing
 
 .. autosummary::
    :nosignatures:
@@ -210,8 +212,10 @@ Summary
    Mesh.statistics
    Mesh.draw
 
-See Also
---------
+Related Topics
+--------------
+
+For more information, refer to the following resources:
 
 - User Guide: `Concepts and Data Model
   <https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh/concepts.html>`_
@@ -237,7 +241,8 @@ DomainMesh
 :class:`DomainMesh` groups an interior mesh with named boundary meshes and
 domain-level data. Operations such as :meth:`DomainMesh.morph` and
 :meth:`DomainMesh.radial_basis_function_deform` apply one geometry change to
-every component and return a new domain.
+every component and return a new domain. The following example builds a
+domain from a mesh and its boundary:
 
 .. code:: python
 
