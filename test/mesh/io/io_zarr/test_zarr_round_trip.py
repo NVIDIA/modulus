@@ -82,7 +82,7 @@ def test_boundary_subgroup_loads_as_mesh(tmp_path):
 
 
 def test_chunking_and_compression_applied(tmp_path):
-    """Layout policy must reach nested leaves (tensordict#1758 workaround)."""
+    """Layout policy must reach nested leaves."""
     import zarr
 
     to_zarr(make_domain_mesh(), tmp_path / "dm.zarr", chunk_rows=16)
