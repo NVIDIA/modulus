@@ -17,7 +17,7 @@ Matplotlib ``Axes`` or a PyVista ``Plotter`` that you can keep drawing on.
          by the magnitude of a two-component velocity field. Each panel has a
          viridis colorbar and a title with the draw call.
    :align: center
-   :width: 80%
+   :width: 65%
 
    ``mesh.draw()`` picks Matplotlib for meshes in 2D space and PyVista in 3D
    space. It colors cells or points by a stored field, and it colors a vector
