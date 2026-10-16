@@ -1664,9 +1664,9 @@ def test_bh_chunked_forward_and_gradients_match_single_chunk(
     """Splitting the near and (near,far) phases into chunks changes nothing.
 
     With ``expand_far_targets=True`` the (near,far) phase carries the
-    far field, and it is chunked by :meth:`BarnesHutKernel._auto_chunk_size`.
+    far field, and it is chunked by :meth:`BarnesHutKernel._auto_chunk_count`.
     On CPU that budget fits these test sizes in one chunk, so this test
-    forces a chunk size that does not divide the pair counts (a ragged
+    forces chunks of a size that does not divide the pair counts (a ragged
     last chunk) and compares outputs and gradients against one chunk.
     """
     chunk_size = 16
@@ -1705,12 +1705,12 @@ def test_bh_chunked_forward_and_gradients_match_single_chunk(
         )
 
     def run(
-        chunk_size_for: Callable[[int], int],
+        chunk_count_for: Callable[[int], int],
     ) -> tuple[TensorDict, list[torch.Tensor]]:
         monkeypatch.setattr(
             BarnesHutKernel,
-            "_auto_chunk_size",
-            lambda self, n_total_pairs, device: chunk_size_for(n_total_pairs),
+            "_auto_chunk_count",
+            lambda self, n_total_pairs, device: chunk_count_for(n_total_pairs),
         )
         inputs = [
             source_pts.clone().requires_grad_(True),
@@ -1734,8 +1734,10 @@ def test_bh_chunked_forward_and_gradients_match_single_chunk(
         ]
         return result.detach(), grads
 
-    single_result, single_grads = run(lambda n_total_pairs: n_total_pairs)
-    chunked_result, chunked_grads = run(lambda n_total_pairs: chunk_size)
+    single_result, single_grads = run(lambda n_total_pairs: 1)
+    chunked_result, chunked_grads = run(
+        lambda n_total_pairs: -(-n_total_pairs // chunk_size)
+    )
 
     for key in ("p", "v"):
         torch.testing.assert_close(
@@ -1885,3 +1887,77 @@ def test_bh_compiled_second_call_reuses_graph() -> None:
         compiled(*args)
     assert n_frames >= 1
     assert counter.frame_count == n_frames, "the second call recompiled"
+
+
+def test_bh_compiled_forward_reuses_graph_for_similar_chunk_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Geometries that need a few more or fewer chunks reuse the compiled graph.
+
+    The chunk loops are unrolled under ``torch.compile``, so the number of
+    chunks is part of the graph.  It is a power of two: a plan that needs
+    three chunks' worth of memory and one that needs four share a graph,
+    where exact counts made every such geometry recompile (about ten minutes
+    for a DrivAerML sample at 80k faces).
+    """
+    from torch._dynamo.testing import CompileCounter
+
+    import physicsnemo.experimental.models.globe.field_kernel as field_kernel
+
+    torch.manual_seed(DEFAULT_SEED)
+    bh_kernel = BarnesHutKernel(
+        n_spatial_dims=3,
+        output_schema={"p": {"rank": 0}},
+        hidden_layer_sizes=[8],
+        leaf_size=DEFAULT_LEAF_SIZE,
+    ).eval()
+
+    def make_case(n_sources: int, seed: int):
+        """``theta=0``: the plan is every pair, ``30 * n_sources`` near pairs."""
+        g = torch.Generator().manual_seed(seed)
+        source_pts = torch.randn(n_sources, 3, generator=g)
+        target_pts = torch.randn(30, 3, generator=g)
+        cluster_tree = ClusterTree.from_points(source_pts, leaf_size=DEFAULT_LEAF_SIZE)
+        target_tree = ClusterTree.from_points(target_pts, leaf_size=DEFAULT_LEAF_SIZE)
+        plan = cluster_tree.find_dual_interaction_pairs(
+            target_tree=target_tree, theta=0.0
+        )
+        return source_pts, target_pts, cluster_tree, target_tree, plan
+
+    cases = [make_case(21, 0), make_case(28, 1)]
+    n_near = [case[4].n_near for case in cases]
+    assert n_near == [630, 840]
+
+    ### A budget of 210 pairs: exact chunk counts 3 and 4, both rounded to 4.
+    bytes_per_pair = bh_kernel._floats_per_interaction * 4
+    budget = 210 * bytes_per_pair
+    assert [-(-n * bytes_per_pair // budget) for n in n_near] == [3, 4]
+    monkeypatch.setattr(
+        field_kernel, "_device_chunk_budget_bytes", lambda device: budget
+    )
+    with torch.no_grad():
+        assert [
+            bh_kernel._auto_chunk_count(n, torch.device("cpu")) for n in n_near
+        ] == [
+            4,
+            4,
+        ]
+
+    def evaluate(source_pts, target_pts, cluster_tree, target_tree, plan):
+        return bh_kernel(
+            source_points=source_pts,
+            target_points=target_pts,
+            reference_length=torch.ones(()),
+            cluster_tree=cluster_tree,
+            target_tree=target_tree,
+            dual_plan=plan,
+        )
+
+    counter = CompileCounter()
+    compiled = torch.compile(evaluate, backend=counter, dynamic=True)
+    with torch.no_grad():
+        for case in cases:
+            torch.testing.assert_close(compiled(*case)["p"], evaluate(*case)["p"])
+            if case is cases[0]:
+                n_frames = counter.frame_count
+    assert counter.frame_count == n_frames, "the second geometry recompiled"

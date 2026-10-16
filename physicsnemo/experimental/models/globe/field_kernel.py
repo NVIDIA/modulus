@@ -538,7 +538,7 @@ class Kernel(Module):
         This is a lower bound - the actual peak is higher due to autograd
         saving input tensors for backward through each element-wise
         operation.  The caller applies a runtime multiplier to account for
-        this (see ``BarnesHutKernel._auto_chunk_size``).
+        this (see ``BarnesHutKernel._auto_chunk_count``).
         """
         n_vec = 1 + self.source_schema.count(1) + self.global_schema.count(1)
         n_pairs = comb(n_vec, 2)
@@ -1053,7 +1053,7 @@ class BarnesHutKernel(Kernel):
         source_areas: Float[torch.Tensor, " n_sources"] | None = None,
         source_aggregates: "SourceAggregates | None" = None,
         target_centroids: Float[torch.Tensor, "n_target_nodes n_dims"] | None = None,
-        near_chunk_size: int | None = None,
+        near_chunk_count: int | None = None,
         expand_far_targets: bool = False,
     ) -> TensorDict[str, Float[torch.Tensor, "n_targets ..."]]:
         r"""Evaluate the kernel with dual-tree Barnes-Hut acceleration.
@@ -1100,12 +1100,10 @@ class BarnesHutKernel(Kernel):
             ``target_tree is cluster_tree`` (self-interaction), source
             aggregates' centroids are reused. Otherwise computed from
             the target tree.
-        near_chunk_size : int or None
-            Fixed chunk size for near-field pair processing. When provided,
-            overrides :meth:`_auto_chunk_size`. Pass this from an outer scope
-            to ensure deterministic chunking inside ``torch.utils.checkpoint``
-            replay (free GPU memory changes between forward and backward,
-            so ``_auto_chunk_size`` would return different values).
+        near_chunk_count : int or None
+            Number of chunks for near-field pair processing. When provided,
+            overrides :meth:`_auto_chunk_count`, e.g. to fix the chunking
+            from an outer scope.
         expand_far_targets : bool, optional, default=False
             If ``True``, far-field node pairs are expanded to individual
             target points during plan construction, eliminating the
@@ -1201,7 +1199,7 @@ class BarnesHutKernel(Kernel):
             node_centroids=node_centroids,
             node_features=node_features,
             target_centroids=target_centroids,
-            near_chunk_size=near_chunk_size,
+            near_chunk_count=near_chunk_count,
         )
         return self.output_layout.unpack(packed)
 
@@ -1219,7 +1217,7 @@ class BarnesHutKernel(Kernel):
         node_centroids: Float[torch.Tensor, "n_nodes n_dims"],
         node_features: Float[torch.Tensor, "n_nodes n_source_features"],
         target_centroids: Float[torch.Tensor, "n_target_nodes n_dims"] | None,
-        near_chunk_size: int | None = None,
+        near_chunk_count: int | None = None,
     ) -> Float[torch.Tensor, "n_targets n_output_features"]:
         r"""Run the four interaction phases of a dual plan on packed data.
 
@@ -1251,8 +1249,8 @@ class BarnesHutKernel(Kernel):
         target_centroids : Float[torch.Tensor, "n_target_nodes n_dims"] or None
             Target-node centroids; required if the plan has far-target
             (``far`` or ``fn``) pairs.
-        near_chunk_size : int or None
-            Fixed chunk size for the near-field phase (see :meth:`forward`).
+        near_chunk_count : int or None
+            Number of chunks for the near-field phase (see :meth:`forward`).
 
         Returns
         -------
@@ -1316,16 +1314,18 @@ class BarnesHutKernel(Kernel):
         if n_near > 0:
             near_tgt_ids = dual_plan.near_target_ids
             near_src_ids = dual_plan.near_source_ids
-            chunk_size = (
-                near_chunk_size
-                if near_chunk_size is not None
-                else self._auto_chunk_size(n_near, device)
+            n_chunks = (
+                near_chunk_count
+                if near_chunk_count is not None
+                else self._auto_chunk_count(n_near, device)
             )
+            chunk_size = _ceil_div(n_near, n_chunks)
 
-            ### Loop over the chunk count, not ``range(0, n_near, chunk_size)``:
-            ### torch.compile specializes ``range`` arguments, so that form would
-            ### recompile for every new pair count (each new geometry).
-            for i_chunk in range(_ceil_div(n_near, chunk_size)):
+            ### Loop over the chunk count (see ``_auto_chunk_count``), not
+            ### ``range(0, n_near, chunk_size)``: torch.compile specializes
+            ### ``range`` arguments, so that form would recompile for every new
+            ### pair count (each new geometry).  Trailing chunks may be empty.
+            for i_chunk in range(n_chunks):
                 start = i_chunk * chunk_size
                 end = min(start + chunk_size, n_near)
 
@@ -1386,8 +1386,9 @@ class BarnesHutKernel(Kernel):
             ### carries almost every interaction, and evaluating it in one
             ### call materializes every hidden activation for all of it.
             ### It loops over the chunk count for the same reason as Phase A.
-            nf_chunk = self._auto_chunk_size(n_nf, device)
-            for i_chunk in range(_ceil_div(n_nf, nf_chunk)):
+            n_nf_chunks = self._auto_chunk_count(n_nf, device)
+            nf_chunk = _ceil_div(n_nf, n_nf_chunks)
+            for i_chunk in range(n_nf_chunks):
                 start = i_chunk * nf_chunk
                 nf_tgt_ids = dual_plan.nf_target_ids[start : start + nf_chunk]
                 nf_src_nids = dual_plan.nf_source_node_ids[start : start + nf_chunk]
@@ -1596,13 +1597,19 @@ class BarnesHutKernel(Kernel):
             r=r,
         )
 
-    def _auto_chunk_size(self, n_total_pairs: int, device: torch.device) -> int:
-        """Determine chunk size for pair-batched kernel evaluation.
+    def _auto_chunk_count(self, n_total_pairs: int, device: torch.device) -> int:
+        """Determine the number of chunks for pair-batched kernel evaluation.
 
         Sizes chunks to fit within a fixed fraction of total device memory
         from the kernel's per-pair feature-engineering footprint estimate.
         During inference (no grad), the autograd overhead multiplier is
         dropped, allowing larger chunks.
+
+        The count is a power of two.  Under ``torch.compile`` the chunk loop
+        is unrolled, so the count is part of the graph and a geometry whose
+        count differs recompiles (several minutes at DrivAerML scale).  With
+        the doubling loop below, Dynamo's guards on the count become a range
+        of pair counts that spans a factor of two, instead of one exact count.
 
         Uses a static budget derived from
         :func:`_device_total_memory_bytes` (cached) instead of
@@ -1632,21 +1639,22 @@ class BarnesHutKernel(Kernel):
         )
         target_bytes = _device_chunk_budget_bytes(device)
 
-        n_chunks = max(1, _ceil_div(approx_peak_bytes, target_bytes))
-        chunk_size = max(1, _ceil_div(n_total_pairs, n_chunks))
+        n_chunks = 1
+        while n_chunks * target_bytes < approx_peak_bytes:
+            n_chunks *= 2
 
         if not torch.compiler.is_compiling():
             logger.debug(
-                "auto_chunk_size: %d pairs -> %d chunks of %d "
+                "auto_chunk_count: %d pairs -> %d chunks of %d "
                 "(%.1f MB est. peak, %.1f MB budget / %.1f MB total %s)",
-                n_total_pairs, n_chunks, chunk_size,
+                n_total_pairs, n_chunks, _ceil_div(n_total_pairs, n_chunks),
                 approx_peak_bytes / 1e6,
                 target_bytes / 1e6,
                 _device_total_memory_bytes(device) / 1e6,
                 device.type.upper(),
             )
 
-        return chunk_size
+        return n_chunks
 
 
 class MultiscaleKernel(Module):
@@ -2057,12 +2065,10 @@ class MultiscaleKernel(Module):
                     cluster_tree, target_tree, target_points, node_centroids
                 )
 
-        ### Precompute near-field chunk sizes outside the checkpoint boundary.
-        # _auto_chunk_size queries free GPU memory, which differs between
-        # forward and checkpoint replay (backward).  Computing here ensures
-        # each branch's chunk size is a fixed checkpoint input.
-        near_chunk_sizes: dict[str, int] = {
-            name: self.kernels[name]._auto_chunk_size(
+        ### Precompute near-field chunk counts outside the checkpoint boundary,
+        # so that each branch's chunking is a fixed checkpoint input.
+        near_chunk_counts: dict[str, int] = {
+            name: self.kernels[name]._auto_chunk_count(
                 dual_plan.n_near, source_points.device
             )
             for name in self.reference_length_names
@@ -2123,7 +2129,7 @@ class MultiscaleKernel(Module):
                     node_centroids=node_centroids,
                     node_features=node_features,
                     target_centroids=target_centroids,
-                    near_chunk_size=near_chunk_sizes[name],
+                    near_chunk_count=near_chunk_counts[name],
                 )
                 if use_branch_ckpt:
                     piece = checkpoint(
