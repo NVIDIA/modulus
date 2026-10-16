@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
 from _style import (
+    ACCENT_LIGHTING,
     EDGE,
     RESULT,
     SECOND,
@@ -144,6 +145,13 @@ def _draw_2d(axis, mesh):
     clean_axis(axis, ((-1.45, 1.45), (-1.45, 1.45)))
 
 
+def _facing_octant(mesh):
+    """Mask of the cells in the octant that faces the camera."""
+
+    offsets = mesh.cell_centroids - mesh.points.mean(dim=0)
+    return (offsets * offsets.new_tensor(VIEW_VECTOR) > 0).all(dim=1)
+
+
 def _render_3d(mesh):
     """A mesh in 3D space, with point normals on a surface and a normal disk on a curve."""
 
@@ -166,7 +174,10 @@ def _render_3d(mesh):
         )
         actors.append((disk, {"color": "#8a949c", "opacity": 0.55}))
         actors.append(
-            (spheres(mesh.points[i : i + 1].numpy(), radius=0.07), {"color": RESULT})
+            (
+                spheres(mesh.points[i : i + 1].numpy(), radius=0.07),
+                {"color": RESULT, **ACCENT_LIGHTING},
+            )
         )
     elif mesh.n_manifold_dims == 2:
         actors.append(
@@ -188,12 +199,11 @@ def _render_3d(mesh):
             factor=0.42,
             geom=pv.Arrow(tip_length=0.3, tip_radius=0.12, shaft_radius=0.045),
         )
-        actors.append((glyphs, {"color": RESULT}))
+        actors.append((glyphs, {"color": RESULT, **ACCENT_LIGHTING}))
     else:
         # Drop the cells in the octant that faces the camera, and shrink the rest.
-        offsets = mesh.cell_centroids - mesh.points.mean(dim=0)
-        facing = (offsets * offsets.new_tensor(VIEW_VECTOR) > 0).all(dim=1)
-        cut = to_pyvista(mesh).extract_cells((~facing).nonzero().squeeze(1).numpy())
+        kept = (~_facing_octant(mesh)).nonzero().squeeze(1).numpy()
+        cut = to_pyvista(mesh).extract_cells(kept)
         actors.append(
             (
                 cut.shrink(0.8),
@@ -250,6 +260,9 @@ def main():
             axis.set_axis_off()
         axis.set_zorder(1)
         count = mesh.n_points if m == 0 else mesh.n_cells
+        if m == 3:
+            # The panel draws the cube with one octant removed.
+            count = f"{int((~_facing_octant(mesh)).sum())} of {count}"
         figure.text(
             (box.x0 + box.x1) / 2,
             box.y1 + 0.006,

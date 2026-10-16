@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from _style import (
+    ACCENT_LIGHTING,
     EDGE,
     FIXED,
     RESULT,
@@ -46,7 +47,7 @@ LIFT = 0.55
 RADIUS = 0.6
 # One camera for every panel, so that the shapes compare directly.
 FOCUS = (0.0, 0.0, -0.12)
-CAMERA_DISTANCE = 4.7
+CAMERA_DISTANCE = 5.1
 SPHERE_RADIUS = 0.04
 TARGET = "#c5ccd1"  # the shrinkwrap target, behind the result
 
@@ -135,8 +136,10 @@ def main():
 
     surface = {"color": SURFACE, "show_edges": True, "edge_color": SURFACE_EDGE}
     lifted = (handle + lift).numpy()
-    handle_actor = (spheres(lifted, 2.2 * SPHERE_RADIUS), {"color": RESULT})
-    lift_actor = (_segments(handle.numpy(), lifted, 0.012), {"color": RESULT})
+    accent = {"color": RESULT, **ACCENT_LIGHTING}
+    fixed = {"color": FIXED, **ACCENT_LIGHTING}
+    handle_actor = (spheres(lifted, 2.2 * SPHERE_RADIUS), accent)
+    lift_actor = (_segments(handle.numpy(), lifted, 0.012), accent)
 
     edge_points = results[1].points[edge].numpy()
     # The compact support of the handle, drawn as a ring on the flat part of the sheet.
@@ -161,26 +164,24 @@ def main():
     cage = _segments(np.concatenate(starts), np.concatenate(ends), 0.008)
 
     target_pv = to_pyvista(backdrop)
-    cap = target_pv.extract_cells(
-        np.flatnonzero(target_pv.cell_centers().points[:, 2] > -0.4)
-    )
+    cap = target_pv.clip(normal="z", origin=(0.0, 0.0, -0.4), invert=False)
 
     extras = [
         [],
-        [(spheres(edge_points, 0.7 * SPHERE_RADIUS), {"color": FIXED})],
+        [(spheres(edge_points, 0.7 * SPHERE_RADIUS), fixed)],
         [
-            (support, {"color": RESULT}),
+            (support, accent),
             handle_actor,
             lift_actor,
         ],
         [
-            (spheres(anchors.numpy(), 2.2 * SPHERE_RADIUS), {"color": FIXED}),
+            (spheres(anchors.numpy(), 2.2 * SPHERE_RADIUS), fixed),
             handle_actor,
             lift_actor,
         ],
         [
             (cage, {"color": EDGE}),
-            (spheres(nodes.reshape(-1, 3), 1.1 * SPHERE_RADIUS), {"color": RESULT}),
+            (spheres(nodes.reshape(-1, 3), 1.1 * SPHERE_RADIUS), accent),
         ],
         [(cap, {"color": TARGET, "show_edges": False})],
     ]

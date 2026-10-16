@@ -53,7 +53,7 @@ def _build():
     mesh = Mesh(points=points, cells=cells)
     x, y = mesh.points.unbind(-1)
     mesh.point_data["temperature"] = 300.0 + 20.0 * x + 10.0 * y
-    mesh.point_data["velocity"] = torch.stack([1.0 - 0.6 * y, 0.4 * x], dim=-1)
+    mesh.point_data["velocity"] = torch.stack([1.0 - 0.6 * y, 0.2 + 0.4 * x], dim=-1)
     mesh.cell_data["pressure"] = 1.0 - mesh.cell_centroids[:, 1]
     mesh.global_data["Re"] = torch.tensor(1000.0)
     return mesh
@@ -182,13 +182,13 @@ def main():
     for i in range(mesh.n_points):
         y = top_points - (i + 0.5) * ROW
         axis.text(0.75, y, str(i), ha="right", va="center", color=colors[i], **MONO)
-    end = _table(axis, x_geometry, top_points, mesh.points, "{:.1f}", "points", mark=4)
+    _table(axis, x_geometry, top_points, mesh.points, "{:.1f}", "points", mark=4)
     shape = f"{tuple(mesh.points.shape)}\n(n_points, n_spatial_dims)"
     axis.text(x_geometry, top_points - 5 * ROW - 0.15, shape, **small)
     for c in range(mesh.n_cells):
         y = top_cells - (c + 0.5) * ROW
         axis.text(0.75, y, f"c{c}", ha="right", va="center", **MONO)
-    _table(
+    end = _table(
         axis,
         x_geometry,
         top_cells,
@@ -245,7 +245,7 @@ def main():
         fontsize=12,
     )
 
-    _bracket(axis, 0.3, end + 0.6, 9.3, "geometry", TEXT)
+    _bracket(axis, 0.3, end + 0.1, 9.3, "geometry", TEXT)
     _bracket(axis, x_data - 1.0, x_global + COL + 0.9, 9.3, "data", TEXT)
 
     ### A link from the first row of cells to its triangle

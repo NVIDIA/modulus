@@ -23,6 +23,7 @@ import numpy as np
 import pyvista as pv
 import torch
 from _style import (
+    ACCENT_LIGHTING,
     FAINT_EDGE,
     RESULT,
     SECOND,
@@ -79,22 +80,25 @@ def main():
         cells=torch.arange(corners.shape[0] * 4).reshape(-1, 4),
     )
     others = to_pyvista(tets.slice_cells(~inside)).shrink(0.92)
-    shrunk_voxels = grid.shrink(0.86)
-    shrunk_voxels["marked"] = voxel_mask.astype(float)
-    two_colors = {"cmap": [SURFACE, RESULT], "clim": (0, 1), "show_scalar_bar": False}
+    plain_voxels = grid.extract_cells(np.flatnonzero(~voxel_mask)).shrink(0.86)
+    marked_voxel = grid.extract_cells(np.flatnonzero(voxel_mask)).shrink(0.86)
+    accent = {"color": RESULT, **ACCENT_LIGHTING}
 
     panels = [
         (
             "pv.ImageData(dimensions=(3, 3, 3))\n"
             f".cast_to_unstructured_grid()\n{grid.n_cells} voxels, {grid.n_points} points",
-            [(shrunk_voxels, {"scalars": "marked", **two_colors, **SOLID})],
+            [
+                (plain_voxels, {"color": SURFACE, **SOLID}),
+                (marked_voxel, {**accent, **SOLID}),
+            ],
         ),
         (
             f"from_pyvista(grid)\nMesh[3, 3], {tets.n_cells} tetrahedra,\n"
             f"{int(inside.sum())} for each voxel",
             [
                 (others, {"color": SURFACE, **SOLID}),
-                (to_pyvista(exploded).shrink(0.9), {"color": RESULT, **SOLID}),
+                (to_pyvista(exploded).shrink(0.9), {**accent, **SOLID}),
             ],
         ),
         (
@@ -107,7 +111,7 @@ def main():
             f"Mesh[0, 3], {centroids.n_points} points",
             [
                 (tubes(grid, radius=0.008), {"color": FAINT_EDGE}),
-                (spheres(centroids.points.numpy(), radius=0.075), {"color": RESULT}),
+                (spheres(centroids.points.numpy(), radius=0.075), accent),
             ],
         ),
         (

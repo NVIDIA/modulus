@@ -149,10 +149,10 @@ def main():
     panels = [
         (axes[0, 0], square, "unit_square.load()", "triangles"),
         (axes[0, 1], images["square_3d"], "embed(square, 3)", "triangles"),
-        (axes[0, 2], images["prism"], "extrude(vector=[0, 0, 0.5])", "tetrahedra"),
+        (axes[0, 2], images["prism"], "extrude(square_3d, [0, 0, 0.5])", "tetrahedra"),
         (axes[1, 0], curve, "circle_2d.load()", "edges"),
         (axes[1, 1], images["curve_3d"], "embed(curve, 3)", "edges"),
-        (axes[1, 2], images["tube"], "extrude(vector=[0, 0, 1])", "triangles"),
+        (axes[1, 2], images["tube"], "extrude(curve_3d, [0, 0, 1])", "triangles"),
         (axes[0, 3], images["sheet"], "curved sheet, color = z", "triangles"),
         (axes[1, 3], shadow, "project(sheet, keep_dims=[0, 1])", "triangles"),
     ]
@@ -183,7 +183,7 @@ def main():
     )
 
     figure.subplots_adjust(left=0.01, right=0.99, bottom=0.02, top=0.92)
-    save(figure, OUTPUT)
+    save(figure, OUTPUT, full_color=True)
 
 
 if __name__ == "__main__":

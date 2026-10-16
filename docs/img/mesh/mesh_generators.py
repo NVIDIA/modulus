@@ -52,7 +52,8 @@ OUTPUT = Path(__file__).parent / "mesh_generators.png"
 
 H = 0.15
 THRESHOLD = 0.5
-GRID = 48
+# An odd grid size puts the middle slice of the grid exactly at z = 0.
+GRID = 49
 BLOBS = ((-0.5, -0.1, 0.0), (0.5, 0.1, 0.1), (0.0, 0.55, -0.2))
 
 
@@ -162,7 +163,7 @@ def main():
     _dots(axis, boundary.points.numpy(), RESULT)
     axis.set_title(
         f"input: two circle_2d loops, merged\n"
-        f"Mesh[1, 2], {boundary.n_cells} edges, vertices in orange"
+        f"Mesh[1, 2], {boundary.n_cells} edges, vertices in vermillion"
     )
     clean_axis(axis, disk_limits)
     _arrow(axis)
@@ -186,7 +187,7 @@ def main():
     )
     axis.contour(phi_grid, levels=[0.0], colors=RESULT, linewidths=2.2, extent=extent)
     axis.set_title(
-        "input: phi = sdf_difference(box, disk)\nnegative inside (blue), zero in orange"
+        "input: phi = sdf_difference(box, disk)\nnegative inside (blue), zero in vermillion"
     )
     clean_axis(axis, box_limits)
     _arrow(axis)
@@ -208,7 +209,7 @@ def main():
         middle, levels=[THRESHOLD], colors=RESULT, linewidths=2.2, extent=extent
     )
     axis.set_title(
-        f"input: field on a {GRID}\u00b3 grid, slice z = 0\nlevel {THRESHOLD} in orange"
+        f"input: field on a {GRID}\u00b3 grid, slice z = 0\nlevel {THRESHOLD} in vermillion"
     )
     clean_axis(axis)
     _arrow(axis)
