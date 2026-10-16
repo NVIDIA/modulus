@@ -1390,8 +1390,12 @@ class BarnesHutKernel(Kernel):
             nf_chunk = _ceil_div(n_nf, n_nf_chunks)
             for i_chunk in range(n_nf_chunks):
                 start = i_chunk * nf_chunk
-                nf_tgt_ids = dual_plan.nf_target_ids[start : start + nf_chunk]
-                nf_src_nids = dual_plan.nf_source_node_ids[start : start + nf_chunk]
+                ### An explicit ``min``, as in Phase A: a slice end past
+                ### ``n_nf`` makes torch.compile guard on whether the last
+                ### chunk is full, i.e. on ``n_nf % n_nf_chunks``.
+                end = min(start + nf_chunk, n_nf)
+                nf_tgt_ids = dual_plan.nf_target_ids[start:end]
+                nf_src_nids = dual_plan.nf_source_node_ids[start:end]
 
                 ### Same evaluation as Phase B (source centroids + aggregates),
                 # but same scatter as Phase A (per-target, no broadcast).

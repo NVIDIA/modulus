@@ -1961,3 +1961,61 @@ def test_bh_compiled_forward_reuses_graph_for_similar_chunk_counts(
             if case is cases[0]:
                 n_frames = counter.frame_count
     assert counter.frame_count == n_frames, "the second geometry recompiled"
+
+
+def test_bh_compiled_forward_reuses_graph_for_ragged_chunks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pair counts that split evenly or unevenly into chunks share a graph.
+
+    With a fixed number of chunks, whether the last chunk is full depends on
+    the pair count modulo the chunk count.  Each chunk loop clamps its ends
+    with ``min``: a slice that ran past the end made torch.compile guard on
+    that remainder, so a new geometry often recompiled the (near,far) phase.
+    """
+    from torch._dynamo.testing import CompileCounter
+
+    monkeypatch.setattr(
+        BarnesHutKernel, "_auto_chunk_count", lambda self, n_total_pairs, device: 4
+    )
+    torch.manual_seed(DEFAULT_SEED)
+    bh_kernel = BarnesHutKernel(
+        n_spatial_dims=3,
+        output_schema={"p": {"rank": 0}},
+        hidden_layer_sizes=[8],
+        leaf_size=DEFAULT_LEAF_SIZE,
+    ).eval()
+
+    def make_case(n_sources: int, seed: int):
+        g = torch.Generator().manual_seed(seed)
+        source_pts = torch.randn(n_sources, 3, generator=g)
+        target_pts = torch.randn(30, 3, generator=g)
+        cluster_tree = ClusterTree.from_points(source_pts, leaf_size=DEFAULT_LEAF_SIZE)
+        target_tree = ClusterTree.from_points(target_pts, leaf_size=DEFAULT_LEAF_SIZE)
+        plan = cluster_tree.find_dual_interaction_pairs(
+            target_tree=target_tree, theta=1.0, expand_far_targets=True
+        )
+        return source_pts, target_pts, cluster_tree, target_tree, plan
+
+    cases = [make_case(90, 4), make_case(60, 0)]
+    ### The first geometry's pairs fill four chunks evenly, the second's do not.
+    assert [case[4].n_nf % 4 == 0 for case in cases] == [True, False]
+
+    def evaluate(source_pts, target_pts, cluster_tree, target_tree, plan):
+        return bh_kernel(
+            source_points=source_pts,
+            target_points=target_pts,
+            reference_length=torch.ones(()),
+            cluster_tree=cluster_tree,
+            target_tree=target_tree,
+            dual_plan=plan,
+        )
+
+    counter = CompileCounter()
+    compiled = torch.compile(evaluate, backend=counter, dynamic=True)
+    with torch.no_grad():
+        for case in cases:
+            torch.testing.assert_close(compiled(*case)["p"], evaluate(*case)["p"])
+            if case is cases[0]:
+                n_frames = counter.frame_count
+    assert counter.frame_count == n_frames, "the second geometry recompiled"
