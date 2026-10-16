@@ -1956,15 +1956,19 @@ def _from_pyvista_cell_centroids(
             point_ids, _, cell_offsets = _gather_vtk_rows(
                 offsets, connectivity, cell_ids
             )
-            # Divide before summing, in float64, so that the sum cannot
-            # overflow (or wrap, for integer points) when the mean is finite.
+            # Average in float64, with each cell's points scaled into [-1, 1],
+            # so that the sum cannot overflow (or wrap, for integer points)
+            # when the mean is finite.
             counts = np.diff(cell_offsets)
-            weighted_points = (
-                pyvista_mesh.points[point_ids].astype(np.float64)
-                / np.repeat(counts, counts)[:, None]
+            starts = cell_offsets[:-1]
+            cell_points = pyvista_mesh.points[point_ids].astype(np.float64)
+            scale = np.maximum.reduceat(np.abs(cell_points), starts, axis=0)
+            scale[(scale == 0) | ~np.isfinite(scale)] = 1.0
+            scaled_sums = np.add.reduceat(
+                cell_points / np.repeat(scale, counts, axis=0), starts, axis=0
             )
-            centroids_np[first_cell_id + cell_ids] = np.add.reduceat(
-                weighted_points, cell_offsets[:-1], axis=0
+            centroids_np[first_cell_id + cell_ids] = (
+                scaled_sums / counts[:, None] * scale
             )
         first_cell_id += len(offsets) - 1
     points = torch.from_numpy(centroids_np)

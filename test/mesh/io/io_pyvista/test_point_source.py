@@ -335,7 +335,12 @@ class TestCellCentroidsPointCloud:
     @pytest.mark.parametrize("as_unstructured", [False, True])
     @pytest.mark.parametrize(
         "dtype,x",
-        [(np.int64, 2**62), (np.float32, 2e38), (np.float64, 8e307)],
+        [
+            (np.int64, 2**62),
+            (np.float32, 2e38),
+            (np.float64, 8e307),
+            (np.float64, np.finfo(np.float64).max),
+        ],
     )
     def test_variable_size_centroid_near_dtype_limit(self, as_unstructured, dtype, x):
         """A polyline centroid is exact even when its vertex sum would overflow."""

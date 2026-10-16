@@ -307,13 +307,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with their cell data. Before, the export failed.
 - `to_zarr` raises a `TypeError` naming any field it cannot store, such as a
   bfloat16 field, before it writes anything. Before, it left a partial store
-  that `from_zarr` loaded without those fields. `from_zarr` now also loads
-  scalar uint64 fields.
-- `Mesh.draw` with matplotlib colors 2D curves by their scalars, honours
-  `alpha_edges` in 2D, keeps 1D meshes in view when points are hidden, draws
-  vertex cells in 1D, and accepts integer vector scalars. With PyVista, it
-  colors vertex cells by cell scalars and lets `backend_options` set the edge
-  color, line width, and scalar bar. Before, these failed or were ignored.
+  that loaded without those fields.
+- `from_zarr` loads scalar uint64 fields, where it raised before.
+- `Mesh.draw` with matplotlib colors 2D curves by their scalars and honours
+  `alpha_edges`. It also draws 1D meshes in view, vertex cells in 1D, and
+  integer vector scalars, where it failed before.
+- `Mesh.draw` with PyVista lets `backend_options` set the edge color, line
+  width and scalar bar, where it raised before.
 - GLOBE DrivAerML postprocessing reports correct Cd, Cl, and Cs on subsampled
   surfaces. Before, they shrank with the fraction of cells kept.
 - The unified external aero recipe documents how surface subsampling affects
