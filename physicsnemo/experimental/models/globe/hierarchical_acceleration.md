@@ -411,12 +411,18 @@ reduction in checkpoint-saved memory per chunk.
 
 ### 6.2 Auto-Chunk Sizing
 
-`_auto_chunk_size()` estimates peak memory per interaction pair from the
+`_auto_chunk_count()` estimates peak memory per interaction pair from the
 kernel's feature engineering pipeline (counting intermediate floats for
-spatial vectors, scalar features, MLP layers, and post-processing) and sizes
-chunks to fit within ~50% of free GPU memory.  During training, a 5x
-multiplier accounts for autograd tensor retention; during inference, this
+spatial vectors, scalar features, MLP layers, and post-processing) and picks
+enough chunks to fit within a fixed fraction of GPU memory.  During training,
+a 5x multiplier accounts for autograd tensor retention; during inference, this
 multiplier is dropped, allowing larger chunks.
+
+Under `torch.compile` the chunk loop is unrolled, so the chunk count is part
+of the compiled graph.  It is therefore a power of two, and a new geometry
+recompiles only when its pair count crosses a power of two in chunks.  All
+chunks but the last have the same size, and the last ends at the pair count,
+so the compiled graph does not depend on how evenly the pairs divide.
 
 ### 6.3 Branch-Level Checkpointing
 
@@ -430,19 +436,19 @@ than O(n_branches \* n_pairs \* features).
 The branch-level and chunk-level checkpoints nest correctly:
 `use_reentrant=False` composes via `saved_tensors_hooks`.
 
-### 6.4 Chunk-Size Determinism
+### 6.4 Chunk-Count Determinism
 
-`_auto_chunk_size()` derives the chunk count from a static fraction of
+`_auto_chunk_count()` derives the chunk count from a static fraction of
 total device memory (cached `torch.cuda.get_device_properties.total_memory`)
 rather than current free memory.  This avoids the synchronizing
-`torch.cuda.mem_get_info` driver query and gives a deterministic chunk size
+`torch.cuda.mem_get_info` driver query and gives a deterministic chunk count
 across forward and checkpoint-replay backward passes.
 
-`MultiscaleKernel.forward()` still precomputes each branch's chunk size
-**outside** the checkpoint boundary and passes it as a fixed input via the
-`near_chunk_size` kwarg, so future changes that re-introduce dynamic sizing
-won't break the outer (branch-level) checkpoint by changing intermediate
-shapes between the forward pass and its replay.
+`MultiscaleKernel.forward_packed()` still precomputes each branch's chunk
+count **outside** the checkpoint boundary and passes it as a fixed input via
+the `near_chunk_count` kwarg, so future changes that re-introduce dynamic
+sizing won't break the outer (branch-level) checkpoint by changing
+intermediate shapes between the forward pass and its replay.
 
 ---
 
@@ -607,7 +613,7 @@ GLOBE.forward()
   |                 |
   |                 +-- pack source and global features
   |                 +-- compute_source_aggregates()  [once, shared across branches]
-  |                 +-- precompute near_chunk_sizes  [outside checkpoint boundary]
+  |                 +-- precompute near_chunk_counts [outside checkpoint boundary]
   |                 |
   |                 +-- for each branch:
   |                       checkpoint(BarnesHutKernel.forward(), ...)

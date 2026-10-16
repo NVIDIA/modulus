@@ -1324,10 +1324,13 @@ class BarnesHutKernel(Kernel):
             ### Loop over the chunk count (see ``_auto_chunk_count``), not
             ### ``range(0, n_near, chunk_size)``: torch.compile specializes
             ### ``range`` arguments, so that form would recompile for every new
-            ### pair count (each new geometry).  Trailing chunks may be empty.
+            ### pair count (each new geometry).  Only the last chunk is shorter,
+            ### and it ends at ``n_near`` itself: a slice past the end makes
+            ### torch.compile guard on ``n_near % n_chunks``, and a ``min``
+            ### gives each chunk its own symbolic size (slower to compile).
             for i_chunk in range(n_chunks):
                 start = i_chunk * chunk_size
-                end = min(start + chunk_size, n_near)
+                end = n_near if i_chunk == n_chunks - 1 else start + chunk_size
 
                 chunk_tgt_ids = near_tgt_ids[start:end]
                 chunk_src_ids = near_src_ids[start:end]
@@ -1390,10 +1393,7 @@ class BarnesHutKernel(Kernel):
             nf_chunk = _ceil_div(n_nf, n_nf_chunks)
             for i_chunk in range(n_nf_chunks):
                 start = i_chunk * nf_chunk
-                ### An explicit ``min``, as in Phase A: a slice end past
-                ### ``n_nf`` makes torch.compile guard on whether the last
-                ### chunk is full, i.e. on ``n_nf % n_nf_chunks``.
-                end = min(start + nf_chunk, n_nf)
+                end = n_nf if i_chunk == n_nf_chunks - 1 else start + nf_chunk
                 nf_tgt_ids = dual_plan.nf_target_ids[start:end]
                 nf_src_nids = dual_plan.nf_source_node_ids[start:end]
 
