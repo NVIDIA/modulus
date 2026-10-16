@@ -134,9 +134,6 @@ exclude_patterns = [
 
 # Fake imports
 autodoc_mock_imports = ["torch_scatter", "torch_cluster"]   # install of these packages takes very long
-    "torch_scatter",
-    "torch_cluster",
-]  # install of these packages takes very long
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 pdf_documents = [
