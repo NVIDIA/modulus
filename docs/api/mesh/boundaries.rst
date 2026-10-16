@@ -24,7 +24,7 @@ or new meshes that keep the point indices of the parent.
 
 .. rubric:: Most Used
 
-.. grid:: 1 2 2 4
+.. grid:: 1 1 2 2
    :gutter: 2
 
    .. grid-item-card:: Boundary Mesh
@@ -33,7 +33,7 @@ or new meshes that keep the point indices of the parent.
       :shadow: md
       :class-card: sd-card-hover
 
-      ``mesh.get_boundary_mesh()``
+      ``mesh.get_boundary_mesh()`` returns the boundary facets as a mesh.
 
    .. grid-item-card:: Facet Mesh
       :link: physicsnemo.mesh.mesh.Mesh.get_facet_mesh
@@ -41,7 +41,7 @@ or new meshes that keep the point indices of the parent.
       :shadow: md
       :class-card: sd-card-hover
 
-      ``mesh.get_facet_mesh()``
+      ``mesh.get_facet_mesh()`` returns all facets, or only some of them.
 
    .. grid-item-card:: Watertight
       :link: physicsnemo.mesh.boundaries.is_watertight
@@ -49,7 +49,7 @@ or new meshes that keep the point indices of the parent.
       :shadow: md
       :class-card: sd-card-hover
 
-      ``mesh.is_watertight()``
+      ``mesh.is_watertight()`` is ``True`` when no facet is on the boundary.
 
    .. grid-item-card:: Manifold
       :link: physicsnemo.mesh.boundaries.is_manifold
@@ -57,7 +57,7 @@ or new meshes that keep the point indices of the parent.
       :shadow: md
       :class-card: sd-card-hover
 
-      ``mesh.is_manifold()``
+      ``mesh.is_manifold()`` is ``True`` when the mesh is locally Euclidean.
 
 A facet is a face of a cell with one dimension less than the cell. The facets
 of a triangle are its three edges, and the facets of a tetrahedron are its
@@ -72,29 +72,6 @@ facet is shared by two cells. The module has three groups of functions:
   `manifold <https://en.wikipedia.org/wiki/Manifold>`_. A watertight mesh has
   no boundary facets. A manifold mesh looks locally like Euclidean space, so
   that, for example, each facet belongs to one or two cells.
-
-The most common operations are ``Mesh`` methods and functions in this module:
-
-.. tab-set::
-
-   .. tab-item:: Mesh method
-
-      .. code:: python
-
-          from physicsnemo.mesh.primitives.planar import unit_square
-
-          square = unit_square.load(subdivisions=2)
-          print(square.is_watertight(), square.is_manifold())  # False True
-
-   .. tab-item:: Function
-
-      .. code:: python
-
-          from physicsnemo.mesh.boundaries import is_manifold, is_watertight
-          from physicsnemo.mesh.primitives.planar import unit_square
-
-          square = unit_square.load(subdivisions=2)
-          print(is_watertight(square), is_manifold(square))  # False True
 
 Example
 -------
@@ -126,6 +103,25 @@ their point indices match the parent's. By default, each facet takes the
 mean of the ``cell_data`` of its parent cells. Set ``data_aggregation`` to
 ``"area_weighted"`` or ``"inverse_distance"`` for other weights, or set
 ``data_source="points"`` to carry ``point_data`` instead.
+
+The most common operations are both ``Mesh`` methods and functions in this
+module:
+
+.. tab-set::
+
+   .. tab-item:: Mesh method
+
+      .. code:: python
+
+          print(square.is_watertight(), square.is_manifold())  # False True
+
+   .. tab-item:: Function
+
+      .. code:: python
+
+          from physicsnemo.mesh.boundaries import is_manifold, is_watertight
+
+          print(is_watertight(square), is_manifold(square))  # False True
 
 Choosing a Function
 -------------------

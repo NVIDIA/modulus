@@ -4,41 +4,10 @@ Discrete Calculus
 .. currentmodule:: physicsnemo.mesh.calculus
 
 ``physicsnemo.mesh.calculus`` computes derivatives of fields on a mesh and
-integrates fields over it. Each operator takes a mesh and a tensor of point or
-cell values, and returns a tensor.
+integrates fields over it. Each operator takes point or cell values, by name or
+as a tensor, and returns a tensor.
 
 :bdg-success:`GPU` :bdg-info:`autograd` :bdg-secondary:`any dimension` :bdg-warning:`curl in 3D only`
-
-.. grid:: 2 2 4 4
-   :gutter: 2
-
-   .. grid-item-card:: Gradient
-      :shadow: md
-
-      :math:`\nabla\varphi`
-
-      scalar to vector
-
-   .. grid-item-card:: Divergence
-      :shadow: md
-
-      :math:`\nabla\cdot\mathbf{v}`
-
-      vector to scalar
-
-   .. grid-item-card:: Curl
-      :shadow: md
-
-      :math:`\nabla\times\mathbf{v}`
-
-      vector to vector, in 3D
-
-   .. grid-item-card:: Laplacian
-      :shadow: md
-
-      :math:`\Delta\varphi = \nabla\cdot\nabla\varphi`
-
-      scalar to scalar
 
 .. figure:: ../../img/mesh/calculus_lsq_vs_dec.png
    :alt: Two square maps of the gradient error, one for least squares (LSQ)
@@ -57,8 +26,48 @@ cell values, and returns a tensor.
 
 .. rubric:: Most Used
 
-.. grid:: 1 1 3 3
+.. grid:: 1 2 2 2
    :gutter: 2
+
+   .. grid-item-card:: Gradient
+      :link: physicsnemo.mesh.mesh.Mesh.gradient
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      :math:`\nabla\varphi`, scalar to vector
+
+      ``mesh.gradient("T")``
+
+   .. grid-item-card:: Divergence
+      :link: physicsnemo.mesh.mesh.Mesh.divergence
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      :math:`\nabla\cdot\mathbf{v}`, vector to scalar
+
+      ``mesh.divergence("v")``
+
+   .. grid-item-card:: Curl
+      :link: physicsnemo.mesh.mesh.Mesh.curl
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      :math:`\nabla\times\mathbf{v}`, vector to vector, in 3D
+
+      ``mesh.curl("v")``
+
+   .. grid-item-card:: Laplacian
+      :link: physicsnemo.mesh.mesh.Mesh.laplacian
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      :math:`\Delta\varphi = \nabla\cdot\nabla\varphi`, scalar to scalar
+
+      ``mesh.laplacian("T")``
 
    .. grid-item-card:: Derivatives of Named Fields
       :link: physicsnemo.mesh.calculus.compute_point_derivatives
@@ -66,17 +75,8 @@ cell values, and returns a tensor.
       :shadow: md
       :class-card: sd-card-hover
 
-      ``mesh.compute_point_derivatives(keys="T")`` stores the gradient as
-      ``"T_gradient"``.
-
-   .. grid-item-card:: Laplacian
-      :link: physicsnemo.mesh.calculus.compute_laplacian_points_dec
-      :link-type: any
-      :shadow: md
-      :class-card: sd-card-hover
-
-      ``compute_laplacian_points_dec(mesh, u)`` gives the Laplace-Beltrami
-      operator at points.
+      ``mesh.compute_point_derivatives("T")`` stores the gradient of
+      ``point_data["T"]`` as ``"T_gradient"``.
 
    .. grid-item-card:: Integration
       :link: physicsnemo.mesh.calculus.integrate
@@ -126,20 +126,19 @@ Pick a method in the tabs. The rest of the example is the same for both:
 
 .. code:: python
 
-    from physicsnemo.mesh.calculus import (
-        compute_curl_points_lsq,
-        compute_divergence_points_lsq,
-        compute_laplacian_points_dec,
-    )
-
     # v = (x, y, z) has divergence 3 and curl 0.
-    velocity = mesh.points.clone()
-    div_v = compute_divergence_points_lsq(mesh, velocity)  # (n_points,), about 3
-    curl_v = compute_curl_points_lsq(mesh, velocity)  # (n_points, 3), about 0
+    mesh.point_data["v"] = mesh.points.clone()
+    div_v = mesh.divergence("v")  # (n_points,), about 3
+    curl_v = mesh.curl("v")  # (n_points, 3), about 0
 
     # The DEC Laplacian of u = x^2 + y^2 + z^2 is 6 at interior points.
-    u = (mesh.points**2).sum(dim=-1)
-    lap_u = compute_laplacian_points_dec(mesh, u)  # (n_points,)
+    mesh.point_data["u"] = (mesh.points**2).sum(dim=-1)
+    lap_u = mesh.laplacian("u")  # (n_points,)
+
+    # The functions in this module take tensors and return the same values.
+    from physicsnemo.mesh.calculus import compute_divergence_points_lsq
+
+    div_v = compute_divergence_points_lsq(mesh, mesh.points)
 
 On a curved surface or curve, an intrinsic gradient lies in the tangent space
 of the mesh, and an extrinsic gradient lies in the ambient space. Select one
@@ -198,6 +197,63 @@ Two methods compute the operators:
    ``compute_cell_derivatives(..., method="dec")`` raises
    ``NotImplementedError``. Use ``method="lsq"`` for derivatives of
    ``cell_data``.
+
+.. dropdown:: Support by Dimension
+
+   The following table shows where each operator runs, by mesh type:
+
+   .. list-table::
+      :header-rows: 1
+      :widths: 28 14 14 14 14 16
+
+      * - Operator
+        - ``Mesh[1, 2]``
+        - ``Mesh[1, 3]``
+        - ``Mesh[2, 2]``
+        - ``Mesh[2, 3]``
+        - ``Mesh[3, 3]``
+      * - Gradient, LSQ, points
+        - yes
+        - yes
+        - yes
+        - yes
+        - yes
+      * - Gradient, LSQ, cells
+        - yes
+        - extrinsic only
+        - yes
+        - yes
+        - yes
+      * - Gradient, DEC, points
+        - yes
+        - yes
+        - yes
+        - yes
+        - yes
+      * - Divergence, LSQ, points and cells
+        - yes
+        - yes
+        - yes
+        - yes
+        - yes
+      * - Divergence, DEC, points
+        - yes
+        - yes
+        - yes
+        - yes
+        - yes
+      * - Curl, LSQ, points and cells
+        - no
+        - yes
+        - no
+        - yes
+        - yes
+      * - Laplacian, DEC, points
+        - yes
+        - yes
+        - yes
+        - yes
+        - yes
 
 Use the following guidelines to choose a function:
 

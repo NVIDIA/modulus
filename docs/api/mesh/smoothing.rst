@@ -24,7 +24,7 @@ point positions and the same connectivity.
 
 .. rubric:: Most Used
 
-.. grid:: 1 1 3 3
+.. grid:: 1 1 2 2
    :gutter: 2
 
    .. grid-item-card:: Laplacian Smoothing
@@ -35,6 +35,14 @@ point positions and the same connectivity.
 
       ``smooth_laplacian(mesh, n_iter=50)`` moves each point toward its
       neighbors.
+
+   .. grid-item-card:: Repair
+      :link: repair
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Remove duplicate points and degenerate cells before you smooth.
 
    .. grid-item-card:: Remeshing
       :link: remeshing

@@ -24,7 +24,7 @@ tensor with one value for each cell, point, or edge.
 
 .. rubric:: Most Used
 
-.. grid:: 1 1 3 3
+.. grid:: 1 1 2 2
    :gutter: 2
 
    .. grid-item-card:: Cell Areas
@@ -42,6 +42,15 @@ tensor with one value for each cell, point, or edge.
       :class-card: sd-card-hover
 
       ``compute_dual_volumes_0(mesh)`` gives the Voronoi area of each point.
+
+   .. grid-item-card:: Circumcenters
+      :link: physicsnemo.mesh.geometry.get_or_compute_circumcenters
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``get_or_compute_circumcenters(mesh)`` gives the circumcenter of each
+      cell and caches it.
 
    .. grid-item-card:: Cotangent Weights
       :link: physicsnemo.mesh.geometry.compute_cotan_weights_fem

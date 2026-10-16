@@ -23,7 +23,7 @@ quality value for each cell, and summary statistics.
 
 .. rubric:: Most Used
 
-.. grid:: 1 1 3 3
+.. grid:: 1 1 2 2
    :gutter: 2
 
    .. grid-item-card:: Validate
@@ -52,6 +52,14 @@ quality value for each cell, and summary statistics.
 
       ``mesh.statistics`` gives counts and summaries of cell sizes and
       quality.
+
+   .. grid-item-card:: Watertight and Manifold
+      :link: boundaries
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``mesh.is_watertight()`` and ``mesh.is_manifold()`` check the topology.
 
 Example
 -------

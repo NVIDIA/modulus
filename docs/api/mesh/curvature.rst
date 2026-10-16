@@ -88,7 +88,7 @@ The two kinds of curvature answer different questions:
        of the positions, :math:`H_i = \|L \mathbf{x}\|_i / (2 A_i^*)`
    * - Works on
      - Any codimension
-     - Codimension 1 only (``n_spatial_dims == n_manifold_dims + 1``)
+     - Codimension 1 only, such as a surface in 3D or a curve in 2D
    * - At
      - Points and cells
      - Points

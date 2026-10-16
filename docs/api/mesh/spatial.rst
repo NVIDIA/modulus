@@ -27,16 +27,25 @@ bounding volume hierarchy (BVH), a cluster tree, and a signed distance field. Un
 
 .. rubric:: Most Used
 
-.. grid:: 1 1 3 3
+.. grid:: 1 1 2 2
    :gutter: 2
 
    .. grid-item-card:: Bounding Volume Hierarchy
-      :link: physicsnemo.mesh.spatial.BVH
+      :link: physicsnemo.mesh.spatial.BVH.from_mesh
       :link-type: any
       :shadow: md
       :class-card: sd-card-hover
 
       ``BVH.from_mesh(mesh)`` builds a tree of boxes over the cells.
+
+   .. grid-item-card:: Candidate Cells
+      :link: physicsnemo.mesh.spatial.BVH.find_candidate_cells
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``bvh.find_candidate_cells(points)`` gives the cells whose boxes hold
+      each point.
 
    .. grid-item-card:: Signed Distance
       :link: physicsnemo.mesh.spatial.signed_distance_field

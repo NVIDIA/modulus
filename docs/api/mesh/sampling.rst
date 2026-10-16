@@ -24,7 +24,7 @@ interpolates mesh data at query points. Both jobs are also ``Mesh`` methods,
 
 .. rubric:: Most Used
 
-.. grid:: 1 1 3 3
+.. grid:: 1 1 2 2
    :gutter: 2
 
    .. grid-item-card:: Random Points
@@ -33,8 +33,8 @@ interpolates mesh data at query points. Both jobs are also ``Mesh`` methods,
       :shadow: md
       :class-card: sd-card-hover
 
-      ``mesh.sample_random_points_on_cells(cell_indices)`` returns one point in
-      each listed cell.
+      ``sample_random_points_on_cells(mesh, idx)`` returns one point in each
+      listed cell.
 
    .. grid-item-card:: Data at Points
       :link: physicsnemo.mesh.sampling.sample_data_at_points
@@ -52,6 +52,15 @@ interpolates mesh data at query points. Both jobs are also ``Mesh`` methods,
 
       ``find_containing_cells(mesh, queries)`` gives each point's cell and its
       barycentric coordinates.
+
+   .. grid-item-card:: Nearest Cells
+      :link: physicsnemo.mesh.sampling.find_nearest_cells
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      ``find_nearest_cells(mesh, queries)`` gives the cell with the nearest
+      centroid.
 
 Example
 -------
