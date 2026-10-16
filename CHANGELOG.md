@@ -118,6 +118,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of with batched `torch.linalg` calls. Vertex angles, Gaussian
   curvature and quality metrics become up to 1000x faster on GPU, and many
   mesh operations 4-130x faster on CPU.
+- Mesh vertex angles, dual volumes, curvature, quality metrics, and cell and
+  point normals use up to 3.4x less peak memory, and gradients through cell
+  centroids and normals are faster on GPU. Results are unchanged up to
+  rounding.
 - GLOBE's field declarations are renamed after the schemas they hold:
   `output_field_ranks`, `boundary_source_data_ranks` and `global_data_ranks`
   become `output_schema`, `boundary_source_schemas` and `global_schema`
@@ -267,8 +271,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `fill_interior` documents that it is not differentiable. Its output carries
-  no autograd history.
+- `GLOBE` accepts `boundary_meshes` as a TensorDict, as the DrivAerML example
+  passes them. Before, every forward pass of that example failed.
+- The GLOBE examples' requirements no longer downgrade PyVista and Matplotlib
+  below the versions PhysicsNeMo requires.
 - `signed_distance_field`, in `physicsnemo.nn.functional` and
   `physicsnemo.mesh.spatial`, supports backpropagation: the signed distance is
   differentiable with respect to the mesh vertices and the query points.
@@ -405,6 +411,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coordinates in unused neighbor slots when `max_points` exceeds the number of
   points. Those slots now stay zero, as with the warp backend, so point 0 no
   longer receives their gradient.
+- The transient conjugate heat transfer tank filling example trains again, on
+  one GPU or several. Before, its `train.py` stopped with a `TypeError` before
+  the first step.
 
 ### Security
 
