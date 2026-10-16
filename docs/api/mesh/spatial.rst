@@ -87,7 +87,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following pages for related topics:
+For more information, refer to the following resources:
 
 - :doc:`sampling`, which uses the BVH to interpolate data at query points.
 - Tutorial: `Neighbors, Adjacency, and Spatial Queries

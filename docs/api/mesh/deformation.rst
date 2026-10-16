@@ -234,7 +234,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following page for a related topic:
+For more information, refer to the following resources:
 
 - :doc:`transformations` for the deformations that these energies regularize.
 

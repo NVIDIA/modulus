@@ -100,7 +100,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following pages for related topics:
+For more information, refer to the following resources:
 
 - :doc:`boundaries` for facets and boundaries.
 - Tutorial: `Neighbors, Adjacency, and Spatial Queries

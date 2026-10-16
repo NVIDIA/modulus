@@ -78,7 +78,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following pages for related topics:
+For more information, refer to the following resources:
 
 - :doc:`remeshing` for a new mesh with a target number of points.
 - Tutorial: `Mesh Operations

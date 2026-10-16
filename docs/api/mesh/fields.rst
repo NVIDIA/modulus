@@ -209,7 +209,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following pages for related topics:
+For more information, refer to the following resources:
 
 - User Guide: `Fields, Ranks, and Schemas
   <https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh/fields.html>`_

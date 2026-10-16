@@ -89,7 +89,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following pages for related topics:
+For more information, refer to the following resources:
 
 - :doc:`validation` to find problems before you repair them.
 - Tutorial: `Quality, Validation, and Repair

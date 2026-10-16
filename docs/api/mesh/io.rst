@@ -74,7 +74,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following pages for related topics:
+For more information, refer to the following resources:
 
 - :doc:`tessellation` for polygon meshes.
 - Tutorial: `Loading, Converting, and Saving Meshes

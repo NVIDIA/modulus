@@ -153,7 +153,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following pages for related topics:
+For more information, refer to the following resources:
 
 - :doc:`generate` for meshes of implicit domains, in any dimension.
 - :doc:`io` to load polygon meshes from files.

@@ -108,7 +108,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following pages for related topics:
+For more information, refer to the following resources:
 
 - :doc:`calculus` and :doc:`curvature`, which use these quantities.
 - Tutorial: `Discrete Calculus and Curvature

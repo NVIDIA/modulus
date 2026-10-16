@@ -150,7 +150,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following pages for related topics:
+For more information, refer to the following resources:
 
 - :doc:`tessellation` for exact-boundary filling of a closed boundary mesh.
 - Tutorial: `Primitives and Mesh Generation

@@ -107,7 +107,7 @@ Summary
 Related Topics
 --------------
 
-Refer to the following pages for related topics:
+For more information, refer to the following resources:
 
 - :doc:`neighbors` for adjacency between points and cells.
 - :doc:`repair` for hole filling and orientation fixes.
