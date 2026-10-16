@@ -2142,21 +2142,23 @@ def _simplex_dual_graph_edges(
     del order
 
     ### Pair facets at distance d inside each run of equal facets (d = 1, 2, ...).
-    # run[t] says sorted facets t..t+d are all equal.
-    run = same
+    # a holds each t whose sorted facets t..t+d are all equal. same gets a
+    # trailing False so that same[b] exists for the last facet.
+    same = np.append(same, False)
+    a = np.flatnonzero(same)
     pairs_i, pairs_f, pairs_j = [], [], []
     d = 1
-    while run.any():
-        a = np.flatnonzero(run)
+    while len(a):
         b = a + d
         # Emit each pair once, from the lower cell id, as the VTK loop does.
         a_is_lower = owner[a] < owner[b]
         pairs_i.append(np.where(a_is_lower, owner[a], owner[b]))
         pairs_j.append(np.where(a_is_lower, owner[b], owner[a]))
         pairs_f.append(np.where(a_is_lower, local_index[a], local_index[b]))
-        run = run[:-1] & same[d:]
+        # Keep only the runs that go on past b, so a pass costs only its pairs.
+        a = a[same[b]]
         d += 1
-    del owner, local_index, same, run
+    del owner, local_index, same
 
     if not pairs_i:
         return np.empty((0, 2), dtype=np.int64)
