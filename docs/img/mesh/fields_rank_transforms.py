@@ -136,6 +136,7 @@ def main():
         f"stress\n{schema['stress']}\n" r"rotated: $T' = R\,T\,R^{\mathsf{T}}$",
     )
     rows = (("Original", mesh), ("Rotated by 30°", rotated))
+    interior = (mesh.points.abs() < 0.5 - 1e-6).all(dim=1)
 
     figure, axes = plt.subplots(2, 3, figsize=(12.0, 9.4))
     for row, (row_label, panel_mesh) in enumerate(rows):
@@ -151,15 +152,23 @@ def main():
             color=VECTOR_COLOR,
             angles="xy",
             scale_units="xy",
-            scale=5.0,
-            width=0.012,
+            scale=3.5,
+            # A thin shaft with a short head, so each arrow reads as an arrow.
+            width=0.008,
+            headwidth=3.0,
+            headlength=3.5,
+            headaxislength=3.0,
             # Center each arrow on its point, so the arrows of the right column
             # stay within the panel.
             pivot="middle",
             zorder=3,
         )
         _draw_mesh(axes[row, 2], panel_mesh)
-        _draw_ellipses(axes[row, 2], points, data["stress"], scale=0.09)
+        # Only interior vertices get an ellipse, so that every ellipse stays
+        # inside the mesh.
+        _draw_ellipses(
+            axes[row, 2], points[interior], data["stress"][interior], scale=0.1
+        )
         axes[row, 0].text(
             -0.06,
             0.5,
