@@ -44,9 +44,7 @@ _DEFAULT_CONFIG = dict(
     mlp_ratio=4,
     share_weights=True,
     eval_seed=0,
-    attention_precision=None,
     qk_normalization=False,
-    attention_precision_scope="attention",
     qk_temperature_max=None,
     surface_query_feature_channels=0,
     volume_query_feature_channels=0,
@@ -86,9 +84,7 @@ def _assert_model_attributes(model, config):
                 mlp_ratio=2,
                 share_weights=False,
                 eval_seed=7,
-                attention_precision="bfloat16",
                 qk_normalization=True,
-                attention_precision_scope="decoder_sdpa",
                 qk_temperature_max=4.0,
                 surface_query_feature_channels=3,
                 volume_query_feature_channels=4,
@@ -238,34 +234,6 @@ def test_sampling_reproducibility(device):
         assert not torch.allclose(a[0], model.encode_geometry(geometry)[0])
 
 
-def test_geometry_latent_override(device):
-    """A per-call force budget matches a configured budget without changing RNG or config."""
-    model = small_model().to(device).train()
-    reference = small_model(num_latents=11).to(device).train()
-    reference.load_state_dict(model.state_dict())
-    geometry = torch.randn(2, 45, 3, device=device)
-    generator = torch.Generator(device=device).manual_seed(27)
-    expected = reference.encode_geometry(geometry, generator=generator)
-    generator.manual_seed(27)
-    rng = (
-        torch.cuda.get_rng_state(device)
-        if torch.device(device).type == "cuda"
-        else torch.get_rng_state()
-    ).clone()
-    actual = model.encode_geometry(geometry, generator=generator, num_latents=11)
-    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
-    assert model.num_latents == 8
-    current_rng = (
-        torch.cuda.get_rng_state(device)
-        if torch.device(device).type == "cuda"
-        else torch.get_rng_state()
-    )
-    assert torch.equal(current_rng, rng)
-    for invalid in (True, 0, -1, 1.5):
-        with pytest.raises(ValueError, match="positive integer"):
-            model.encode_geometry(geometry, num_latents=invalid)
-
-
 def test_empty_query_and_disabled_head(device):
     model = small_model(volume_channels=0).to(device).eval()
     geometry = torch.randn(2, 17, 3, device=device)
@@ -318,24 +286,9 @@ def test_invalid_inputs():
     "options",
     [
         pytest.param({}, id="shared"),
-        pytest.param(dict(share_weights=False), id="unshared"),
-        pytest.param(dict(attention_precision="bfloat16"), id="attention-bf16"),
         pytest.param(
-            dict(
-                attention_precision="float16",
-                attention_precision_scope="sdpa",
-                qk_normalization=True,
-            ),
-            id="sdpa-fp16",
-        ),
-        pytest.param(
-            dict(
-                attention_precision="float16",
-                attention_precision_scope="decoder_sdpa",
-                qk_normalization=True,
-                qk_temperature_max=8.0,
-            ),
-            id="decoder-sdpa-fp16",
+            dict(share_weights=False, qk_normalization=True, qk_temperature_max=4.0),
+            id="unshared-normalized",
         ),
     ],
 )
@@ -353,32 +306,6 @@ def test_smart_checkpoint(device, tmp_path, monkeypatch, options):
         torch.randn(2, 2, device=device),
     )
     assert validate_checkpoint(model, restored, inputs, rtol=0, atol=0)
-
-
-@pytest.mark.parametrize("scope", ["attention", "sdpa", "decoder_sdpa"])
-def test_checkpoint_precision_override_preserves_architecture(tmp_path, scope):
-    """Changing arithmetic is supported; changing normalization is not a resume."""
-    model = small_model(
-        attention_precision="float16",
-        attention_precision_scope=scope,
-        qk_normalization=True,
-    )
-    path = tmp_path / "attention.mdlus"
-    model.save(path)
-    restored = Module.from_checkpoint(
-        path,
-        override_args={
-            "attention_precision": None,
-            "attention_precision_scope": "attention",
-        },
-    )
-    assert restored.qk_normalization and restored.attention_precision is None
-    assert restored.attention_precision_scope == "attention"
-    assert all(block.attention_dtype is None for block in restored.geometry_attention)
-    for name, value in model.state_dict().items():
-        torch.testing.assert_close(value, restored.state_dict()[name], rtol=0, atol=0)
-    with pytest.raises(ValueError, match="cannot be overridden"):
-        Module.from_checkpoint(path, override_args={"qk_normalization": False})
 
 
 @pytest.mark.parametrize("case", ["shared", "unshared"])
@@ -498,50 +425,6 @@ def test_autocast_preserves_small_residual_updates(device):
         )
 
 
-@pytest.mark.parametrize("normalize", [False, True])
-def test_sdpa_scope_keeps_projections_float32(device, monkeypatch, normalize):
-    """Verify actual projection dtypes and gradients under an outer autocast."""
-    from torch.nn import functional as F
-
-    from physicsnemo.experimental.models.smart.model import _CrossAttention
-
-    torch.manual_seed(9)
-    reference = _CrossAttention(32, 4, qk_normalization=normalize).to(device)
-    mixed = _CrossAttention(
-        32, 4, "float16", normalize, attention_precision_scope="sdpa"
-    ).to(device)
-    mixed.load_state_dict(reference.state_dict())
-    query = torch.randn(2, 23, 32, device=device)
-    context = torch.randn(2, 37, 32, device=device)
-    expected = reference(query, context)
-    expected.square().mean().backward()
-    linear, sdpa = F.linear, F.scaled_dot_product_attention
-    projection_dtypes, attention_dtypes = [], []
-
-    def observed_linear(*args, **kwargs):
-        result = linear(*args, **kwargs)
-        projection_dtypes.append(result.dtype)
-        return result
-
-    def observed_sdpa(q, k, v, *args, **kwargs):
-        attention_dtypes.append((q.dtype, k.dtype, v.dtype))
-        return sdpa(q, k, v, *args, **kwargs)
-
-    monkeypatch.setattr(F, "linear", observed_linear)
-    monkeypatch.setattr(F, "scaled_dot_product_attention", observed_sdpa)
-    with torch.autocast(torch.device(device).type, dtype=torch.bfloat16):
-        actual = mixed(query, context)
-    actual.square().mean().backward()
-    assert projection_dtypes and set(projection_dtypes) == {torch.float32}
-    assert attention_dtypes == [(torch.float16, torch.float16, torch.float16)]
-    assert actual.dtype == torch.float32
-    assert (actual - expected).norm() / expected.norm() < 0.01
-    original_grad = torch.cat([p.grad.flatten() for p in reference.parameters()])
-    actual_grad = torch.cat([p.grad.flatten() for p in mixed.parameters()])
-    assert torch.isfinite(actual_grad).all()
-    assert (actual_grad - original_grad).norm() / original_grad.norm() < 0.02
-
-
 def test_qk_normalization_bounds_scores(monkeypatch):
     """Large projected Q/K must stay bounded and query-independent."""
     import math
@@ -583,12 +466,13 @@ def test_normalized_attention_large_projection_gradients():
         reference = _CrossAttention(32, 4, qk_normalization=True).cuda()
         with torch.no_grad():
             reference.attention.in_proj_weight[:64].mul_(100)
-        mixed = _CrossAttention(32, 4, "float16", qk_normalization=True).cuda()
+        mixed = _CrossAttention(32, 4, qk_normalization=True).cuda()
         mixed.load_state_dict(reference.state_dict())
         query = torch.randn(2, 23, 32, device="cuda")
         context = torch.randn(2, 37, 32, device="cuda")
         reference_output = reference(query, context)
-        actual = mixed(query, context)
+        with torch.autocast("cuda", dtype=torch.float16):
+            actual = mixed(query, context)
         reference_output.square().mean().backward()
         actual.square().mean().backward()
         assert (actual - reference_output).norm() / reference_output.norm() < 0.01
@@ -602,66 +486,6 @@ def test_normalized_attention_large_projection_gradients():
         ).norm() / reference_gradient.norm() < 0.02
     finally:
         torch.set_float32_matmul_precision(previous_precision)
-
-
-def test_decoder_sdpa_matches_qualified_policy(device, monkeypatch):
-    """Match the encoder-FP32 experiment without mutating shared-module state."""
-    from torch.nn import functional as F
-
-    from physicsnemo.experimental.models.smart.model import _CrossAttention
-
-    torch.manual_seed(81)
-    options = dict(
-        parameter_channels=2,
-        qk_normalization=True,
-        attention_precision="float16",
-    )
-    prototype = (
-        small_model(**options, attention_precision_scope="sdpa").to(device).eval()
-    )
-    model = (
-        small_model(**options, attention_precision_scope="decoder_sdpa")
-        .to(device)
-        .eval()
-    )
-    model.load_state_dict(prototype.state_dict())
-    geometry = torch.randn(1, 45, 3, device=device)
-    parameters = torch.randn(1, 2, device=device)
-    surface = torch.randn(1, 13, 3, device=device)
-    volume = torch.randn(1, 19, 3, device=device)
-    saved = [
-        (module, module.attention_dtype)
-        for module in prototype.modules()
-        if isinstance(module, _CrossAttention)
-    ]
-    for module, _ in saved:
-        module.attention_dtype = None
-    contexts = prototype.encode_geometry(geometry, parameters)
-    for module, dtype in saved:
-        module.attention_dtype = dtype
-    expected = tuple(
-        prototype.decode_queries(queries, contexts, parameters, field=field)
-        for field, queries in (("surface", surface), ("volume", volume))
-    )
-    dtypes = []
-    sdpa = F.scaled_dot_product_attention
-
-    def observed(query, key, value, *args, **kwargs):
-        dtypes.append(query.dtype)
-        return sdpa(query, key, value, *args, **kwargs)
-
-    monkeypatch.setattr(F, "scaled_dot_product_attention", observed)
-    actual = model(geometry, surface, volume, parameters)
-    assert dtypes == [torch.float32] * 3 + [torch.float16] * 4
-    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
-    sum(value.square().mean() for value in expected).backward()
-    sum(value.square().mean() for value in actual).backward()
-    for actual_parameter, expected_parameter in zip(
-        model.parameters(), prototype.parameters()
-    ):
-        torch.testing.assert_close(
-            actual_parameter.grad, expected_parameter.grad, rtol=0, atol=0
-        )
 
 
 @pytest.mark.parametrize("invalid_kind", ["integer", "wrong_device"])
@@ -684,3 +508,17 @@ def test_public_tensor_dtype_and_device_validation(invalid_kind):
     if invalid_kind == "wrong_device":
         with pytest.raises(ValueError, match="Queries.*geometry device"):
             model(geometry, invalid(queries), parameters=conditions)
+
+
+@pytest.mark.parametrize("precision", ["float16", "bfloat16"])
+def test_legacy_attention_override_is_not_silently_discarded(tmp_path, precision):
+    """Unsupported legacy arithmetic must fail instead of changing predictions."""
+    model = small_model()
+    model.__model_checkpoint_version__ = "0.1.0"
+    model._args["__args__"].update(
+        attention_precision=precision, attention_precision_scope="sdpa"
+    )
+    path = tmp_path / "legacy.mdlus"
+    model.save(path)
+    with pytest.raises(ValueError, match="earlier SMART implementation"):
+        Module.from_checkpoint(path)

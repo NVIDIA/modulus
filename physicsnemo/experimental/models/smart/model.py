@@ -23,7 +23,6 @@ No research implementation is used as a dependency.
 from __future__ import annotations
 
 import math
-from contextlib import nullcontext
 from typing import Literal
 
 import torch
@@ -69,9 +68,7 @@ class _CrossAttention(nn.Module):
         self,
         width: int,
         heads: int,
-        attention_precision: str | None = None,
         qk_normalization: bool = False,
-        attention_precision_scope: str = "attention",
         qk_temperature_max: float | None = None,
     ):
         super().__init__()
@@ -93,62 +90,24 @@ class _CrossAttention(nn.Module):
             )
         else:
             self.register_parameter("temperature_logit", None)
-        self.attention_precision_scope = attention_precision_scope
         self.query_norm = nn.LayerNorm(width)
         self.context_norm = nn.LayerNorm(width)
         # need_weights=False selects PyTorch's optimized SDPA implementation.
         self.attention = nn.MultiheadAttention(width, heads, batch_first=True)
-        self.attention_dtype = (
-            getattr(torch, attention_precision) if attention_precision else None
-        )
 
-    def forward(
-        self, queries: Tensor, context: Tensor, *, force_float32: bool = False
-    ) -> Tensor:
-        if force_float32:
-            with torch.autocast(queries.device.type, enabled=False):
-                normalized = self.context_norm(context.float())
-                query = self.query_norm(queries.float())
-                if self.qk_normalization:
-                    update = self._projected_attention(query, normalized)
-                else:
-                    update, _ = self.attention(
-                        query, normalized, normalized, need_weights=False
-                    )
-            return queries + update
-        if self.attention_dtype is not None and self.attention_precision_scope in (
-            "sdpa",
-            "decoder_sdpa",
-        ):
-            # Quantize only the attention operands/result. Learned projections
-            # and their gradients retain full float32 arithmetic.
-            with torch.autocast(queries.device.type, enabled=False):
-                query = self.query_norm(queries.float())
-                normalized = self.context_norm(context.float())
-                update = self._projected_attention(
-                    query, normalized, self.attention_dtype
-                )
-            return queries + update
+    def forward(self, queries: Tensor, context: Tensor) -> Tensor:
         normalized = self.context_norm(context)
-        precision = (
-            torch.autocast(queries.device.type, dtype=self.attention_dtype)
-            if self.attention_dtype is not None
-            else nullcontext()
-        )
-        with precision:
-            query = self.query_norm(queries)
-            if self.qk_normalization:
-                update = self._projected_attention(query, normalized)
-            else:
-                update, _ = self.attention(
-                    query, normalized, normalized, need_weights=False
-                )
+        query = self.query_norm(queries)
+        if self.qk_normalization:
+            update = self._projected_attention(query, normalized)
+        else:
+            update, _ = self.attention(
+                query, normalized, normalized, need_weights=False
+            )
         return queries + update
 
-    def _projected_attention(
-        self, queries: Tensor, context: Tensor, sdpa_dtype: torch.dtype | None = None
-    ) -> Tensor:
-        r"""Reuse projections with optional Q/K normalization and SDPA-only casting.
+    def _projected_attention(self, queries: Tensor, context: Tensor) -> Tensor:
+        r"""Reuse projections with optional Q/K normalization.
 
         Reuse the MultiheadAttention projections and checkpoint parameter names.
         Normalization is in float32. An optional bounded per-head temperature
@@ -172,14 +131,8 @@ class _CrossAttention(nn.Module):
         if self.temperature_logit is not None:
             temperature = self.qk_temperature_max * self.temperature_logit.sigmoid()
             query = query * temperature.to(query.dtype).view(1, heads, 1, 1)
-        if sdpa_dtype is not None:
-            query, key, value = (
-                tensor.to(sdpa_dtype) for tensor in (query, key, value)
-            )
         result = F.scaled_dot_product_attention(query, key, value)
         result = result.transpose(1, 2).reshape(batch, count, width)
-        if sdpa_dtype is not None:
-            result = result.float()
         return attention.out_proj(result)
 
 
@@ -192,18 +145,14 @@ class _Refinement(nn.Module):
         heads: int,
         expansion: int,
         parameters: int,
-        attention_precision: str | None = None,
         qk_normalization: bool = False,
-        attention_precision_scope: str = "attention",
         qk_temperature_max: float | None = None,
     ):
         super().__init__()
         self.cross_attention = _CrossAttention(
             width,
             heads,
-            attention_precision,
             qk_normalization,
-            attention_precision_scope,
             qk_temperature_max,
         )
         self.norm = nn.LayerNorm(width)
@@ -221,12 +170,8 @@ class _Refinement(nn.Module):
         queries: Tensor,
         context: Tensor,
         parameters: Tensor | None,
-        *,
-        force_float32_attention: bool = False,
     ) -> Tensor:
-        queries = self.cross_attention(
-            queries, context, force_float32=force_float32_attention
-        )
+        queries = self.cross_attention(queries, context)
         hidden = self.hidden(self.norm(queries))
         if self.modulation is not None:
             scale, shift = self.modulation(parameters).unsqueeze(1).chunk(2, dim=-1)
@@ -266,24 +211,12 @@ class SMART(Module):
     eval_seed : int, optional, default=0
         Fixed geometry sampling seed during evaluation. Training uses the active
         RNG or the generator supplied to :meth:`encode_geometry`.
-    attention_precision : {"float16", "bfloat16"} or None, optional, default=None
-        Optional autocast restricted to attention projections and attention.
-        Keeps positional embeddings, residuals, MLPs and output heads in their
-        surrounding precision. FP16 attention training requires gradient scaling.
-        None uses the caller's autocast context unchanged.
     qk_normalization : bool, optional, default=False
         Normalize projected queries and keys by their per-head RMS in float32,
         with unit gain unless ``qk_temperature_max`` enables a bounded learned
         gain. Bounds attention logits against weight growth.
         This changes the attention function; train a new model when enabling it.
         Disabled preserves the original paper-derived implementation.
-    attention_precision_scope : {"attention", "sdpa", "decoder_sdpa"}, optional, default="attention"
-        Scope of ``attention_precision``. The default includes projections.
-        ``sdpa`` keeps query/key/value and output projections in float32 and casts
-        only SDPA operands/results. It changes execution, not model parameters.
-        ``decoder_sdpa`` additionally keeps geometry-encoder attention in
-        float32, including shared refinements when called by the encoder.
-        Ignored when ``attention_precision`` is None. FP16 still requires scaling.
     qk_temperature_max : float or None, optional, default=None
         Optional upper bound (> 1) on a learned per-head multiplier of normalized
         attention logits, initialized at 1. Requires ``qk_normalization=True``.
@@ -325,6 +258,7 @@ class SMART(Module):
 
     Notes
     -----
+    Mixed precision follows the caller's :func:`torch.autocast` context.
     Coordinates must be finite and consistently scaled. Padding is not supported;
     use fixed-size sampled batches or batch size one for ragged clouds. Sampling
     is without replacement. Evaluation is repeatable for a fixed ordered cloud.
@@ -346,9 +280,22 @@ class SMART(Module):
     (torch.Size([2, 12, 1]), torch.Size([2, 20, 3]))
     """
 
-    # Arithmetic can change without changing weights or the attention function.
-    # Architectural changes such as Q/K normalization remain protected.
-    _overridable_args = {"attention_precision", "attention_precision_scope"}
+    __model_checkpoint_version__ = "0.2.0"
+    __supported_model_checkpoint_version__ = {
+        "0.1.0": "Loading SMART 0.1.0 with caller-controlled autocast."
+    }
+
+    @classmethod
+    def _backward_compat_arg_mapper(cls, version: str, args: dict) -> dict:
+        """Load earlier checkpoints only when they used caller-controlled precision."""
+        args = super()._backward_compat_arg_mapper(version, args).copy()
+        if args.pop("attention_precision", None) is not None:
+            raise ValueError(
+                "Checkpoints with an attention_precision override require the "
+                "earlier SMART implementation. New models use caller-controlled autocast."
+            )
+        args.pop("attention_precision_scope", None)
+        return args
 
     def __init__(
         self,
@@ -363,20 +310,12 @@ class SMART(Module):
         mlp_ratio: int = 4,
         share_weights: bool = True,
         eval_seed: int = 0,
-        attention_precision: str | None = None,
         qk_normalization: bool = False,
-        attention_precision_scope: str = "attention",
         qk_temperature_max: float | None = None,
         surface_query_feature_channels: int = 0,
         volume_query_feature_channels: int = 0,
     ):
         super().__init__(meta=ModelMetaData(amp=True, auto_grad=True))
-        if attention_precision not in (None, "float16", "bfloat16"):
-            raise ValueError("attention_precision must be None, float16, or bfloat16")
-        if attention_precision_scope not in ("attention", "sdpa", "decoder_sdpa"):
-            raise ValueError(
-                "attention_precision_scope must be attention, sdpa or decoder_sdpa"
-            )
         for name, value in (
             ("hidden_dim", hidden_dim),
             ("num_heads", num_heads),
@@ -431,17 +370,13 @@ class SMART(Module):
         self.mlp_ratio = mlp_ratio
         self.share_weights = share_weights
         self.eval_seed = eval_seed
-        self.attention_precision = attention_precision
         self.qk_normalization = qk_normalization
-        self.attention_precision_scope = attention_precision_scope
         self.position = _ModulatedPosition(hidden_dim)
         self.geometry_attention = nn.ModuleList(
             _CrossAttention(
                 hidden_dim,
                 num_heads,
-                attention_precision,
                 qk_normalization,
-                attention_precision_scope,
                 qk_temperature_max,
             )
             for _ in range(num_layers)
@@ -452,9 +387,7 @@ class SMART(Module):
                 num_heads,
                 mlp_ratio,
                 parameter_channels,
-                attention_precision,
                 qk_normalization,
-                attention_precision_scope,
                 qk_temperature_max,
             )
             for _ in range(num_layers)
@@ -469,9 +402,7 @@ class SMART(Module):
                 num_heads,
                 mlp_ratio,
                 parameter_channels,
-                attention_precision,
                 qk_normalization,
-                attention_precision_scope,
                 qk_temperature_max,
             )
             for i in range(num_layers - 1)
@@ -557,7 +488,6 @@ class SMART(Module):
         parameters: Float[Tensor, "batch parameter_channels"] | None = None,
         *,
         generator: torch.Generator | None = None,
-        num_latents: int | None = None,
     ) -> tuple[Float[Tensor, "batch latents hidden_dim"], ...]:
         r"""Build intermediate geometry latents without observing spatial queries.
 
@@ -569,9 +499,6 @@ class SMART(Module):
             Conditions of shape :math:`(B,P)`.
         generator : torch.Generator or None, optional, default=None
             Sampling RNG on the geometry device. Overrides ``eval_seed``.
-        num_latents : int or None, optional, default=None
-            Positive latent count for this call. Defaults to the model's
-            configured count without changing its configuration or state.
 
         Returns
         -------
@@ -587,28 +514,20 @@ class SMART(Module):
             generator = torch.Generator(device=geometry.device).manual_seed(
                 self.eval_seed
             )
-        count = self.num_latents if num_latents is None else num_latents
-        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
-            raise ValueError("num_latents must be a positive integer")
-        state = self.position(self._sample(geometry, count, generator))
+        state = self.position(self._sample(geometry, self.num_latents, generator))
         contexts = []
         for layer, attention in enumerate(self.geometry_attention):
             # Embed only selected geometry points, avoiding O(N*D) dense storage.
             sampled = self.position(
                 self._sample(geometry, self.geometry_subsample, generator)
             )
-            encoder_float32 = (
-                self.attention_precision is not None
-                and self.attention_precision_scope == "decoder_sdpa"
-            )
-            context = attention(state, sampled, force_float32=encoder_float32)
+            context = attention(state, sampled)
             contexts.append(context)
             if layer < self.num_layers - 1:
                 state = self.encoder_refinement[layer](
                     state,
                     context,
                     parameters,
-                    force_float32_attention=encoder_float32,
                 )
         return tuple(contexts)
 
@@ -672,16 +591,23 @@ class SMART(Module):
         if not torch.compiler.is_compiling():
             if projection is None and query_features is not None:
                 raise ValueError(f"The {field} query features are disabled")
-            if projection is not None and (
-                query_features is None
-                or query_features.shape != (*queries.shape[:2], feature_channels)
-                or not query_features.is_floating_point()
-                or query_features.device != queries.device
-            ):
-                raise ValueError(
-                    f"Expected {field} query_features of shape (B, M, {feature_channels}) "
-                    "with floating dtype on the query device"
+            if projection is not None:
+                actual_shape = (
+                    None if query_features is None else tuple(query_features.shape)
                 )
+                if actual_shape != (*queries.shape[:2], feature_channels):
+                    raise ValueError(
+                        f"Expected tensor of shape (B, M, {feature_channels}) "
+                        f"but got tensor of shape {actual_shape} for {field} query_features"
+                    )
+                if (
+                    not query_features.is_floating_point()
+                    or query_features.device != queries.device
+                ):
+                    raise ValueError(
+                        f"The {field} query_features must have a floating-point dtype "
+                        "on the query device"
+                    )
         state = self.position(queries)
         if projection is not None:
             state = state + projection(query_features.to(state.dtype)).to(state.dtype)
