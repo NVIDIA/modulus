@@ -87,6 +87,9 @@ exact-boundary contract provides three guarantees:
   them.
 - The entire process is deterministic.
 
+Interior filling is not differentiable. The output carries no autograd
+history.
+
 You can attach provenance fields (``"boundary_marker"`` and
 ``"source_point"``) to the output's ``point_data`` by setting
 ``provenance=True``. By default, the pipeline claims no keys in the
