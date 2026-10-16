@@ -214,6 +214,15 @@ def test_knn_warp_non_finite_queries(device: str):
     KNN.compare_forward((indices[good], distances[good]), reference)
 
 
+# A neighbor whose squared distance is close to the float32 maximum is still found.
+def test_knn_warp_large_finite_distance(device: str):
+    points = torch.tensor([[1.8e19, 0.0, 0.0]], device=device)
+    queries = torch.zeros(1, 3, device=device)
+    indices, distances = knn(points, queries, k=1, implementation="warp")
+    assert indices.tolist() == [[0]]
+    torch.testing.assert_close(distances, points[:, :1])
+
+
 # Validate the Warp implementation's input checks.
 def test_knn_warp_error_handling(device: str):
     points = torch.randn(20, 4, device=device)

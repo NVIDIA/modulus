@@ -45,7 +45,6 @@ LEAF_SIZE = 8
 # LEAF_SIZE = 8, the heap tree has at most 28 levels, so 32 entries suffice.
 STACK_SIZE = 32
 _MORTON_BITS = 21  # 3 x 21 bits fit in a non-negative int64
-_FLOAT_MAX = 3.0e38
 
 _MORTON_MAX = float((1 << _MORTON_BITS) - 1)
 
@@ -251,8 +250,8 @@ def get_tree_knn_kernel(capacity: int, static_k: bool):
         # position: an upper bound on the true k-th distance. ``kth`` keeps
         # the list's k-th entry in a register.
         for j in range(kq):
-            best_d[j] = float(_FLOAT_MAX)
-        kth = float(_FLOAT_MAX)
+            best_d[j] = wp.inf
+        kth = float(wp.inf)
         width = wp.min(2 * kq, n_points)
         start = wp.clamp(window_pos[qi] - kq, 0, n_points - width)
         for p in range(start, start + width):
