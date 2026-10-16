@@ -52,22 +52,6 @@ def test_feature_alignment_chunks_gradients_and_checkpoint(field, tmp_path):
     expected = model.decode_queries(
         queries, context, field=field, query_features=features
     )
-    chunks = torch.cat(
-        [
-            model.decode_queries(q, context, field=field, query_features=f)
-            for q, f in zip(queries.split(6, 1), features.split(6, 1))
-        ],
-        dim=1,
-    )
-    torch.testing.assert_close(chunks, expected, atol=2e-6, rtol=2e-5)
-    permutation = torch.randperm(17)
-    permuted = model.decode_queries(
-        queries[:, permutation],
-        context,
-        field=field,
-        query_features=features[:, permutation],
-    )
-    torch.testing.assert_close(permuted, expected[:, permutation], atol=2e-6, rtol=2e-5)
     changed = model.decode_queries(
         queries,
         context,
@@ -90,7 +74,25 @@ def test_feature_alignment_chunks_gradients_and_checkpoint(field, tmp_path):
             queries, context, field=field, query_features=-features
         )
         assert (learned - changed).abs().max() > 1e-6
-        projection.weight.zero_()
+        assert projection.weight.count_nonzero() > 0
+        chunks = torch.cat(
+            [
+                model.decode_queries(q, context, field=field, query_features=f)
+                for q, f in zip(queries.split(6, 1), features.split(6, 1))
+            ],
+            dim=1,
+        )
+        torch.testing.assert_close(chunks, learned, atol=2e-6, rtol=2e-5)
+        permutation = torch.randperm(17)
+        permuted = model.decode_queries(
+            queries[:, permutation],
+            context,
+            field=field,
+            query_features=features[:, permutation],
+        )
+        torch.testing.assert_close(
+            permuted, learned[:, permutation], atol=2e-6, rtol=2e-5
+        )
     assert all(
         "volume" not in name if field == "surface" else "surface" not in name
         for name, _ in model.named_parameters()
@@ -98,13 +100,19 @@ def test_feature_alignment_chunks_gradients_and_checkpoint(field, tmp_path):
     kwargs = {f"{field}_queries": queries, f"{field}_query_features": features}
     result = model(geometry, **kwargs)
     index = 0 if field == "surface" else 1
-    torch.testing.assert_close(result[index], expected)
+    torch.testing.assert_close(result[index], learned)
     assert result[1 - index] is None
     path = tmp_path / f"{field}.mdlus"
     model.save(path)
     restored = Module.from_checkpoint(path).eval()
     torch.testing.assert_close(
-        restored(geometry, **kwargs)[index], expected, atol=0, rtol=0
+        getattr(restored, f"{field}_query_projection").weight,
+        projection.weight,
+        atol=0,
+        rtol=0,
+    )
+    torch.testing.assert_close(
+        restored(geometry, **kwargs)[index], learned, atol=0, rtol=0
     )
 
 
@@ -113,11 +121,24 @@ def test_required_feature_validation(field):
     model = field_model(field)
     queries = torch.randn(1, 7, 3)
     contexts = model.encode_geometry(torch.randn(1, 20, 3))
-    for features in [None, torch.randn(1, 6, 3), torch.ones(1, 7, 3, dtype=torch.long)]:
-        with pytest.raises(ValueError, match="query_features"):
+    channels = 3 if field == "surface" else 4
+    for features in (None, torch.randn(1, 6, channels)):
+        shape = None if features is None else tuple(features.shape)
+        with pytest.raises(ValueError, match="query_features") as error:
             model.decode_queries(
                 queries, contexts, field=field, query_features=features
             )
+        assert str(error.value) == (
+            f"Expected tensor of shape (B, M, {channels}) but got tensor of shape "
+            f"{shape} for {field} query_features"
+        )
+    with pytest.raises(ValueError, match="query_features.*floating-point"):
+        model.decode_queries(
+            queries,
+            contexts,
+            field=field,
+            query_features=torch.ones(1, 7, channels, dtype=torch.long),
+        )
     with pytest.raises(ValueError, match="requires"):
         model(
             torch.randn(1, 20, 3),
