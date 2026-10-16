@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import torch
 
+from physicsnemo.utils._small_linalg import batched_lstsq
+
 from .utils import resolve_safe_epsilon, validate_inputs
 
 
@@ -56,8 +58,8 @@ def mesh_lsq_gradient_torch(
     counts = neighbor_offsets[1:] - neighbor_offsets[:-1]
 
     ### Flatten component dimensions so scalar and tensor fields share one solve path.
-    values_flat = values.reshape(n_entities, -1)
-    n_components = values_flat.shape[1]
+    n_components = value_shape.numel()
+    values_flat = values.reshape(n_entities, n_components)
     gradients_flat = torch.zeros(
         (n_entities, n_dims, n_components),
         dtype=values.dtype,
@@ -68,15 +70,20 @@ def mesh_lsq_gradient_torch(
     dist_eps = resolve_safe_epsilon(safe_epsilon=safe_epsilon, dtype=points_cast.dtype)
 
     ### Process one dense batch per neighbor-count group (mesh-module strategy).
-    unique_counts = torch.unique(counts)
-    for count_tensor in unique_counts:
-        n_neighbors = int(count_tensor.item())
+    # A stable sort lists each group's entities contiguously, in ascending index
+    # order; one transfer brings every group's count and size to the host.
+    order = torch.argsort(counts, stable=True)
+    unique_counts, group_sizes = torch.unique_consecutive(
+        counts[order], return_counts=True
+    )
+    group_counts, group_sizes = torch.stack((unique_counts, group_sizes)).tolist()
+    group_end = 0
+    for n_neighbors, group_size in zip(group_counts, group_sizes):
+        group_start, group_end = group_end, group_end + group_size
         if n_neighbors < min_neighbors or n_neighbors == 0:
             continue
 
-        entity_indices = torch.where(counts == count_tensor)[0]
-        if entity_indices.numel() == 0:
-            continue
+        entity_indices = order[group_start:group_end]
 
         offsets_group = neighbor_offsets[entity_indices]
         col_range = torch.arange(n_neighbors, device=points.device, dtype=torch.int64)
@@ -94,12 +101,12 @@ def mesh_lsq_gradient_torch(
 
         A_weighted = sqrt_w * relative
         b_weighted = sqrt_w * delta_values
+        # Only the weighted system is needed from here on
+        del flat_indices, neighbors, center_points, relative
+        del values_center, delta_values, dist2, sqrt_w
 
-        solution = torch.linalg.lstsq(
-            A_weighted,
-            b_weighted,
-            rcond=None,
-        ).solution
+        solution = batched_lstsq(A_weighted, b_weighted)
+        del A_weighted, b_weighted
         gradients_flat[entity_indices] = solution
 
     ### Restore gradient output shape.

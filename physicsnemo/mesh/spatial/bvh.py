@@ -43,9 +43,32 @@ if TYPE_CHECKING:
 # Morton code computation
 # ---------------------------------------------------------------------------
 
+# Shift-and-mask steps that move bit b of a coordinate to bit b*D, for the bits
+# per dimension that _compute_morton_codes uses (D=2: 31 bits, D=3: 21 bits).
+# D=1 needs no spreading.
+_MORTON_SPREAD_STEPS: dict[int, tuple[tuple[int, int], ...]] = {
+    1: (),
+    2: (
+        (16, 0x0000_FFFF_0000_FFFF),
+        (8, 0x00FF_00FF_00FF_00FF),
+        (4, 0x0F0F_0F0F_0F0F_0F0F),
+        (2, 0x3333_3333_3333_3333),
+        (1, 0x5555_5555_5555_5555),
+    ),
+    3: (
+        (32, 0x001F_0000_0000_FFFF),
+        (16, 0x001F_0000_FF00_00FF),
+        (8, 0x100F_00F0_0F00_F00F),
+        (4, 0x10C3_0C30_C30C_30C3),
+        (2, 0x1249_2492_4924_9249),
+    ),
+}
+
 
 def _compute_morton_codes(
     centroids: Float[torch.Tensor, "n_centroids n_spatial_dims"],
+    *,
+    isotropic: bool = False,
 ) -> Int[torch.Tensor, " n_centroids"]:
     """Compute morton codes (Z-order curve) for a set of points.
 
@@ -59,6 +82,11 @@ def _compute_morton_codes(
     ----------
     centroids : torch.Tensor
         Point coordinates, shape ``(N, D)``, any float dtype.
+    isotropic : bool, optional, default=False
+        If ``True``, every axis is quantized with the same scale (the largest
+        extent), so the Morton grid's cells are cubes. If ``False``, each axis
+        is stretched to the full grid independently, so the cells inherit the
+        aspect ratio of the bounding box.
 
     Returns
     -------
@@ -100,6 +128,8 @@ def _compute_morton_codes(
     cmin = quantization_points.min(dim=0).values  # (D,)
     cmax = quantization_points.max(dim=0).values  # (D,)
     extent = cmax - cmin
+    if isotropic:
+        extent = extent.amax().expand(D)
     # Preserve every representable nonzero extent. Constant axes have a zero
     # numerator, so replacing only their zero denominator maps them to zero.
     safe_extent = torch.where(extent != 0, extent, torch.ones_like(extent))
@@ -108,17 +138,18 @@ def _compute_morton_codes(
     )  # (N, D)
 
     ### Bit-interleave all dimensions: bit b of dim d -> position b*D + d.
-    if device.type == "cuda":
-        # CUDA is launch-bound in the bit loop below. Materializing all bits at
-        # once trades a modest temporary for far fewer kernel launches.
-        bit_offsets = torch.arange(n_bits, dtype=torch.int64, device=device)
-        dim_offsets = torch.arange(D, dtype=torch.int64, device=device)
-        bits = (coords.unsqueeze(-1) >> bit_offsets) & 1  # (N, D, n_bits)
-        shifts = bit_offsets.view(1, 1, -1) * D + dim_offsets.view(1, -1, 1)
-        return (bits << shifts).reshape(N, -1).sum(dim=1)
+    dim_offsets = torch.arange(D, dtype=torch.int64, device=device)  # (D,)
+    spread_steps = _MORTON_SPREAD_STEPS.get(D)
+    if spread_steps is not None:
+        # Spread every coordinate's bits D apart in a few whole-tensor steps,
+        # then shift dimension d by d. The dimensions' bits do not overlap, so
+        # the sum is their bitwise OR. Temporaries are O(N * D), and the number
+        # of kernel launches depends on neither N nor n_bits.
+        for shift, mask in spread_steps:
+            coords = (coords | (coords << shift)) & mask
+        return (coords << dim_offsets).sum(dim=1)
 
     code = torch.zeros(N, dtype=torch.int64, device=device)
-    dim_offsets = torch.arange(D, dtype=torch.int64, device=device)  # (D,)
     for b in range(n_bits):
         bits = (coords >> b) & 1  # (N, D) - extract bit b from every dim
         code += (bits << (b * D + dim_offsets)).sum(dim=1)  # (N,)
@@ -296,8 +327,18 @@ class BVH(TensorClass):
 
     Examples
     --------
+    >>> import torch
+    >>> from physicsnemo.mesh import Mesh
+    >>> mesh = Mesh(
+    ...     points=torch.tensor(
+    ...         [[0.0, 0.0], [2.0, 0.0], [0.0, 2.0], [2.0, 2.0], [4.0, 0.0]]
+    ...     ),
+    ...     cells=torch.tensor([[0, 1, 2], [1, 4, 3]]),
+    ... )
     >>> bvh = BVH.from_mesh(mesh)
-    >>> candidates = bvh.find_candidate_cells(query_points)
+    >>> query_points = torch.tensor([[0.5, 0.5], [3.5, 0.2], [9.0, 9.0]])
+    >>> bvh.find_candidate_cells(query_points).to_list()
+    [[0], [1], []]
     """
 
     node_aabb_min: Float[torch.Tensor, "n_nodes n_spatial_dims"]
