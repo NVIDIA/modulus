@@ -238,9 +238,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CUDA device.
 - `BoundingBoxFilter` takes about half as long on CPU. On a GPU it
   synchronizes once per coordinate key, instead of once per filtered tensor.
-- The PhysicsNeMo-Mesh tutorials in `examples/minimal/mesh` are reorganized into
-  nine notebooks, from a first mesh to ML pipelines, and re-executed with their
-  outputs. The mesh API reference opens with a map of its submodules.
+- Every PhysicsNeMo-Mesh API page now opens with a figure, and the nine
+  tutorials in `examples/minimal/mesh` are reorganized from a first mesh to ML
+  pipelines. New sections show how to use the edge graph of a mesh, a
+  `Mesh[1, n]`, in graph network models.
 
 ### Deprecated
 
