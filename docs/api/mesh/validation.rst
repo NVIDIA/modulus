@@ -12,9 +12,9 @@ the quality of its cells. It has three functions:
   returns a ``dict`` with the key ``"valid"`` and a count for each problem,
   or raises ``ValueError`` if you pass ``raise_on_error=True``.
 - :func:`compute_quality_metrics`, also the ``mesh.quality_metrics``
-  property, returns a ``TensorDict`` with one value per cell: aspect ratio,
-  edge length ratio, minimum and maximum angle, minimum and maximum edge
-  length, and an overall ``quality_score``.
+  property, returns a ``TensorDict`` with one value for each cell. Its
+  metrics are aspect ratio, edge length ratio, minimum and maximum angle,
+  minimum and maximum edge length, and an overall ``quality_score``.
 - :func:`compute_mesh_statistics`, also the ``mesh.statistics`` property,
   returns a ``dict`` of counts and of summaries (minimum, maximum, mean, and
   standard deviation) of cell areas, edge lengths, aspect ratios, and quality
@@ -54,8 +54,10 @@ Summary
    compute_mesh_statistics
    validate_mesh
 
-See Also
---------
+Related Topics
+--------------
+
+For more information, refer to the following resources:
 
 - :doc:`repair` to fix the problems that validation finds.
 - :doc:`boundaries` for watertight and manifold checks.

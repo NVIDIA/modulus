@@ -9,17 +9,17 @@ two backends:
 
 - Matplotlib draws static 2D plots, and 3D plots through ``mplot3d``. It
   draws a volume mesh as its boundary surface.
-- PyVista draws interactive 3D scenes with VTK. It supports meshes with at
-  most three spatial dimensions.
+- PyVista draws interactive 3D scenes with the Visualization Toolkit (VTK).
+  It supports meshes with at most three spatial dimensions.
 
 With ``backend="auto"``, the default, :func:`draw` selects the backend from
-the spatial dimension of the mesh only. It uses matplotlib for meshes with
+the spatial dimension of the mesh only. It uses Matplotlib for meshes with
 two or fewer spatial dimensions and PyVista for meshes in 3D. If the
 preferred backend is not installed, it uses the other one. To choose a
 backend, pass ``backend="matplotlib"`` or ``backend="pyvista"``.
 
-Pass ``point_scalars`` or ``cell_scalars`` (not both) to color the mesh by a
-field. Each one accepts a tensor or a key of ``point_data`` or
+Pass ``point_scalars`` or ``cell_scalars``, but not both, to color the mesh by
+a field. Each one accepts a tensor or a key of ``point_data`` or
 ``cell_data``. For a vector or tensor field, :func:`draw` colors by the L2
 norm of the trailing dimensions.
 
@@ -46,7 +46,7 @@ Example
 
     ax = draw(sphere, backend="matplotlib", point_scalars="height", show=False)
 
-With ``show=False``, :func:`draw` returns the matplotlib ``Axes`` or the
+With ``show=False``, :func:`draw` returns the Matplotlib ``Axes`` or the
 PyVista ``Plotter`` without showing it. Pass it back as ``ax`` to draw
 several meshes in one scene. ``backend_options`` passes keyword arguments to
 PyVista's ``Plotter.add_mesh``. Matplotlib ignores them with a warning.
@@ -63,8 +63,10 @@ Summary
    draw
    draw_mesh
 
-See Also
---------
+Related Topics
+--------------
+
+For more information, refer to the following resources:
 
 - Tutorial: `Getting Started
   <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_1_getting_started.ipynb>`_

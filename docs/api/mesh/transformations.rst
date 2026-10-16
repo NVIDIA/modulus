@@ -30,8 +30,8 @@ mesh and keep its connectivity:
        :func:`~physicsnemo.mesh.projections.project`
 
 Each function is also a ``Mesh`` method, except the projections and the two
-matrix builders. See :doc:`deformation` for penalty energies that keep a
-deformation well shaped, and the tutorial `Mesh Operations
+matrix builders. Refer to :doc:`deformation` for penalty energies that keep a
+deformation well shaped, and to the tutorial `Mesh Operations
 <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_4_operations.ipynb>`_.
 
 Geometric Transformations
@@ -39,23 +39,24 @@ Geometric Transformations
 
 .. currentmodule:: physicsnemo.mesh.transformations.geometric
 
-Linear and affine transformations on mesh geometry. Each function returns a
-new :class:`~physicsnemo.mesh.mesh.Mesh` with transformed point coordinates
-and the same connectivity.
+These functions apply linear and affine transformations to mesh geometry.
+Each function returns a new :class:`~physicsnemo.mesh.mesh.Mesh` with
+transformed point coordinates and the same connectivity.
 
 By default, :func:`rotate`, :func:`scale`, and :func:`transform` leave
 ``point_data``, ``cell_data``, and ``global_data`` unchanged. To transform
 vector and tensor fields with the mesh, pass ``transform_point_data``,
-``transform_cell_data``, or ``transform_global_data``: ``True`` transforms
+``transform_cell_data``, or ``transform_global_data``. ``True`` transforms
 every field whose shape fits, and a ``dict`` of booleans selects fields by
-name (see :doc:`fields`). :func:`translate` does not change data.
+name. For more information, refer to :doc:`fields`. :func:`translate` does
+not change data.
 
 Topology caches carry over to the new mesh. Cached cell areas, normals, and
 centroids are updated from the matrix where possible. Other cached geometry,
 such as curvature, is recomputed on next access.
 
 All transformations are also available as methods on
-:class:`~physicsnemo.mesh.mesh.Mesh`.
+:class:`~physicsnemo.mesh.mesh.Mesh`, as the following example shows:
 
 .. code:: python
 
@@ -116,10 +117,11 @@ caches and recompute them lazily. They retain topology caches.
    :meth:`~physicsnemo.mesh.domain_mesh.DomainMesh.validate` explicitly when a
    deformation could compromise validity.
 
-Dense displacement accepts a tensor or a point-data key (including a nested
-tuple key). The operation returns a new mesh without changing ``mesh.points``.
+Dense displacement accepts a tensor or a point-data key, including a nested
+tuple key. The operation returns a new mesh without changing ``mesh.points``.
 Assigning a point-data key, as in the second example below, is a separate,
-explicit mutation of the source mesh's attached data.
+explicit mutation of the source mesh's attached data. The following example
+shows both forms:
 
 .. code:: python
 
@@ -186,13 +188,17 @@ gradients. The Warp implementation runs on CUDA and supplies an explicit
 implicit-adjoint backward with an analytic geometry vector-Jacobian product.
 By default, CUDA segments, triangles, and tetrahedra select Warp when it is
 available. CPU meshes and higher-dimensional simplices select Torch.
-``max_iterations`` and ``tolerance`` control the iterative solve. The operation
-raises an error if either the forward or adjoint solve does not reach the
-requested tolerance. At positive length scales, cells must be finite,
-nondegenerate simplices. Isolated points receive their raw displacement.
-CUDA Graph capture is not supported because P1 operator assembly and solver
-diagnostics are not capture-safe. Both backends support ``torch.compile``.
-Warp CUDA results and point gradients may vary at roundoff between runs.
+``max_iterations`` and ``tolerance`` control the iterative solve. Keep the
+following behavior in mind:
+
+- The operation raises an error if either the forward or adjoint solve does
+  not reach the requested tolerance.
+- At positive length scales, cells must be finite, nondegenerate simplices.
+- Isolated points receive their raw displacement.
+- CUDA Graph capture is not supported because P1 operator assembly and solver
+  diagnostics are not capture-safe.
+- Both backends support ``torch.compile``.
+- Warp CUDA results and point gradients may vary at roundoff between runs.
 
 .. rubric:: Before and After
 
@@ -300,7 +306,7 @@ are not validated at runtime. When a model learns the radius, use a positive
 parameterization such as
 ``torch.nn.functional.softplus(raw_radius) + radius_epsilon`` rather than
 optimizing an unconstrained radius directly. Floating ``point_weights`` are
-used as supplied and may be signed or greater than one.
+used as supplied and can be signed or greater than one.
 
 .. rubric:: Visualization
 
@@ -316,9 +322,10 @@ and magnitudes.
 Global Radial-Basis Deformation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Radial-basis deformation fits one global displacement field through sparse
-handles. With zero smoothing and a nonsingular control layout, the fitted field
-interpolates each prescribed control displacement up to solver precision.
+Radial basis function (RBF) deformation fits one global displacement field
+through sparse handles. With zero smoothing and a nonsingular control layout,
+the fitted field interpolates each prescribed control displacement up to
+solver precision.
 Optional point weights are applied after interpolation. Unlike compact Shepard
 morphing, every control generally influences every point. Fixed controls are
 therefore useful as anchors.
@@ -336,8 +343,9 @@ https://doi.org/10.1109/34.24792
 .. rubric:: Two-Dimensional Example
 
 A mesh with ``n_spatial_dims=2`` requires at least three non-collinear controls
-when the affine tail is enabled. This example fixes the four corners of a
-triangulated square and moves a fifth handle at the midpoint of its upper edge.
+when the affine tail is enabled. The following example fixes the four corners
+of a triangulated square and moves a fifth handle at the midpoint of its upper
+edge:
 
 .. code:: python
 
@@ -380,8 +388,8 @@ position.
 .. rubric:: Three-Dimensional Example
 
 In three dimensions, the affine tail requires at least four controls spanning
-the coordinate space. Practical layouts usually use more. The sphere example
-uses its six axis-extreme vertices as controls.
+the coordinate space. Practical layouts usually use more. The following
+sphere example uses its six axis-extreme vertices as controls:
 
 .. code:: python
 
@@ -420,7 +428,7 @@ interpolation accuracy.
 
 Both evaluation backends use PyTorch for the dense coefficient solve. The Warp
 backend fuses evaluation over the mesh points without materializing its full
-point/control kernel matrix.
+kernel matrix between points and controls.
 
 Orange controls are fixed anchors. Green controls mark moved handles, and the
 arrows show their displacement directions. The labels give the prescribed
@@ -449,13 +457,19 @@ Validating an automatically derived extent synchronizes with the device and is
 not CUDA Graph capture-safe. For capture, pass both ``origin`` and ``extent``
 as device tensors.
 
-``basis="bernstein"`` provides classic global-support free-form deformation for
-coarse lattices. ``basis="bspline"`` provides local four-node-per-axis support
-and scales to fine lattices for local sculpting. Its first and last coefficient
-planes lie one knot spacing outside the evaluation box. ``basis="linear"``,
-``"cubic_hermite"``, and ``"quintic_hermite"`` instead use the two neighboring
-nodes per axis and reproduce every control displacement at its lattice node.
-For a local cell coordinate :math:`t`, their upper-node weights are
+The ``basis`` argument accepts the following options:
+
+- ``basis="bernstein"`` provides classic global-support free-form deformation
+  for coarse lattices.
+- ``basis="bspline"`` provides local four-node-per-axis support and scales to
+  fine lattices for local sculpting. Its first and last coefficient planes lie
+  one knot spacing outside the evaluation box.
+- ``basis="linear"``, ``"cubic_hermite"``, and ``"quintic_hermite"`` instead
+  use the two neighboring nodes for each axis and reproduce every control
+  displacement at its lattice node.
+
+For a local cell coordinate :math:`t`, the upper-node weights of these three
+node-interpolating bases are
 :math:`t`, :math:`3t^2-2t^3` (cubic Hermite), and
 :math:`6t^5-15t^4+10t^3` (quintic Hermite), respectively. The lower-node
 weight is one minus the upper-node weight. The resulting fields are C0, C1,
@@ -485,8 +499,8 @@ instead.
 .. rubric:: Visualization
 
 The panels compare the original sphere with two lattice deformations. A coarse
-Bernstein lattice tapers the whole sphere because every node acts globally,
-while three independently displaced regions in a finer cubic B-spline lattice
+Bernstein lattice tapers the whole sphere because every node acts globally.
+In a finer cubic B-spline lattice, three independently displaced regions
 produce two local bulges and a local indentation.
 
 .. figure:: ../../img/mesh/sphere_ffd.png
@@ -534,11 +548,16 @@ Color shows how far each source vertex moved.
    :width: 100%
 
 Nearest-face selection and closest-feature changes are discrete. With those
-choices fixed, gradients propagate through source points, selected target
-vertices, floating point weights, and a tensor-valued ``offset``. At a shared
-edge or vertex, adjacent faces can provide different normals. Use consistently
-oriented target faces and avoid placing offset-sensitive samples exactly on
-shared features.
+choices fixed, gradients propagate through the following inputs:
+
+- Source points
+- Selected target vertices
+- Floating-point weights
+- A tensor-valued ``offset``
+
+At a shared edge or vertex, adjacent faces can provide different normals. Use
+consistently oriented target faces and avoid placing offset-sensitive samples
+exactly on shared features.
 
 The source points and the target must be in 3D. Torch provides the reference
 search. By default (``implementation=None``), shrinkwrap searches with Torch
@@ -549,9 +568,9 @@ Shrinkwrap is available on :class:`~physicsnemo.mesh.mesh.Mesh`, not
 :class:`~physicsnemo.mesh.domain_mesh.DomainMesh`, because one source mesh is
 projected onto one target surface.
 
-Float64 targets use the Torch search because Warp searches in float32. Safe
-float32 coordinates are searched unchanged. Warp falls back to Torch for
-unsafe coordinate magnitudes or face geometry.
+``float64`` targets use the Torch search because Warp searches in
+``float32``. Safe ``float32`` coordinates are searched unchanged. Warp falls
+back to Torch for unsafe coordinate magnitudes or face geometry.
 
 Shrinkwrap performs data-dependent validation and nearest-face search setup.
 CUDA executions with either backend are not supported inside CUDA Graph
@@ -581,12 +600,18 @@ only the violating vertices back to the limit. After repair, the cap is green,
 the gold optimized surface is retained, and an orange wire outline marks the
 former excess.
 
-All connectivity is triangular. The example checks the repaired-cap residual,
-exact preservation of admissible vertices, closed two-manifold source and
-result connectivity, consistent winding, positive enclosed volume, adjoints,
-and Torch versus Warp agreement. Shrinkwrap restores this geometric
-constraint. It does not run the optimizer or guarantee valid cells for
-arbitrary inputs.
+All connectivity is triangular. The example checks the following properties:
+
+- The repaired-cap residual
+- Exact preservation of admissible vertices
+- Closed two-manifold source and result connectivity
+- Consistent winding
+- Positive enclosed volume
+- Adjoints
+- Agreement between Torch and Warp
+
+Shrinkwrap restores this geometric constraint. It does not run the optimizer
+or guarantee valid cells for arbitrary inputs.
 
 .. figure:: ../../img/mesh/shrinkwrap_solid_surface.png
    :alt: Selective repair of an optimized enclosure crossing a clearance plane
@@ -598,17 +623,18 @@ Domain Meshes
 :meth:`~physicsnemo.mesh.domain_mesh.DomainMesh.morph` evaluates one
 world-coordinate control field on the interior and every named boundary. With
 ``point_weights=None``, coincident component points receive identical motion.
-Domain point weights must instead be a point-data key (or nested tuple key)
+Domain point weights must instead be a point-data key, or a nested tuple key,
 present in every component. Raw weight tensors are rejected because component
 point counts can differ. Every resolved field must use one common dtype across
-the domain: bool for a hard mask, or the same floating dtype as the mesh points.
-Coincident points remain coincident under a point-weight key only when their
+the domain: ``bool`` for a hard mask, or the same floating dtype as the mesh
+points. Coincident points remain coincident under a point-weight key only when their
 resolved values also match.
 
 :meth:`~physicsnemo.mesh.domain_mesh.DomainMesh.radial_basis_function_deform`
 follows the same component and point-weight rules while fitting one global RBF
 field. The coefficient system is solved once, and the combined interior and
 boundary points are evaluated together before the component meshes are rebuilt.
+The following example morphs a domain with a point-weight key:
 
 .. code:: python
 
@@ -653,7 +679,7 @@ same pattern for lattice free-form deformation:
 The combined bounds must have positive range on every coordinate axis unless
 an explicit extent is supplied.
 
-For optimization-time geometric penalties on a fixed topology, see
+For optimization-time geometric penalties on a fixed topology, refer to
 :doc:`deformation`.
 
 .. autofunction:: displace
@@ -684,9 +710,8 @@ Projections
     flat = project(in_3d, target_n_spatial_dims=2)  # drops z
     print(in_3d.n_spatial_dims, prism.n_manifold_dims, flat.n_spatial_dims)  # 3 3 2
 
-These functions change the spatial dimension of a mesh (:func:`embed`,
-:func:`project`), or extrude it into a mesh one manifold dimension higher
-(:func:`extrude`).
+These functions change the spatial dimension of a mesh, or extrude it into a
+mesh one manifold dimension higher:
 
 - :func:`embed`: add spatial dimensions without loss, for example from 2D to
   3D by appending zero coordinates.
