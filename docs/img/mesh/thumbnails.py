@@ -198,9 +198,14 @@ def fields():
     surface["pressure"] = rotated.point_data["pressure"].numpy()
     actors = [
         (_edges(square, 0.006, z=-0.01), _flat("#555555")),
-        (surface, _flat(None, scalars="pressure", cmap=S.SEQUENTIAL, show_scalar_bar=False)),
+        (
+            surface,
+            _flat(None, scalars="pressure", cmap=S.SEQUENTIAL, show_scalar_bar=False),
+        ),
         (_edges(rotated, 0.004, z=0.005), _flat(S.EDGE)),
-        _arrows(rotated.points, rotated.point_data["velocity"], 0.22, "#ffffff", z=0.02),
+        _arrows(
+            rotated.points, rotated.point_data["velocity"], 0.22, "#ffffff", z=0.02
+        ),
     ]
     return actors, "2d"
 
@@ -226,7 +231,9 @@ def io():
 def generate():
     """mesh_implicit_domain on a box minus a disk, with the boundary in vermillion."""
 
-    phi = sdf_difference(sdf_box([-1.6, -1.0], [1.6, 1.0]), sdf_sphere([0.35, 0.0], 0.5))
+    phi = sdf_difference(
+        sdf_box([-1.6, -1.0], [1.6, 1.0]), sdf_sphere([0.35, 0.0], 0.5)
+    )
     mesh = mesh_implicit_domain(phi, ([-1.6, -1.0], [1.6, 1.0]), 0.12)
     return [
         (_pv(mesh), _flat(S.SURFACE)),
@@ -267,7 +274,10 @@ def tessellation():
          for o, n in zip(polygons.offsets[:-1].tolist(), sizes.tolist())]
     )  # fmt: skip
     actors.append(
-        (_edges(Mesh(points=points, cells=outline), 0.022, z=0.02), _flat(S.SURFACE_EDGE))
+        (
+            _edges(Mesh(points=points, cells=outline), 0.022, z=0.02),
+            _flat(S.SURFACE_EDGE),
+        )
     )
     return actors, "2d"
 
@@ -290,7 +300,13 @@ def deformation():
 
     sphere = sphere_icosahedral.load(subdivisions=3)
     anchors = torch.tensor(
-        [[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -1.0, 0.0]]
+        [
+            [0.0, 0.0, -1.0],
+            [1.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, -1.0, 0.0],
+        ]
     )
     handle = torch.tensor([[0.0, 0.0, 1.0]])
     controls = torch.cat([anchors, handle])
@@ -300,7 +316,10 @@ def deformation():
     return [
         _surface(pulled),
         (S.spheres((anchors * 1.02).numpy(), 0.085), _shaded(S.FIXED, ambient=0.6)),
-        (S.spheres((handle + displacements[-1:]).numpy() * 1.02, 0.1), _shaded(S.RESULT, ambient=0.6)),
+        (
+            S.spheres((handle + displacements[-1:]).numpy() * 1.02, 0.1),
+            _shaded(S.RESULT, ambient=0.6),
+        ),
     ], "3d"
 
 
@@ -339,7 +358,9 @@ def smoothing():
     smooth = smooth_laplacian(rough, n_iter=40, relaxation_factor=0.3)
     # Blend from rough (left) to smooth (right), so the surface stays one piece.
     weight = torch.sigmoid(10.0 * (rough.points @ torch.tensor([1.0, 0.7, 0.0])))
-    blended = rough.with_points(rough.points + weight[:, None] * (smooth.points - rough.points))
+    blended = rough.with_points(
+        rough.points + weight[:, None] * (smooth.points - rough.points)
+    )
     return [_surface(blended)], "3d"
 
 
@@ -385,7 +406,9 @@ def boundaries():
 def geometry():
     """Circumcentric dual edges over a triangle mesh, with one dual cell filled."""
 
-    mesh = mesh_implicit_domain(sdf_box([-1.5, -1.0], [1.5, 1.0]), ([-1.5, -1.0], [1.5, 1.0]), 0.6)
+    mesh = mesh_implicit_domain(
+        sdf_box([-1.5, -1.0], [1.5, 1.0]), ([-1.5, -1.0], [1.5, 1.0]), 0.6
+    )
     centers = compute_circumcenters(mesh.points[mesh.cells])
     source, target = mesh.get_cell_to_cells_adjacency().expand_to_pairs()
     pairs = torch.stack([source, target], 1)
@@ -673,7 +696,9 @@ def main():
     OUTPUT.mkdir(exist_ok=True)
     for name in names:
         path = OUTPUT / f"{name}.png"
-        render(name).quantize(colors=256).save(path, optimize=True)
+        render(name).quantize(colors=256, method=Image.Quantize.FASTOCTREE).save(
+            path, optimize=True
+        )
         print(f"Saved {path} ({path.stat().st_size / 1024:.0f} KB)")
 
 

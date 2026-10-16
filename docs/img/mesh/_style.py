@@ -146,9 +146,10 @@ def spheres(points, radius: float):
 def save(figure, path: Path, tight: bool = False, full_color: bool = False) -> None:
     """Save a figure as an opaque white PNG, and report its size.
 
-    The image is reduced to a 256-color palette, which keeps the file small. Pass
-    ``full_color=True`` for figures with smooth color gradients, where a palette
-    shows bands.
+    The image is reduced to a 256-color palette, which keeps the file small. The
+    octree method keeps small accent colors true, where median cut would merge them
+    into the shading. Pass ``full_color=True`` for figures with smooth color
+    gradients, where a palette shows bands.
     """
 
     path = Path(path)
@@ -158,6 +159,6 @@ def save(figure, path: Path, tight: bool = False, full_color: bool = False) -> N
     plt.close(figure)
     image = Image.open(path).convert("RGB")
     if not full_color:
-        image = image.quantize(colors=256)
+        image = image.quantize(colors=256, method=Image.Quantize.FASTOCTREE)
     image.save(path, optimize=True)
     print(f"Saved {path} ({path.stat().st_size / 1024:.0f} KB)")

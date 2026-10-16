@@ -151,7 +151,9 @@ def main():
     figure.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.94)
     figure.savefig(OUTPUT, dpi=160, facecolor="white")
     # A 256-color palette keeps the file small and looks the same.
-    Image.open(OUTPUT).convert("RGB").quantize(colors=256).save(OUTPUT, optimize=True)
+    Image.open(OUTPUT).convert("RGB").quantize(
+        colors=256, method=Image.Quantize.FASTOCTREE
+    ).save(OUTPUT, optimize=True)
     plt.close(figure)
     print(f"Saved {OUTPUT}")
 

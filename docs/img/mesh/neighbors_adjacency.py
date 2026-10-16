@@ -155,7 +155,9 @@ def main():
     )
     figure.savefig(OUTPUT, dpi=160, facecolor="white")
     # A 256-color palette keeps the file small and looks the same.
-    Image.open(OUTPUT).convert("RGB").quantize(colors=256).save(OUTPUT, optimize=True)
+    Image.open(OUTPUT).convert("RGB").quantize(
+        colors=256, method=Image.Quantize.FASTOCTREE
+    ).save(OUTPUT, optimize=True)
     plt.close(figure)
     print(f"Saved {OUTPUT}")
 

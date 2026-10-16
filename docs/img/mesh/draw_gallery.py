@@ -51,7 +51,9 @@ def main():
     axes = grid.ravel()
 
     planar.draw(show=False, ax=axes[0], cell_scalars="pressure")
-    axes[0].set_title(f'draw(cell_scalars="pressure")\n{S.mesh_label(planar, "triangles")}')
+    axes[0].set_title(
+        f'draw(cell_scalars="pressure")\n{S.mesh_label(planar, "triangles")}'
+    )
 
     planar.draw(show=False, ax=axes[1], point_scalars="temperature")
     axes[1].set_title(
@@ -86,7 +88,7 @@ def main():
     )
     axes[2].set_title(
         f'draw(point_scalars="height", backend="pyvista")\n'
-        f'{S.mesh_label(surface, "triangles")}'
+        f"{S.mesh_label(surface, 'triangles')}"
     )
 
     planar.draw(show=False, ax=axes[3], point_scalars="velocity")
@@ -97,7 +99,9 @@ def main():
 
     for axis in axes:
         S.clean_axis(axis)
-    figure.subplots_adjust(left=0.01, right=0.95, bottom=0.02, top=0.93, wspace=0.12, hspace=0.22)
+    figure.subplots_adjust(
+        left=0.01, right=0.95, bottom=0.02, top=0.93, wspace=0.12, hspace=0.22
+    )
     S.save(figure, OUTPUT, tight=True)
 
 
