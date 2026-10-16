@@ -20,6 +20,7 @@ import warnings
 
 import numpy as np
 import pytest
+import torch
 
 pv = pytest.importorskip("pyvista")
 
@@ -400,6 +401,89 @@ class TestCellCentroidsDualGraph:
         assert mesh.n_manifold_dims == 1
         assert mesh.n_points == 3  # 3 segments -> 3 centroids
         assert mesh.n_cells == 2  # consecutive segments share a vertex
+
+    @staticmethod
+    def _simplex_dual_graph_cases() -> dict[str, "pv.DataSet"]:
+        rng = np.random.default_rng(0)
+        tets = pv.PolyData(rng.random((60, 3))).delaunay_3d()
+        # Shuffle the cells and permute each cell's vertices.
+        tet_cells = np.asarray(tets.cell_connectivity).reshape(-1, 4)
+        tet_cells = tet_cells[rng.permutation(len(tet_cells))][:, [2, 0, 3, 1]]
+        return {
+            "tet delaunay": tets,
+            "tet shuffled": pv.UnstructuredGrid(
+                {pv.CellType.TETRA: tet_cells}, tets.points
+            ),
+            "tri plane": pv.Plane(i_resolution=4, j_resolution=3).triangulate(),
+            # Four triangles share edge (0, 1); the last cell duplicates the first.
+            "tri non-manifold": pv.PolyData.from_regular_faces(
+                rng.random((7, 3)),
+                np.array(
+                    [[0, 1, 2], [1, 0, 3], [0, 1, 4], [5, 1, 0], [1, 2, 6], [0, 1, 2]]
+                ),
+            ),
+            "tri grid": pv.UnstructuredGrid(
+                {pv.CellType.TRIANGLE: np.array([[0, 1, 2], [2, 1, 3], [3, 1, 0]])},
+                rng.random((4, 3)),
+            ),
+            # Five lines share vertex 0.
+            "line star": pv.UnstructuredGrid(
+                {pv.CellType.LINE: np.array([[0, 1], [2, 0], [0, 3], [4, 0], [0, 5]])},
+                rng.random((6, 3)),
+            ),
+            "line polydata": pv.PolyData(
+                rng.random((5, 3)), lines=np.array([2, 0, 1, 2, 1, 2, 2, 3, 2, 2, 2, 4])
+            ),
+        }
+
+    @pytest.mark.parametrize(
+        "case",
+        [
+            "tet delaunay",
+            "tet shuffled",
+            "tri plane",
+            "tri non-manifold",
+            "tri grid",
+            "line star",
+            "line polydata",
+        ],
+    )
+    @pytest.mark.parametrize("packed_keys", [True, False])
+    def test_simplex_fast_path_matches_vtk_loop(self, case, packed_keys, monkeypatch):
+        """The vectorized LINE/TRIANGLE/TETRA path gives the VTK loop's edges, in
+        order, both with packed int64 facet keys and with the tuple-lexsort fallback."""
+        import physicsnemo.mesh.io.io_pyvista as io_pyvista
+
+        pv_mesh = self._simplex_dual_graph_cases()[case]
+        simplex_cells = io_pyvista._homogeneous_simplex_cells(pv_mesh)
+        assert simplex_cells is not None
+        local_facets = io_pyvista._SIMPLEX_FACETS[simplex_cells.shape[1]]
+        assert io_pyvista._packed_facet_keys(simplex_cells, local_facets) is not None
+        if not packed_keys:
+            monkeypatch.setattr(io_pyvista, "_packed_facet_keys", lambda *_: None)
+        assert io_pyvista._simplex_dual_graph_edges(simplex_cells) is not None
+        fast = io_pyvista._build_dual_graph_edges(pv_mesh)
+
+        monkeypatch.setattr(io_pyvista, "_homogeneous_simplex_cells", lambda _: None)
+        reference = io_pyvista._build_dual_graph_edges(pv_mesh)
+
+        assert len(reference) > 0
+        assert fast.dtype == reference.dtype == torch.long
+        assert torch.equal(fast, reference)
+
+    def test_packed_facet_keys_fall_back_on_overflow(self):
+        """Facet keys that could overflow int64 are not packed."""
+        from physicsnemo.mesh.io.io_pyvista import _SIMPLEX_FACETS, _packed_facet_keys
+
+        cells = np.array([[0, 1, 2, 3], [1, 2, 3, 2**21]])
+        assert _packed_facet_keys(cells, _SIMPLEX_FACETS[4]) is None
+        assert _packed_facet_keys(cells[:, :3], _SIMPLEX_FACETS[3]) is not None
+
+    def test_simplex_fast_path_falls_back_on_repeated_vertex(self):
+        """A cell that repeats a vertex is left to the VTK loop."""
+        from physicsnemo.mesh.io.io_pyvista import _simplex_dual_graph_edges
+
+        assert _simplex_dual_graph_edges(np.array([[0, 1, 2], [1, 1, 3]])) is None
 
 
 # ---------------------------------------------------------------------------
