@@ -16,6 +16,8 @@
 
 """Tests for immutable Mesh field-data replacement."""
 
+import numpy as np
+import pytest
 import torch
 
 from physicsnemo.mesh import Mesh
@@ -91,6 +93,24 @@ def test_with_data_dict_does_not_alias_source_groups():
 
     assert torch.equal(mesh.point_data["flow", "p"], torch.tensor([1.0, 2.0, 3.0]))
     assert "added" not in mesh.point_data["flow"]
+
+
+def test_with_data_accepts_pyvista_data_set_attributes():
+    pv = pytest.importorskip("pyvista")
+    pv_mesh = pv.PolyData.from_regular_faces(np.eye(3), np.array([[0, 1, 2]]))
+    pv_mesh.point_data["prediction"] = np.array([6.0, 7.0, 8.0])
+    pv_mesh.cell_data["error"] = np.array([9.0])
+    pv_mesh.field_data["case"] = np.array([10.0])
+
+    result = _mesh_with_data().with_data(
+        point_data=pv_mesh.point_data,
+        cell_data=pv_mesh.cell_data,
+        global_data=pv_mesh.field_data,
+    )
+
+    assert result.point_data["prediction"].tolist() == [6.0, 7.0, 8.0]
+    assert result.cell_data["error"].tolist() == [9.0]
+    assert result.global_data["case"].tolist() == [10.0]
 
 
 def test_with_data_empty_mapping_clears_association():

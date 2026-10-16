@@ -2199,8 +2199,10 @@ class Mesh(
                 return current.copy()
             if isinstance(value, TensorDict):
                 return value.copy()
-            # A dict may hold the source's nested TensorDicts; copy them too.
-            return TensorDict(value).copy()
+            # dict() unwraps mappings that TensorDict rejects, such as PyVista's
+            # DataSetAttributes, as the constructor does. A dict may hold the
+            # source's nested TensorDicts, so copy them too.
+            return TensorDict(dict(value)).copy()
 
         return replace(
             self,
