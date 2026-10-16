@@ -340,13 +340,15 @@ points or node centroids.
 The features arrive packed: before any phase runs, the kernel packs the
 scalar leaves and then the vector leaves of `source_data` into one
 `(N_sources, n_scalars + n_vectors * D)` tensor, and those of `global_data`
-into one vector, in a fixed column order.  The node aggregates are computed
-from the packed tensor and stay packed.  Each phase then gathers one row per
-pair, and the feature engineering works on `(N_pairs, n_vectors, D)` and
-`(N_pairs, n_scalars)` tensors: one operation per step for all features,
-where a TensorDict of features would take one per leaf.  The outputs are
-packed too, one column per scalar field and D per vector field, and a
-`tensordict.PackLayout` turns the packed result back into named fields.
+into one vector, with `TensorDict.pack` and a `PackLayout` that the kernel
+builds from its schemas, so the column order is fixed.  The node aggregates
+are computed from the packed tensor and stay packed.  Each phase then gathers
+one row per pair, and the feature engineering works on
+`(N_pairs, n_vectors, D)` and `(N_pairs, n_scalars)` tensors: one operation
+per step for all features, where a TensorDict of features would take one per
+leaf.  The outputs are packed too, one column per scalar field and D per
+vector field, and a `tensordict.PackLayout` turns the packed result back into
+named fields.
 
 ### 5.1 Phase A: Near-Field (Individual Pairs)
 

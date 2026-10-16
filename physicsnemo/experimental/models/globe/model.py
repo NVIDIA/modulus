@@ -752,7 +752,9 @@ class GLOBE(Module):
             ### enforced by ``FieldSchema.check`` at ``GLOBE.forward``
             ### entry.
             kernel_source_keys = kernel.source_schema.keys() - {"normals"}
-            source_data = mesh.cell_data.flatten_keys().select(*kernel_source_keys)
+            source_data = mesh.cell_data.select(
+                *(FieldSchema.key(name) for name in kernel_source_keys)
+            )
             source_data["normals"] = mesh.cell_normals
 
             piece = kernel.forward_packed(

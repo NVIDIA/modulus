@@ -121,7 +121,8 @@ def _sort_key(key: NestedKey) -> str:
     prefix.  The network's input and output columns follow this order, so
     changing it would scramble the columns of every trained checkpoint.
     (:meth:`TensorDict.pack <tensordict.TensorDictBase.pack>` sorts nested
-    keys as dotted strings, which disagrees for some keys.)
+    keys as dotted strings, which disagrees for some keys, so the kernels
+    pack with layouts in this order; see :func:`_input_layout`.)
 
     Parameters
     ----------
@@ -136,61 +137,81 @@ def _sort_key(key: NestedKey) -> str:
     return str(("_", *((key,) if isinstance(key, str) else key)))
 
 
-def _pack_features(
-    td: TensorDict, device: torch.device
-) -> tuple[Float[torch.Tensor, "*batch n_features"], int, int]:
-    r"""Pack the scalar leaves of ``td``, then its vector leaves, into one tensor.
+def _input_layout(
+    schema: FieldSchema, n_spatial_dims: int, *, sort_dotted_names: bool
+) -> PackLayout:
+    r"""Layout in which the kernels pack one group of input features.
 
-    Each group is ordered by :func:`_sort_key`.  Vector leaves keep their
-    components together, so the :math:`N_v D` vector columns reshape to
-    :math:`(*, N_v, D)`.  One gather of the packed tensor replaces one per
-    leaf, and the evaluation code works on the packed groups instead of on a
-    TensorDict per leaf.
+    The scalar fields come first, then the vector fields, each group in
+    :func:`_sort_key` order.  The network's input columns follow this order,
+    so trained checkpoints depend on it.  Leaves are keyed by the nested keys
+    of :meth:`FieldSchema.key <physicsnemo.mesh.FieldSchema.key>`.  Vector
+    leaves keep their components together, so the :math:`N_v D` vector
+    columns reshape to :math:`(*, N_v, D)`.
+
+    Parameters
+    ----------
+    schema : FieldSchema
+        The scalar and vector fields of the group.
+    n_spatial_dims : int
+        Number of components of each vector field.
+    sort_dotted_names : bool
+        Whether to order the fields by their dotted names instead of their
+        nested keys.  This keeps the column order of earlier versions, which
+        saw source features with flattened keys and global features with
+        nested keys.  The two orders differ only for unusual names.
+
+    Returns
+    -------
+    PackLayout
+        Layout for :meth:`TensorDict.pack <tensordict.TensorDictBase.pack>`,
+        whose packed tensor has shape :math:`(*, N_s + N_v D)` for
+        :math:`N_s` scalar and :math:`N_v` vector fields.
+    """
+    ranks = schema.ranks
+
+    def order(name: str) -> str:
+        return _sort_key(name if sort_dotted_names else FieldSchema.key(name))
+
+    names = sorted((n for n in ranks if ranks[n] == 0), key=order) + sorted(
+        (n for n in ranks if ranks[n] == 1), key=order
+    )
+    return PackLayout(
+        keys=tuple(FieldSchema.key(n) for n in names),
+        shapes=tuple(() if ranks[n] == 0 else (n_spatial_dims,) for n in names),
+    )
+
+
+def _pack_inputs(
+    td: TensorDict, layout: PackLayout, device: torch.device
+) -> Float[torch.Tensor, "*batch n_features"]:
+    r"""Pack ``td`` in ``layout``, with an empty result on ``device`` if ``layout`` has no fields.
 
     Parameters
     ----------
     td : TensorDict
-        Features with :math:`N_s` scalar leaves of shape :math:`(*)`, the
-        batch shape of ``td``, and :math:`N_v` vector leaves of shape
-        :math:`(*, D)`.
+        Features whose leaves are exactly the fields of ``layout``.
+    layout : PackLayout
+        Layout from :func:`_input_layout`.
     device : torch.device
-        Device of the empty result when ``td`` has no leaves.
+        Device of the empty result: a tensordict packs its own fields only.
 
     Returns
     -------
-    tuple[torch.Tensor, int, int]
-        The packed tensor of shape :math:`(*, N_s + N_v D)`, :math:`N_s`, and
-        :math:`N_v`.
+    Float[torch.Tensor, "*batch n_features"]
+        The packed features, of shape :math:`(*, F)`.
 
     Raises
     ------
+    KeyError
+        If the leaves of ``td`` differ from the fields of ``layout``.
     ValueError
-        If a leaf has rank 2 or more.
+        If a leaf has another shape than its field.
     """
-    batch_dims = td.batch_dims
-    scalar_keys: list[NestedKey] = []
-    vector_keys: list[NestedKey] = []
-    for key, value in td.items(include_nested=True, leaves_only=True):
-        rank = value.ndim - batch_dims
-        if rank == 0:
-            scalar_keys.append(key)
-        elif rank == 1:
-            vector_keys.append(key)
-        else:
-            raise ValueError(
-                f"Feature {key!r} has rank {rank}; the kernels take scalars "
-                f"(rank 0) and vectors (rank 1) only."
-            )
-    if not scalar_keys and not vector_keys:
-        return torch.zeros(td.batch_size + (0,), device=device), 0, 0
-    scalar_keys.sort(key=_sort_key)
-    vector_keys.sort(key=_sort_key)
-    packed = torch.cat(
-        [td.get(key).unsqueeze(-1) for key in scalar_keys]
-        + [td.get(key) for key in vector_keys],
-        dim=-1,
-    )
-    return packed, len(scalar_keys), len(vector_keys)
+    flat, _ = td.pack(layout=layout)
+    if not layout.keys:
+        return torch.zeros(td.batch_size + (0,), device=device)
+    return flat
 
 
 def _dipole_directions(
@@ -446,13 +467,14 @@ class Kernel(Module):
     source_data : TensorDict or None, optional, default=None
         Per-source features with ``batch_size=(N_sources,)``. Contains a mix
         of scalar (rank-0) and vector (rank-1) tensors; the kernel packs
-        them into one tensor before evaluating. Leaf keys and ranks
-        must match ``source_schema``. All values must be dimensionless.
+        them into one tensor before evaluating. Its leaves must be exactly
+        the fields of ``source_schema``, under their nested keys (a field
+        ``"a.b"`` at ``("a", "b")``). All values must be dimensionless.
     global_data : TensorDict or None, optional, default=None
         Problem-level features with ``batch_size=()``. Contains a mix of
         scalar (rank-0) and vector (rank-1) tensors, packed the same way.
-        Leaf keys and ranks must match ``global_schema``. All values
-        must be dimensionless.
+        Its leaves must be exactly the fields of ``global_schema``. All
+        values must be dimensionless.
 
     Outputs
     -------
@@ -561,6 +583,12 @@ class Kernel(Module):
         ### Static description of the packed features (see
         ### ``_evaluate_packed``), built here so that compiled code only
         ### reads it.
+        self._source_layout = _input_layout(
+            self.source_schema, n_spatial_dims, sort_dotted_names=True
+        )
+        self._global_layout = _input_layout(
+            self.global_schema, n_spatial_dims, sort_dotted_names=False
+        )
         self._n_source_scalars = self.source_schema.count(0)
         self._n_source_vectors = self.source_schema.count(1)
         self._n_global_scalars = self.global_schema.count(0)
@@ -676,44 +704,6 @@ class Kernel(Module):
             + 2 * (n_vectors_in - 1)  # All non-r vectors
         )
 
-    def _check_feature_counts(
-        self,
-        *,
-        n_source_scalars: int,
-        n_source_vectors: int,
-        n_global_scalars: int,
-        n_global_vectors: int,
-    ) -> None:
-        r"""Raise if the packed features do not match the kernel's schemas.
-
-        Parameters
-        ----------
-        n_source_scalars : int
-            Number of scalar source features given.
-        n_source_vectors : int
-            Number of vector source features given.
-        n_global_scalars : int
-            Number of scalar global features given.
-        n_global_vectors : int
-            Number of vector global features given.
-
-        Raises
-        ------
-        ValueError
-            If a count differs from the kernel's schemas.
-        """
-        for name, (actual, expected) in {
-            "source scalars": (n_source_scalars, self._n_source_scalars),
-            "source vectors": (n_source_vectors, self._n_source_vectors),
-            "global scalars": (n_global_scalars, self._n_global_scalars),
-            "global vectors": (n_global_vectors, self._n_global_vectors),
-        }.items():
-            if actual != expected:
-                raise ValueError(
-                    f"This kernel was instantiated to expect {expected} {name},\n"
-                    f"but the forward-method input gives {actual} {name}."
-                )
-
     def _split_source_features(
         self, features: Float[torch.Tensor, "*batch n_features"]
     ) -> tuple[
@@ -789,15 +779,13 @@ class Kernel(Module):
             associated with each source point. Defaults to all ones if ``None``.
         source_data : TensorDict or None, optional
             Per-source features with ``batch_size=(N_sources,)``. Contains a
-            mix of scalar (rank-0) and vector (rank-1) tensors. Scalar count
-            must match ``n_source_scalars``; vector count must match
-            ``n_source_vectors``. All values must be dimensionless.
+            mix of scalar (rank-0) and vector (rank-1) tensors, exactly the
+            fields of ``source_schema``. All values must be dimensionless.
             ``None`` (the default) indicates no per-source features.
         global_data : TensorDict or None, optional
             Problem-level features with ``batch_size=()``. Contains a mix of
-            scalar (rank-0) and vector (rank-1) tensors.
-            Scalar count must match ``n_global_scalars``; vector count must
-            match ``n_global_vectors``. All values must be dimensionless.
+            scalar (rank-0) and vector (rank-1) tensors, exactly the fields
+            of ``global_schema``. All values must be dimensionless.
             ``None`` (the default) indicates no global conditioning.
 
         Returns
@@ -819,12 +807,8 @@ class Kernel(Module):
         if global_data is None:
             global_data = TensorDict({}, device=device)
 
-        source_features, n_source_scalars, n_source_vectors = _pack_features(
-            source_data, device
-        )
-        global_features, n_global_scalars, n_global_vectors = _pack_features(
-            global_data, device
-        )
+        source_features = _pack_inputs(source_data, self._source_layout, device)
+        global_features = _pack_inputs(global_data, self._global_layout, device)
 
         ### Input validation
         # Skip validation when running under torch.compile for performance
@@ -849,12 +833,6 @@ class Kernel(Module):
                     f"Expected target_points last dimension to be {self.n_spatial_dims}, "
                     f"got {target_points.shape[-1]}"
                 )
-            self._check_feature_counts(
-                n_source_scalars=n_source_scalars,
-                n_source_vectors=n_source_vectors,
-                n_global_scalars=n_global_scalars,
-                n_global_vectors=n_global_vectors,
-            )
 
         source_scalars, source_vectors = self._split_source_features(source_features)
         global_scalars, global_vectors = self._split_global_features(global_features)
@@ -1283,19 +1261,8 @@ class BarnesHutKernel(Kernel):
 
         ### Pack the features once; every phase gathers from these tensors.
         with record_function("bh_kernel::prepare_data"):
-            source_features, n_source_scalars, n_source_vectors = _pack_features(
-                source_data, device
-            )
-            global_features, n_global_scalars, n_global_vectors = _pack_features(
-                global_data, device
-            )
-            if not torch.compiler.is_compiling():
-                self._check_feature_counts(
-                    n_source_scalars=n_source_scalars,
-                    n_source_vectors=n_source_vectors,
-                    n_global_scalars=n_global_scalars,
-                    n_global_vectors=n_global_vectors,
-                )
+            source_features = _pack_inputs(source_data, self._source_layout, device)
+            global_features = _pack_inputs(global_data, self._global_layout, device)
 
         ### Source aggregates for far-field clusters, packed like the sources.
         if source_aggregates is None:
@@ -1309,8 +1276,8 @@ class BarnesHutKernel(Kernel):
                     (node_centroids.shape[0], source_features.shape[-1])
                 )
             else:
-                node_features, _, _ = _pack_features(
-                    source_aggregates.node_source_data, device
+                node_features = _pack_inputs(
+                    source_aggregates.node_source_data, self._source_layout, device
                 )
 
         ### Target-node centroids, needed only by the far-target phases.
@@ -1373,10 +1340,10 @@ class BarnesHutKernel(Kernel):
         source_strengths : Float[torch.Tensor, "n_sources"]
             Per-source strength weights, of shape :math:`(N_{sources},)`.
         source_features : Float[torch.Tensor, "n_sources n_source_features"]
-            Source features packed by :func:`_pack_features`, of shape
+            Source features packed by :func:`_pack_inputs`, of shape
             :math:`(N_{sources}, F_{src})`.
         global_features : Float[torch.Tensor, "n_global_features"]
-            Global features packed by :func:`_pack_features`, of shape
+            Global features packed by :func:`_pack_inputs`, of shape
             :math:`(F_{glob},)`.
         dual_plan : DualInteractionPlan
             Interaction plan from ``cluster_tree`` to the targets.
@@ -1734,7 +1701,7 @@ class BarnesHutKernel(Kernel):
         tensors (~8 bytes/pair) and references to the shared source data
         (O(1)), instead of the gathered float features (~300 bytes/pair).
 
-        The source features arrive packed (:func:`_pack_features`), so one
+        The source features arrive packed (:func:`_pack_inputs`), so one
         gather fetches every scalar and vector feature of each pair's
         source, and the gathered rows split into scalars and vectors as
         views.
@@ -2282,20 +2249,10 @@ class MultiscaleKernel(Module):
         ### Pack the features once for all branches and phases: one tensor
         ### of source features and one of global features.
         with record_function("multiscale_kernel::prepare_data"):
-            source_features, n_source_scalars, n_source_vectors = _pack_features(
-                source_data, device
-            )
-            global_features, n_global_scalars, n_global_vectors = _pack_features(
-                global_data, device
-            )
-            if not torch.compiler.is_compiling():
-                for kernel in self.kernels.values():
-                    kernel._check_feature_counts(
-                        n_source_scalars=n_source_scalars,
-                        n_source_vectors=n_source_vectors,
-                        n_global_scalars=n_global_scalars,
-                        n_global_vectors=n_global_vectors,
-                    )
+            ### Every branch has the same schemas, so the same layouts.
+            branch = next(iter(self.kernels.values()))
+            source_features = _pack_inputs(source_data, branch._source_layout, device)
+            global_features = _pack_inputs(global_data, branch._global_layout, device)
 
         ### Aggregates and target-node centroids, shared by all branches.
         with record_function("multiscale_kernel::compute_aggregates"):
