@@ -47,9 +47,11 @@ By default, :func:`rotate`, :func:`scale`, and :func:`transform` leave
 ``point_data``, ``cell_data``, and ``global_data`` unchanged. To transform
 vector and tensor fields with the mesh, pass ``transform_point_data``,
 ``transform_cell_data``, or ``transform_global_data``. ``True`` transforms
-every field whose shape fits, and a ``dict`` of booleans selects fields by
-name. For more information, refer to :doc:`fields`. :func:`translate` does
-not change data.
+every field. Scalar fields stay unchanged, and a field whose trailing sizes do
+not all equal the spatial dimension raises ``ValueError``. When the data also
+holds other channels, such as a ``(n_points, 5)`` feature array on a 3D mesh,
+pass a ``dict`` of booleans that selects fields by name. For more information,
+refer to :doc:`fields`. :func:`translate` does not change data.
 
 Topology caches carry over to the new mesh. Cached cell areas, normals, and
 centroids are updated from the matrix where possible. Other cached geometry,

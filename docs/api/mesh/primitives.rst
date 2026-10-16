@@ -7,7 +7,8 @@ Primitives
 tutorials, tests, and experiments. The library builds each mesh when you ask
 for it, except the PyVista datasets, which are downloaded. Each primitive is a
 module with one ``load`` function. Its keyword arguments set the size and the
-resolution, and ``device`` sets where the tensors go.
+resolution, and ``device`` sets where the tensors go. The ``text`` module is
+the exception: it has one function for each kind of text mesh.
 
 .. figure:: ../../img/mesh/primitives_gallery.png
    :alt: A grid of five columns and two rows, one column for each family.
@@ -332,6 +333,35 @@ PyVista Datasets
      - ``Mesh[3, 3]``
      - Tetrahedral beam volume mesh from PyVista examples
 
+Text
+^^^^
+
+``physicsnemo.mesh.primitives.text``: Meshes of a text string, built from the
+outlines of a bold sans-serif font through matplotlib. These need
+``matplotlib``. Each function
+takes the string, a font size, and the sampling resolution of the outlines. The
+following table lists its functions:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 15 55
+
+   * - Function
+     - Type
+     - Description
+   * - :func:`~physicsnemo.mesh.primitives.text.text_1d_2d`
+     - ``Mesh[1, 2]``
+     - Letter outlines as closed curves in the plane
+   * - :func:`~physicsnemo.mesh.primitives.text.text_2d_2d`
+     - ``Mesh[2, 2]``
+     - Filled, triangulated letters in the plane
+   * - :func:`~physicsnemo.mesh.primitives.text.text_2d_3d`
+     - ``Mesh[2, 3]``
+     - Surface of the extruded letters in 3D
+   * - :func:`~physicsnemo.mesh.primitives.text.text_3d_3d`
+     - ``Mesh[3, 3]``
+     - Solid extruded letters, as tetrahedra
+
 Choosing a Primitive
 --------------------
 
@@ -510,3 +540,14 @@ PyVista Datasets
 .. autofunction:: physicsnemo.mesh.primitives.pyvista_datasets.hexbeam.load
 
 .. autofunction:: physicsnemo.mesh.primitives.pyvista_datasets.tetbeam.load
+
+Text
+^^^^
+
+.. autofunction:: physicsnemo.mesh.primitives.text.text_1d_2d
+
+.. autofunction:: physicsnemo.mesh.primitives.text.text_2d_2d
+
+.. autofunction:: physicsnemo.mesh.primitives.text.text_2d_3d
+
+.. autofunction:: physicsnemo.mesh.primitives.text.text_3d_3d
