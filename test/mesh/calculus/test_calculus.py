@@ -1307,6 +1307,21 @@ class TestLaplacianManifoldDimensions:
         assert laplacian.shape == scalar_values.shape
         assert torch.isfinite(laplacian).all()
 
+    def test_laplacian_millimetre_tet_float32(self):
+        """Lap(|x|^2) is scale-free, so a 1-mm float32 tet in metres gives the
+        unit tet's values: dual volumes h^3/24 and origin-edge weights h/6
+        give 12 at the origin and -4 at the other vertices."""
+        from physicsnemo.mesh.calculus.laplacian import compute_laplacian_points_dec
+
+        points = 1e-3 * torch.cat([torch.zeros(1, 3), torch.eye(3)])
+        mesh = Mesh(points=points, cells=torch.tensor([[0, 1, 2, 3]]))
+
+        laplacian = compute_laplacian_points_dec(mesh, (points**2).sum(dim=-1))
+
+        torch.testing.assert_close(
+            laplacian, torch.tensor([12.0, -4.0, -4.0, -4.0]), rtol=1e-5, atol=1e-5
+        )
+
     def test_laplacian_flat_mesh_quadratic(self):
         r"""Verify \Delta(x^2+y^2) = 4 on flat 2D mesh.
 
@@ -2760,6 +2775,24 @@ class TestDECGradientIsExactForLinearFields:
 
         mesh = Mesh(points=torch.ones(2, 2), cells=torch.tensor([[0, 1]]))
         assert torch.isfinite(compute_barycentric_gradients(mesh)).all()
+
+    def test_barycentric_gradients_of_millimetre_triangle_in_3d(self):
+        """grad phi = n x e / (2A) has units 1/length: a 1-mm float32 triangle
+        in metres gets the unit triangle's gradients divided by 1e-3, and a
+        degenerate triangle gets zero gradients."""
+        from physicsnemo.mesh.geometry.interpolation import (
+            compute_barycentric_gradients,
+        )
+
+        points = 1e-3 * torch.tensor(
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+        )
+        mesh = Mesh(points=points, cells=torch.tensor([[0, 1, 2], [0, 1, 1]]))
+        gradients = compute_barycentric_gradients(mesh)
+
+        expected = torch.tensor([[-1.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+        torch.testing.assert_close(gradients[0], expected / 1e-3)
+        torch.testing.assert_close(gradients[1], torch.zeros(3, 3))
 
     def test_tetrahedra(self):
         from physicsnemo.mesh.calculus.gradient import compute_gradient_points_dec

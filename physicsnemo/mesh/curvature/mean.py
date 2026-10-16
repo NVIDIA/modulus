@@ -34,7 +34,6 @@ from physicsnemo.mesh.geometry.dual_meshes import (
     compute_dual_volumes_0,
     get_or_compute_dual_volumes_0,
 )
-from physicsnemo.mesh.utilities._tolerances import safe_eps
 
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh
@@ -122,7 +121,8 @@ def mean_curvature_vertices(
 
     ### Compute mean curvature
     # H = ||L @ points|| / (2 * dual_volume)
-    dual_volumes_safe = torch.clamp(dual_volumes, min=safe_eps(dual_volumes.dtype))
+    # Isolated vertices (dual_volume = 0) divide by 1 here and get NaN below
+    dual_volumes_safe = torch.where(dual_volumes > 0, dual_volumes, 1.0)
     mean_curvature = laplacian_magnitude / (2.0 * dual_volumes_safe)
 
     ### Determine sign using normal orientation
