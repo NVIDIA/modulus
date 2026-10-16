@@ -2087,6 +2087,87 @@ def _packed_facet_keys(
     return keys.reshape(-1)
 
 
+def _sorted_facets(
+    cells: np.ndarray,
+    local_facets: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Sort every facet's vertices, then sort all facets so equal ones are adjacent.
+
+    Parameters
+    ----------
+    cells : np.ndarray
+        Shape ``(n_cells, k)`` connectivity.
+    local_facets : np.ndarray
+        Shape ``(n_facets, k - 1)`` local vertex indices of each facet.
+
+    Returns
+    -------
+    owner : np.ndarray
+        Shape ``(n_cells * n_facets,)``, the cell of each sorted facet.
+    local_index : np.ndarray
+        Shape ``(n_cells * n_facets,)`` with dtype ``int8``, the local index
+        of each sorted facet in its cell.
+    same : np.ndarray
+        Shape ``(n_cells * n_facets,)``. ``same[t]`` says sorted facets ``t``
+        and ``t + 1`` are equal. The last entry is ``False``.
+    """
+    n_facets = len(local_facets)
+    keys = _packed_facet_keys(cells, local_facets)
+    if keys is not None:
+        order = np.argsort(keys, kind="stable")
+        keys = keys[order]
+        same = keys[1:] == keys[:-1]
+    else:
+        facets = cells[:, local_facets]
+        facets.sort(axis=2)
+        facets = facets.reshape(len(cells) * n_facets, -1)
+        order = np.lexsort(facets.T[::-1])
+        facets = facets[order]
+        same = (facets[1:] == facets[:-1]).all(axis=1)
+    local_index = (order % n_facets).astype(np.int8)
+    return order // n_facets, local_index, np.append(same, False)
+
+
+def _shared_facet_pairs(
+    cells: np.ndarray,
+    local_facets: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Find the pairs of cells that share a facet, once per shared facet.
+
+    Parameters
+    ----------
+    cells : np.ndarray
+        Shape ``(n_cells, k)`` connectivity without repeated vertices.
+    local_facets : np.ndarray
+        Shape ``(n_facets, k - 1)`` local vertex indices of each facet.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        ``(i, f, j)``, each of shape ``(n_pairs,)``: cells ``i < j`` share
+        the local facet ``f`` of cell ``i``.
+    """
+    owner, local_index, same = _sorted_facets(cells, local_facets)
+    # The empty first slices let the lists concatenate when no facet is shared.
+    pairs_i, pairs_f, pairs_j = [owner[:0]], [local_index[:0]], [owner[:0]]
+
+    ### Pair facets at distance d inside each run of equal facets (d = 1, 2, ...).
+    # a holds each t whose sorted facets t..t+d are all equal.
+    a = np.flatnonzero(same)
+    d = 1
+    while len(a):
+        b = a + d
+        # Emit each pair once, from the lower cell id, as the VTK loop does.
+        a_is_lower = owner[a] < owner[b]
+        pairs_i.append(np.where(a_is_lower, owner[a], owner[b]))
+        pairs_j.append(np.where(a_is_lower, owner[b], owner[a]))
+        pairs_f.append(np.where(a_is_lower, local_index[a], local_index[b]))
+        # Keep only the runs that go on past b, so a pass costs only its pairs.
+        a = a[same[b]]
+        d += 1
+    return np.concatenate(pairs_i), np.concatenate(pairs_f), np.concatenate(pairs_j)
+
+
 def _simplex_dual_graph_edges(
     cells: np.ndarray,
 ) -> np.ndarray | None:
@@ -2109,69 +2190,18 @@ def _simplex_dual_graph_edges(
         repeats a vertex (VTK's point-set neighbor matching then differs from
         facet matching, so the caller must use the VTK loop).
     """
-    n_cells, cell_size = cells.shape
-    sorted_cells = np.sort(cells, axis=1)
-    if (sorted_cells[:, 1:] == sorted_cells[:, :-1]).any():
-        return None
-    del sorted_cells
-
-    ### Sort every facet's vertices, then sort all facets so equal ones are adjacent.
     # Without repeated vertices, a cell contains all points of another cell's
     # facet exactly when it has that facet, and only once, so matching facets
-    # reproduces GetCellNeighbors' point-set matching. Each full-size
-    # intermediate is freed as soon as it is used to keep the peak low.
-    local_facets = _SIMPLEX_FACETS[cell_size]
-    n_facets = len(local_facets)
-    # same[t] says sorted facets t and t+1 are equal.
-    keys = _packed_facet_keys(cells, local_facets)
-    if keys is not None:
-        order = np.argsort(keys, kind="stable")
-        keys = keys[order]
-        same = keys[1:] == keys[:-1]
-        del keys
-    else:
-        facets = cells[:, local_facets]
-        facets.sort(axis=2)
-        facets = facets.reshape(n_cells * n_facets, -1)
-        order = np.lexsort(facets.T[::-1])
-        facets = facets[order]
-        same = (facets[1:] == facets[:-1]).all(axis=1)
-        del facets
-    owner = order // n_facets
-    local_index = (order % n_facets).astype(np.int8)
-    del order
-
-    ### Pair facets at distance d inside each run of equal facets (d = 1, 2, ...).
-    # a holds each t whose sorted facets t..t+d are all equal. same gets a
-    # trailing False so that same[b] exists for the last facet.
-    same = np.append(same, False)
-    a = np.flatnonzero(same)
-    pairs_i, pairs_f, pairs_j = [], [], []
-    d = 1
-    while len(a):
-        b = a + d
-        # Emit each pair once, from the lower cell id, as the VTK loop does.
-        a_is_lower = owner[a] < owner[b]
-        pairs_i.append(np.where(a_is_lower, owner[a], owner[b]))
-        pairs_j.append(np.where(a_is_lower, owner[b], owner[a]))
-        pairs_f.append(np.where(a_is_lower, local_index[a], local_index[b]))
-        # Keep only the runs that go on past b, so a pass costs only its pairs.
-        a = a[same[b]]
-        d += 1
-    del owner, local_index, same
-
-    if not pairs_i:
-        return np.empty((0, 2), dtype=np.int64)
-    i = np.concatenate(pairs_i)
-    f = np.concatenate(pairs_f)
-    j = np.concatenate(pairs_j)
-    del pairs_i, pairs_f, pairs_j
-    edge_order = np.lexsort((j, f, i))
-    del f
+    # reproduces GetCellNeighbors' point-set matching.
+    if (np.diff(np.sort(cells, axis=1), axis=1) == 0).any():
+        return None
+    # Each step is its own function, so its full-size arrays are freed when it
+    # returns. This keeps the peak memory low.
+    i, f, j = _shared_facet_pairs(cells, _SIMPLEX_FACETS[cells.shape[1]])
+    order = np.lexsort((j, f, i))
     edges = np.empty((len(i), 2), dtype=np.int64)
-    edges[:, 0] = i[edge_order]
-    del i
-    edges[:, 1] = j[edge_order]
+    edges[:, 0] = i[order]
+    edges[:, 1] = j[order]
     return edges
 
 
