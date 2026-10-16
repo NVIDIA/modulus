@@ -29,7 +29,7 @@ The most-used primitives are the following:
 .. grid:: 1 1 3 3
    :gutter: 2
 
-   .. grid-item-card:: surfaces.sphere_icosahedral
+   .. grid-item-card:: sphere_icosahedral
       :link: physicsnemo.mesh.primitives.surfaces.sphere_icosahedral.load
       :link-type: any
       :shadow: md
@@ -37,7 +37,7 @@ The most-used primitives are the following:
 
       A closed surface with near-equilateral triangles.
 
-   .. grid-item-card:: planar.unit_square
+   .. grid-item-card:: unit_square
       :link: physicsnemo.mesh.primitives.planar.unit_square.load
       :link-type: any
       :shadow: md
@@ -45,7 +45,7 @@ The most-used primitives are the following:
 
       A 2D domain for quick tests of fields and calculus.
 
-   .. grid-item-card:: volumes.sphere_volume
+   .. grid-item-card:: sphere_volume
       :link: physicsnemo.mesh.primitives.volumes.sphere_volume.load
       :link-type: any
       :shadow: md
