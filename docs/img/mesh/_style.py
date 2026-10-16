@@ -60,6 +60,10 @@ VIEW_VECTOR = (1.0, -1.4, 0.9)
 VIEW_UP = (0.0, 0.0, 1.0)
 DPI = 160
 
+# Flat lighting for small accent actors (handles, anchors, highlighted cells), so their
+# rendered color stays close to the palette color.
+ACCENT_LIGHTING = {"ambient": 0.5, "diffuse": 0.55, "specular": 0.0}
+
 plt.rcParams.update(
     {
         "font.family": "DejaVu Sans",
@@ -139,14 +143,21 @@ def spheres(points, radius: float):
     )
 
 
-def save(figure, path: Path, tight: bool = False) -> None:
-    """Save a figure as an opaque white PNG with a 256-color palette, and report its size."""
+def save(figure, path: Path, tight: bool = False, full_color: bool = False) -> None:
+    """Save a figure as an opaque white PNG, and report its size.
+
+    The image is reduced to a 256-color palette, which keeps the file small. Pass
+    ``full_color=True`` for figures with smooth color gradients, where a palette
+    shows bands.
+    """
 
     path = Path(path)
     figure.savefig(
         path, dpi=DPI, facecolor="white", bbox_inches="tight" if tight else None
     )
     plt.close(figure)
-    # A 256-color palette keeps the file small and looks the same.
-    Image.open(path).convert("RGB").quantize(colors=256).save(path, optimize=True)
+    image = Image.open(path).convert("RGB")
+    if not full_color:
+        image = image.quantize(colors=256)
+    image.save(path, optimize=True)
     print(f"Saved {path} ({path.stat().st_size / 1024:.0f} KB)")
