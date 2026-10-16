@@ -21,7 +21,18 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from _style import EDGE, FACE, RESULT, SECOND, SECOND_FILL, TEXT, clean_axis, save
+from _style import (
+    EDGE,
+    FACE,
+    FIXED,
+    FOURTH,
+    RESULT,
+    SECOND,
+    SECOND_FILL,
+    TEXT,
+    clean_axis,
+    save,
+)
 from matplotlib.collections import PolyCollection
 from matplotlib.patches import Polygon
 
@@ -32,7 +43,7 @@ from physicsnemo.mesh.tessellation import triangulate
 OUTPUT = Path(__file__).parent / "tessellation_fan_vs_ear.png"
 
 # One fill color per source polygon (parent_index 0, 1, 2).
-PARENT_COLORS = ("#56b4e9", "#e69f00", "#009e73")
+PARENT_COLORS = (SECOND_FILL, FOURTH, FIXED)
 
 QUAD = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
 HEXAGON = [
@@ -161,9 +172,10 @@ def main():
     )
     for ring in rings:
         _outline(axis, ring)
-    for ring, size in zip(rings, sizes, strict=True):
+    for parent, ring in enumerate(rings):
         cx = 0.5 * (ring[:, 0].min() + ring[:, 0].max())
-        axis.text(cx, -0.42, f"{size - 2} triangles", ha="center", va="top", color=TEXT)
+        count = int((parents_np == parent).sum())
+        axis.text(cx, -0.42, f"{count} triangles", ha="center", va="top", color=TEXT)
     axis.set_title(
         f"(b) triangulate(points, polygons)\n"
         f"Mesh[{mesh.n_manifold_dims}, {mesh.n_spatial_dims}], {mesh.n_cells} triangles, "

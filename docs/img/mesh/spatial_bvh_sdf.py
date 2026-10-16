@@ -91,7 +91,8 @@ def main():
             [-1.4, 1.1, 0.0],
             [-1.3, -1.25, 0.0],
             [1.2, -1.35, 0.0],
-            [0.15, 0.2, 0.0],
+            # Inside. Its closest point lies near the slice, so its arrow meets the curve.
+            [0.175, 0.475, 0.0],
         ]
     )
     probe_sdf, hit_points, _ = signed_distance_field(surface, probes)

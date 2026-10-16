@@ -111,11 +111,23 @@ def main():
     walls_pv = to_pyvista(exposed.slice_cells(~on_skin))
 
     edges = {"show_edges": True, "edge_color": SURFACE_EDGE, "line_width": 0.4}
+    # A white surface just inside the cloud and the graph hides their far sides,
+    # so that each panel shows only what faces the camera.
+    hidden = {"color": "white", "ambient": 1.0, "diffuse": 0.0, "specular": 0.0}
+    cloud_occluder = to_pyvista(surface.with_points(0.96 * surface.points))
+    graph_occluder = to_pyvista(coarse.with_points(0.96 * coarse.points))
     panels = [
-        (cloud, [(cloud_pv, {"scalars": "f", **common, "smooth_shading": True})]),
+        (
+            cloud,
+            [
+                (cloud_occluder, hidden),
+                (cloud_pv, {"scalars": "f", **common, "smooth_shading": True}),
+            ],
+        ),
         (
             graph,
             [
+                (graph_occluder, hidden),
                 (graph_tubes, {"color": SECOND}),
                 (nodes, {"color": SURFACE_EDGE, "smooth_shading": True}),
             ],

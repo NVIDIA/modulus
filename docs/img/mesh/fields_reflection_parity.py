@@ -171,7 +171,7 @@ def main():
         )
         colorbar.set_label(key)
     figure.subplots_adjust(left=0.04, right=0.99, bottom=0.08, top=0.86, wspace=0.06)
-    save(figure, OUTPUT, tight=True)
+    save(figure, OUTPUT, tight=True, full_color=True)
 
 
 if __name__ == "__main__":

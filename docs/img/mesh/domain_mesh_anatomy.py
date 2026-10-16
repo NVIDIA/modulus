@@ -175,7 +175,7 @@ def _draw_tree(axis, dm):
 
     interior = dm.interior
     axis.set_xlim(0.0, 9.6)
-    axis.set_ylim(1.45, 8.0)
+    axis.set_ylim(0.95, 8.0)
     axis.set_axis_off()
 
     axis.text(0.1, 7.7, "dm = DomainMesh(...)", va="center", fontsize=15, **MONO)
@@ -210,8 +210,8 @@ def _draw_tree(axis, dm):
     )
 
     keys = list(dm.boundaries.keys())
-    tops = [5.55 - 1.5 * i for i in range(len(keys))]
-    branch(4.3, "boundaries", TEXT, [top - 0.62 for top in tops])
+    tops = [5.55 - 1.7 * i for i in range(len(keys))]
+    branch(3.9, "boundaries", TEXT, [top - 0.8 for top in tops])
     for key, top in zip(keys, tops):
         color = {"no_slip": RESULT, "freestream": SECOND}[key]
         patch = dm.boundaries[key]
@@ -220,19 +220,20 @@ def _draw_tree(axis, dm):
             left,
             top,
             width,
-            1.25,
+            1.6,
             color,
             [
                 (f'"{key}"', {"color": color, **MONO}),
                 (mesh_label(patch, "edges") + f", {patch.n_points} points", {}),
+                (f"point_data: {_fields(patch.point_data)}", MONO),
             ],
         )
 
-    branch(2.1, "global_data", GLOBAL, [2.1])
+    branch(1.53, "global_data", GLOBAL, [1.53])
     _box(
-        axis, left, 2.52, width, 0.85, GLOBAL, [(_fields_global(dm.global_data), MONO)]
+        axis, left, 1.95, width, 0.85, GLOBAL, [(_fields_global(dm.global_data), MONO)]
     )
-    axis.plot([trunk, trunk], [7.45, 2.1], color=EDGE, linewidth=1.6)
+    axis.plot([trunk, trunk], [7.45, 1.53], color=EDGE, linewidth=1.6)
 
 
 def _fields_global(data):
@@ -246,7 +247,7 @@ def main():
 
     dm = _build()
 
-    figure = plt.figure(figsize=(14.0, 6.6))
+    figure = plt.figure(figsize=(14.0, 7.1))
     domain_axis = figure.add_axes((0.01, 0.13, 0.5, 0.76))
     tree_axis = figure.add_axes((0.53, 0.06, 0.46, 0.83))
 

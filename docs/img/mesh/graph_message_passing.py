@@ -116,9 +116,10 @@ def main():
                 points[sender],
                 points[query],
                 arrowstyle="-|>",
-                mutation_scale=18,
-                shrinkA=7,
-                shrinkB=11,
+                # Small heads and margins, so that the shortest arrow keeps a shaft.
+                mutation_scale=15,
+                shrinkA=6,
+                shrinkB=9,
                 color=style.SECOND,
                 linewidth=2.2,
                 zorder=3,

@@ -100,7 +100,7 @@ def _merge_panel(axis, strip):
 
 
 def _padding_panel(axis):
-    """Compare bucketed padding with one fixed size, for meshes of five sizes."""
+    """Compare bucketed padding with one fixed size, for meshes of four sizes."""
 
     meshes = [
         ("sphere_icosahedral\nsubdivisions=1", sphere_icosahedral.load(subdivisions=1)),
@@ -144,6 +144,8 @@ def _padding_panel(axis):
     axis.invert_yaxis()
     for side in ("top", "right"):
         axis.spines[side].set_visible(False)
+    # End the axis line past the fixed size, short of the label column.
+    axis.spines["bottom"].set_bounds(30, 800)
     axis.set_title(f"mesh.pad_to_next_power(power={POWER})\npoints per mesh")
     return [
         Patch(color=style.SECOND_FILL),

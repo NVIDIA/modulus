@@ -82,11 +82,11 @@ def _winding(axis, mesh, highlight=None):
     for cell, (center, sign) in enumerate(zip(centers.tolist(), signs.tolist())):
         flagged = cell == highlight
         color = RESULT if flagged else "#7d8a94"
-        radius = 0.045
+        radius = 0.057
         angles = [math.pi / 2 + sign * 1.6 * math.pi * k / 24 for k in range(25)]
         xs = [center[0] + radius * math.cos(a) for a in angles]
         ys = [center[1] + radius * math.sin(a) for a in angles]
-        axis.plot(xs[:-1], ys[:-1], color=color, linewidth=2.2 if flagged else 1.1)
+        axis.plot(xs[:-1], ys[:-1], color=color, linewidth=2.4 if flagged else 1.5)
         axis.annotate(
             "",
             xy=(xs[-1], ys[-1]),
@@ -95,7 +95,7 @@ def _winding(axis, mesh, highlight=None):
                 arrowstyle="-|>",
                 color=color,
                 linewidth=0,
-                mutation_scale=13 if flagged else 8,
+                mutation_scale=15 if flagged else 11,
             ),
         )
 
@@ -271,6 +271,9 @@ def _hole():
 
     boundary = broken.get_boundary_mesh()
     fixed, stats = fill_holes(broken, max_hole_edges=10)
+    # The outer loop has 16 edges, more than max_hole_edges, so it is the one skipped.
+    if (stats["n_holes_filled"], stats["n_holes_skipped"]) != (1, 1):
+        raise RuntimeError(f"fill_holes filled or skipped other loops: {stats}")
     added = [SECOND_FILL if i >= broken.n_cells else FACE for i in range(fixed.n_cells)]
 
     def before(axis):

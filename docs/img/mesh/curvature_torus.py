@@ -39,7 +39,7 @@ from matplotlib import colormaps
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import TwoSlopeNorm
 from matplotlib.patches import Polygon, Wedge
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import MaxNLocator, MultipleLocator
 
 from physicsnemo.mesh import Mesh
 from physicsnemo.mesh.geometry import compute_vertex_angle_sums
@@ -153,7 +153,7 @@ def _draw_angle_defect(axis, n_triangles, defect):
     axis.text(
         0.0,
         1.08,
-        r"gap $2\pi - \Sigma\,\theta_j = \pi/3$",
+        rf"gap $2\pi - \Sigma\,\theta_j$ = {math.degrees(defect):.0f}°",
         ha="center",
         va="bottom",
         color=RESULT,
@@ -183,9 +183,11 @@ def main():
         1, 3, figsize=(14.0, 5.2), gridspec_kw={"width_ratios": (1.35, 1.35, 1.0)}
     )
     titles = []
-    for axis, values, name, symbol in (
-        (axes[0], gaussian, "gaussian_curvature_vertices", "K"),
-        (axes[1], mean, "mean_curvature_vertices", "H"),
+    # K changes sign, so its two halves of the colorbar have different scales.
+    # Ticks at even steps keep the labels apart.
+    for axis, values, name, symbol, locator in (
+        (axes[0], gaussian, "gaussian_curvature_vertices", "K", MultipleLocator(2.0)),
+        (axes[1], mean, "mean_curvature_vertices", "H", MaxNLocator(nbins=5)),
     ):
         norm = _norm(values)
         axis.imshow(_render_field(mesh, values, norm))
@@ -199,13 +201,13 @@ def main():
             cax=axis.inset_axes([0.2, -0.07, 0.6, 0.04]),
             orientation="horizontal",
         )
-        colorbar.locator = MaxNLocator(nbins=5)
+        colorbar.locator = locator
         colorbar.update_ticks()
         colorbar.set_label(symbol)
 
     _draw_angle_defect(axes[2], n_triangles, defect)
     titles.append(
-        f"compute_vertex_angle_sums()\nicosahedron vertex, {n_triangles} angles,"
+        f"compute_vertex_angle_sums(mesh)\nicosahedron vertex, {n_triangles} angles,"
         f" sum {math.degrees(angle_sum):.0f}°"
     )
     clean_axis(axes[2], ((-1.25, 1.25), (-1.0, 1.35)))
