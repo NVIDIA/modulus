@@ -25,14 +25,67 @@ from geometry import encode_geometry
 from torch.utils.data import Dataset
 
 
+class CaseEncoder:
+    """Encode the inputs of one case with fixed training transforms.
+
+    ``features`` holds the two normalized operating conditions followed by the
+    coordinate and normal PCA features. ``geometry`` is a context of
+    ``geometry_points`` surface vertices with normalized coordinates, normals
+    and standardized displacements from the training mean surface.
+    """
+
+    def __init__(self, basis_path, stats_path, geometry_points=2048):
+        self.stats = json.loads(Path(stats_path).read_text())
+        with np.load(basis_path) as basis:
+            self.basis = dict(basis)
+        vertices = len(self.basis["mean_points"])
+        self.context_indices = np.linspace(0, vertices - 1, geometry_points).astype(
+            np.int64
+        )
+
+    def normalize(self, values, key):
+        """Standardize values with the training statistics of ``key``."""
+        stats = self.stats[key]
+        return (values - np.asarray(stats["mean"])) / np.asarray(stats["std"])
+
+    def denormalize_globals(self, values):
+        """Return compressor outputs in source units."""
+        stats = self.stats["globals"]
+        return values * np.asarray(stats["std"]) + np.asarray(stats["mean"])
+
+    def encode(self, points, normals, conditions):
+        """Return the ``features`` and ``geometry`` tensors of one surface.
+
+        ``points`` and ``normals`` follow the vertex order of the training mesh.
+        """
+        basis = self.basis
+        if points.shape != basis["mean_points"].shape:
+            raise ValueError("The surface must follow the training mesh vertex order")
+        points = points.astype(np.float64)
+        normals = normals.astype(np.float64)
+        features = np.concatenate(
+            (
+                self.normalize(conditions, "conditions"),
+                encode_geometry(points, normals, basis),
+            )
+        )
+        displacement = (points - basis["mean_points"]) / basis["displacement_scale"]
+        context = np.concatenate(
+            (self.normalize(points, "points"), normals, displacement), axis=1
+        )
+        return {
+            "features": torch.from_numpy(features.astype(np.float32)),
+            "geometry": torch.from_numpy(
+                context[self.context_indices].astype(np.float32)
+            ),
+        }
+
+
 class Rotor37Dataset(Dataset):
     """Encode one prepared split for GeoTransolver.
 
-    Each case provides ``features`` with the two normalized operating
-    conditions followed by the coordinate and normal PCA features, and a
-    ``geometry`` context of ``geometry_points`` surface vertices with
-    normalized coordinates, normals and standardized displacements from the
-    training mean surface. Labeled splits add normalized ``fields`` and
+    Each case provides the ``features`` and ``geometry`` of
+    :class:`CaseEncoder`. Labeled splits add normalized ``fields`` and
     ``globals``, and the training split adds the target basis
     ``coefficients``. Encoded cases are cached in memory.
     """
@@ -49,41 +102,18 @@ class Rotor37Dataset(Dataset):
         self.manifest = json.loads((self.data_dir / "manifest.json").read_text())
         self.sample_ids = self.manifest["splits"][split]
         self.split = split
-        self.stats = json.loads(Path(stats_path).read_text())
-        with np.load(basis_path) as basis:
-            self.basis = dict(basis)
+        self.encoder = CaseEncoder(basis_path, stats_path, geometry_points)
+        self.stats = self.encoder.stats
+        self.basis = self.encoder.basis
         train_ids = self.manifest["splits"]["train"]
         if self.stats["sample_ids"] != train_ids or not np.array_equal(
             self.basis["training_sample_ids"], train_ids
         ):
             raise ValueError("Statistics and bases must come from the training split")
-        vertices = len(self.basis["mean_points"])
-        self.context_indices = np.linspace(0, vertices - 1, geometry_points).astype(
-            np.int64
-        )
         self.cache = {}
 
     def __len__(self):
         return len(self.sample_ids)
-
-    def normalize(self, values, key):
-        """Standardize values with the training statistics of ``key``."""
-        stats = self.stats[key]
-        return (values - np.asarray(stats["mean"])) / np.asarray(stats["std"])
-
-    def denormalize_globals(self, values):
-        """Return compressor outputs in source units."""
-        stats = self.stats["globals"]
-        return values * np.asarray(stats["std"]) + np.asarray(stats["mean"])
-
-    def context(self, points, normals):
-        """Return the sampled point context of one surface."""
-        basis = self.basis
-        displacement = (points - basis["mean_points"]) / basis["displacement_scale"]
-        values = np.concatenate(
-            (self.normalize(points, "points"), normals, displacement), axis=1
-        )
-        return torch.from_numpy(values[self.context_indices].astype(np.float32))
 
     def load(self, index):
         """Return the prepared arrays of a case."""
@@ -102,24 +132,21 @@ class Rotor37Dataset(Dataset):
     def encode(self, index):
         """Encode a case with the fixed training transforms."""
         arrays = self.load(index)
-        points = arrays["points"].astype(np.float64)
-        normals = arrays["normals"].astype(np.float64)
-        features = np.concatenate(
-            (
-                self.normalize(arrays["conditions"], "conditions"),
-                encode_geometry(points, normals, self.basis),
-            )
-        )
         sample = {
             "sample_id": self.sample_ids[index],
-            "features": torch.from_numpy(features.astype(np.float32)),
-            "geometry": self.context(points, normals),
+            **self.encoder.encode(
+                arrays["points"], arrays["normals"], arrays["conditions"]
+            ),
         }
         if "fields" in arrays:
-            fields = self.normalize(arrays["fields"].astype(np.float64), "fields")
-            globals_ = self.normalize(arrays["globals"].astype(np.float64), "globals")
-            sample["fields"] = torch.from_numpy(fields.astype(np.float32))
-            sample["globals"] = torch.from_numpy(globals_.astype(np.float32))
+            fields = arrays["fields"].astype(np.float64)
+            globals_ = arrays["globals"].astype(np.float64)
+            sample["fields"] = torch.from_numpy(
+                self.encoder.normalize(fields, "fields").astype(np.float32)
+            )
+            sample["globals"] = torch.from_numpy(
+                self.encoder.normalize(globals_, "globals").astype(np.float32)
+            )
         if self.split == "train":
             coefficients = np.concatenate(
                 (

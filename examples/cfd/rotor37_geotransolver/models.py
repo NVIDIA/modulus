@@ -19,7 +19,9 @@
 from typing import NamedTuple
 
 import torch
-from hydra.utils import instantiate
+from hydra.utils import get_class, instantiate
+from omegaconf import OmegaConf
+from prepare_data import GLOBAL_NAMES
 
 from physicsnemo.models.geotransolver import GeoTransolver
 
@@ -47,7 +49,10 @@ def build_model(model_cfg):
             tokenizer.in_project_x,
             tokenizer.in_project_fx,
         )
-        output = model.ln_mlp_out[0][1]
+        # With use_te the output projection is a single fused LayerNormLinear.
+        output = model.ln_mlp_out[0]
+        if isinstance(output, torch.nn.Sequential):
+            output = output[-1]
     else:
         inputs = ()
         output = model.final_layer.linear
@@ -59,13 +64,24 @@ def build_model(model_cfg):
     return model
 
 
+def load_model(run_dir, device):
+    """Load the final checkpoint of a run in evaluation mode."""
+    run_cfg = OmegaConf.load(run_dir / "config.yaml")
+    network = get_class(run_cfg.model._target_)
+    epoch = run_cfg.training.num_epochs
+    model = network.from_checkpoint(
+        str(run_dir / "checkpoints" / f"{network.__name__}.0.{epoch}.mdlus")
+    )
+    return model.to(device).eval()
+
+
 def predict(model, batch, decoder):
     """Predict compressor outputs and decoded fields for a batch of cases.
 
     GeoTransolver uses the case features as its single query token and its
     global context and reads the point context through cross-attention. The
-    multilayer perceptron reads the case features only. The first three
-    outputs are the normalized compressor outputs and the rest are basis
+    multilayer perceptron reads the case features only. The first outputs
+    are the normalized compressor outputs and the rest are basis
     coefficients.
     """
     network = getattr(model, "module", model)
@@ -75,5 +91,6 @@ def predict(model, batch, decoder):
         output = output[:, 0]
     else:
         output = model(batch["features"])
-    coefficients = output[:, 3:]
-    return Prediction(decoder(coefficients), output[:, :3], coefficients)
+    count = len(GLOBAL_NAMES)
+    coefficients = output[:, count:]
+    return Prediction(decoder(coefficients), output[:, :count], coefficients)

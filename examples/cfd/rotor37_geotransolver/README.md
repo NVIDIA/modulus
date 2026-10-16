@@ -342,6 +342,21 @@ predictions to `runs/geotransolver/evaluation/validation`. Add `model=mlp` for
 the baseline, `evaluation.split=test` for the test cases, or
 `evaluation.split=official_test` to predict the 200 official test cases.
 
+### Inference
+
+```bash
+python inference.py data/rotor37/processed/samples/000613.npz
+```
+
+`inference.py` predicts a single case from an `.npz` file with the surface
+`points` and `normals`, each of shape `[29773, 3]` in the vertex order of the
+Rotor37 mesh, and the operating `conditions` `Omega` and `P`. Every prepared
+sample has this format. The script reads only the run directory, not the
+prepared dataset, and writes the predicted fields on the mesh and the compressor
+outputs to `outputs/prediction.npz`. Add `--run-dir runs/mlp` for the baseline.
+Within Python, `Rotor37Predictor` from `inference.py` takes the same arrays
+directly, for example inside a design loop.
+
 ### Visualization
 
 ```bash
@@ -381,6 +396,29 @@ the remaining error concentrates along the shock and the leading edge.
 
 The metrics of both models are in `reference_results/geotransolver` and
 `reference_results/mlp`.
+
+## Adapting this recipe to another dataset
+
+The recipe carries over to any dataset whose cases share one surface mesh, so
+that a vertex index refers to the same location on every case. The table lists
+the places to change.
+
+| What changes | Where to change it |
+| --- | --- |
+| Reading the source data | `decode_sample` in `prepare_data.py` turns one source case into the prepared sample format, an `.npz` file with `points` and `normals` of shape `[vertices, 3]`, quadrilateral faces `quads`, `conditions`, and for labeled cases `fields` of shape `[vertices, 3]` and `globals`. `make_splits` reads the official Rotor37 splits and needs its own version as well. |
+| Operating conditions and outputs | `CONDITION_NAMES` and `GLOBAL_NAMES` in `prepare_data.py`. Their counts set the model widths, see below. |
+| Fitted transforms | Nothing to edit. `prepare_data.py` refits the normalization, the gas constant, the geometry principal components and the field modes on the new training cases. The geometry rank of 32 and the retained energy of 99.9% are arguments of `fit_transforms` in `basis.py`. |
+| Model widths | `functional_dim` and `global_dim` in `conf/model/geotransolver.yaml` equal the number of conditions plus twice the geometry rank, and `out_dim` equals the number of compressor outputs plus the number of modes, which `basis.json` reports after preparation. The MLP uses `in_features` and `out_features`. `train.py` stops with the values to set when they do not match. |
+| Fields | `FIELD_NAMES` must remain density, pressure and temperature in this order. `FieldDecoder` in `objectives.py` decodes positive pressure and temperature from log modes and computes density from the ideal-gas relation, and `fit_statistics` in `basis.py` stops when the training fields violate that relation. Other fields need their own decoder, for example without the logarithm for quantities that change sign. |
+| Shocks | The edge-aware pressure modes and the jump loss target sharp pressure transitions. For flows without shocks, set `training.loss_weights.jump=0`. |
+| Mesh elements | `quad_edges` in `basis.py` extracts edges from quadrilateral faces, so a triangle mesh needs its own edge extraction. |
+
+For example, another compressor dataset with the inlet total pressure, the
+rotational speed and the outlet static pressure as operating conditions needs a
+new reader that writes those three values as `conditions`, the matching
+`CONDITION_NAMES`, and `functional_dim` and `global_dim` raised from 66 to 67.
+All transforms are then refitted by `prepare_data.py`, and losses, training,
+evaluation and inference run unchanged.
 
 ## Limitations and next steps
 

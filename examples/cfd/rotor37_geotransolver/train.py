@@ -31,6 +31,7 @@ from hydra.utils import instantiate, to_absolute_path
 from models import build_model, predict
 from objectives import FieldDecoder, loss_components
 from omegaconf import DictConfig, OmegaConf
+from prepare_data import GLOBAL_NAMES
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler, Subset
 
@@ -75,7 +76,7 @@ def to_device(batch, device):
 def check_dimensions(cfg, dataset, decoder):
     """Require model widths that match the encoded inputs and fitted bases."""
     features = len(dataset[0]["features"])
-    outputs = 3 + decoder.coefficient_count
+    outputs = len(GLOBAL_NAMES) + decoder.coefficient_count
     model = cfg.model
     for key in ("functional_dim", "global_dim", "in_features"):
         if key in model and model[key] != features:

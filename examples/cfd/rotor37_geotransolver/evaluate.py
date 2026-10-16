@@ -24,8 +24,8 @@ from pathlib import Path
 import hydra
 import numpy as np
 import torch
-from hydra.utils import get_class, to_absolute_path
-from models import predict
+from hydra.utils import to_absolute_path
+from models import load_model, predict
 from objectives import FieldDecoder
 from omegaconf import DictConfig, OmegaConf
 from prepare_data import FIELD_NAMES, GLOBAL_NAMES
@@ -119,12 +119,7 @@ def evaluate(cfg, run_dir, log):
     split = cfg.evaluation.split
     dataset = make_dataset(run_cfg, run_dir, split)
     decoder = FieldDecoder(dataset.basis, dataset.stats).to(device)
-    epoch = run_cfg.training.num_epochs
-    network = get_class(run_cfg.model._target_)
-    model = network.from_checkpoint(
-        str(run_dir / "checkpoints" / f"{network.__name__}.0.{epoch}.mdlus")
-    )
-    model = model.to(device).eval()
+    model = load_model(run_dir, device)
     output_dir = run_dir / "evaluation" / split
     shutil.rmtree(output_dir, ignore_errors=True)
     (output_dir / "predictions").mkdir(parents=True)
@@ -141,7 +136,7 @@ def evaluate(cfg, run_dir, log):
             }
             prediction = predict(model, batch, decoder)
             fields = decoder.physical(prediction.coefficients)[0].cpu().numpy()
-            globals_ = dataset.denormalize_globals(
+            globals_ = dataset.encoder.denormalize_globals(
                 prediction.globals[0].cpu().numpy().astype(np.float64)
             )
             arrays = dataset.load(index)
@@ -165,7 +160,11 @@ def evaluate(cfg, run_dir, log):
                     output_dir / "predictions" / f"sample_{sample_id:06d}.npz", **export
                 )
     if labeled:
-        summary = {"split": split, "epoch": epoch, **summarize(rows)}
+        summary = {
+            "split": split,
+            "epoch": run_cfg.training.num_epochs,
+            **summarize(rows),
+        }
         (output_dir / "metrics.json").write_text(json.dumps(summary, indent=2) + "\n")
         with (output_dir / "cases.csv").open("w", newline="") as stream:
             writer = csv.DictWriter(
