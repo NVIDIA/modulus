@@ -1,32 +1,56 @@
-PhysicsNeMo Mesh
+PhysicsNeMo-Mesh
 ================
 
 .. currentmodule:: physicsnemo.mesh
 
 PhysicsNeMo-Mesh (``physicsnemo.mesh``) is a PyTorch library for simplicial
-meshes in any dimension. A simplex is a point, edge, triangle, tetrahedron, or
-its higher-dimensional analog. One :class:`~physicsnemo.mesh.mesh.Mesh` type
-holds point clouds, curves, surfaces, and volumes, together with tensor fields
-of any rank on its points, its cells, and the mesh as a whole. Operations run
-on CPU or GPU, and most of them are differentiable with
-`PyTorch autograd <https://pytorch.org/docs/stable/autograd.html>`_.
+meshes in any dimension. One :class:`~physicsnemo.mesh.mesh.Mesh` type holds
+point clouds, curves, surfaces, and volumes, with tensor fields of any rank on
+its points, its cells, and the mesh as a whole.
+
+:bdg-success:`CPU and GPU` :bdg-info:`autograd` :bdg-secondary:`any dimension`
+:bdg-secondary:`torch.compile`
+
+.. figure:: ../../img/mesh/mesh_hero_strip.png
+   :alt: Four objects in a row, each one Mesh: a point cloud labeled Mesh[0, 3],
+         a curve labeled Mesh[1, 3], a surface labeled Mesh[2, 3], and a
+         tetrahedral volume labeled Mesh[3, 3].
+   :align: center
+   :width: 100%
+
+   One ``Mesh`` type for point clouds, curves, surfaces, and volumes.
 
 Where to Start
 --------------
 
-The following resources document the library:
+The library has three sets of documentation:
 
-- The `PhysicsNeMo-Mesh User Guide
-  <https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh.html>`_
-  explains the data model (manifold dimension, spatial dimension, and
-  codimension), helps you choose between methods, and shows how meshes fit
-  into a machine learning (ML) pipeline.
-- The `tutorial notebooks
-  <https://github.com/NVIDIA/physicsnemo/tree/main/examples/minimal/mesh>`_
-  teach the library step by step, from a first mesh to an ML pipeline.
-- This API reference has one page for each submodule. Each page gives the
-  purpose of the submodule, a short example, a table of its public API, and
-  the full reference.
+.. grid:: 1 1 3 3
+   :gutter: 2
+
+   .. grid-item-card:: User Guide
+      :link: https://docs.nvidia.com/physicsnemo/latest/user-guide/mesh.html
+      :shadow: md
+      :class-card: sd-card-hover
+
+      The data model, how to choose a method, and meshes in ML pipelines.
+
+   .. grid-item-card:: Tutorials
+      :link: https://github.com/NVIDIA/physicsnemo/tree/main/examples/minimal/mesh
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Nine notebooks, from a first mesh to an ML pipeline.
+
+   .. grid-item-card:: Quick Start
+      :link: mesh-quick-start
+      :link-type: ref
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Ten lines, from two triangles to a gradient.
+
+.. _mesh-quick-start:
 
 Quick Start
 -----------
@@ -51,86 +75,310 @@ scalar field to the points, and computes the gradient of the field:
     mesh = mesh.compute_point_derivatives(keys="T", method="lsq")
     print(mesh.point_data["T_gradient"][0])  # tensor([1., 2.])
 
-To run the same code on a GPU, move the mesh and all of its data with
-``mesh = mesh.to("cuda")``.
+.. tip::
+
+   To run the same code on a GPU, move the mesh and all of its data with
+   ``mesh = mesh.to("cuda")``.
 
 Submodules
 ----------
 
-Each submodule has its own page:
+This API reference has one page for each submodule, with its purpose, an
+example, a summary table, and the full reference. The pages are grouped by
+task:
 
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
+.. rubric:: Core
 
-   * - Page
-     - Contents
-   * - :doc:`core`
-     - The ``Mesh`` and ``DomainMesh`` data structures.
-   * - :doc:`fields`
-     - Declarations of named fields and their tensor ranks (``RankSpec``,
-       ``FieldSchema``).
-   * - :doc:`primitives`
-     - A catalog of ready-made meshes, from single triangles to tetrahedral
-       spheres.
-   * - :doc:`io`
-     - Conversion to and from PyVista, and native Zarr storage.
-   * - :doc:`tessellation`
-     - Triangulation of polygon meshes and quality filling of closed
-       boundaries.
-   * - :doc:`generate`
-     - Volume meshes of implicit domains, and marching cubes.
-   * - :doc:`geometry`
-     - Low-level geometric quantities: angles, circumcenters, dual volumes,
-       and cotangent weights.
-   * - :doc:`curvature`
-     - Gaussian and mean curvature.
-   * - :doc:`calculus`
-     - Integration, and the gradient, divergence, curl, and Laplacian by
-       discrete exterior calculus (DEC) and least squares (LSQ).
-   * - :doc:`boundaries`
-     - Boundary detection, facet extraction, and watertight and manifold
-       checks.
-   * - :doc:`neighbors`
-     - Point and cell adjacency in a ragged ``Adjacency`` format.
-   * - :doc:`spatial`
-     - Bounding volume hierarchies, cluster trees, and signed distance.
-   * - :doc:`sampling`
-     - Random points on cells and interpolation of data at query points.
-   * - :doc:`transformations`
-     - Rigid and linear transformations, deformations, and projections.
-   * - :doc:`deformation`
-     - Differentiable penalty energies for deformations.
-   * - :doc:`subdivision`
-     - Linear, Loop, and Butterfly subdivision.
-   * - :doc:`smoothing`
-     - Laplacian smoothing.
-   * - :doc:`remeshing`
-     - Surface remeshing to a target vertex count, and cell partitioning.
-   * - :doc:`repair`
-     - Removal of duplicate and degenerate elements, orientation, and hole
-       filling.
-   * - :doc:`validation`
-     - Structural validation, per-cell quality metrics, and mesh statistics.
-   * - :doc:`visualization`
-     - Plots of meshes and their data with matplotlib or PyVista.
+.. grid:: 1 2 3 3
+   :gutter: 3
 
-Tutorials
----------
+   .. grid-item-card:: Mesh
+      :img-top: ../../img/mesh/thumbnails/core.png
+      :link: core
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
 
-The notebooks are in
+      The ``Mesh`` and ``DomainMesh`` data structures.
+
+   .. grid-item-card:: Fields and Schemas
+      :img-top: ../../img/mesh/thumbnails/fields.png
+      :link: fields
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Named fields and their tensor ranks.
+
+.. rubric:: Building Meshes
+
+.. grid:: 1 2 3 3
+   :gutter: 3
+
+   .. grid-item-card:: Primitives
+      :img-top: ../../img/mesh/thumbnails/primitives.png
+      :link: primitives
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Ready-made meshes, from one triangle to a tetrahedral ball.
+
+   .. grid-item-card:: I/O
+      :img-top: ../../img/mesh/thumbnails/io.png
+      :link: io
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      PyVista conversion and native Zarr storage.
+
+   .. grid-item-card:: Tessellation
+      :img-top: ../../img/mesh/thumbnails/tessellation.png
+      :link: tessellation
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Polygons to triangles, and quality filling of a closed boundary.
+
+   .. grid-item-card:: Generate
+      :img-top: ../../img/mesh/thumbnails/generate.png
+      :link: generate
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Volume meshes of implicit domains, and marching cubes.
+
+.. rubric:: Geometry and Calculus
+
+.. grid:: 1 2 3 3
+   :gutter: 3
+
+   .. grid-item-card:: Geometry
+      :img-top: ../../img/mesh/thumbnails/geometry.png
+      :link: geometry
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Angles, circumcenters, dual volumes, and cotangent weights.
+
+   .. grid-item-card:: Curvature
+      :img-top: ../../img/mesh/thumbnails/curvature.png
+      :link: curvature
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Gaussian and mean curvature.
+
+   .. grid-item-card:: Discrete Calculus
+      :img-top: ../../img/mesh/thumbnails/calculus.png
+      :link: calculus
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Gradient, divergence, curl, Laplacian, and integrals, by DEC or LSQ.
+
+.. rubric:: Topology and Queries
+
+.. grid:: 1 2 3 3
+   :gutter: 3
+
+   .. grid-item-card:: Boundaries and Topology
+      :img-top: ../../img/mesh/thumbnails/boundaries.png
+      :link: boundaries
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Boundary detection, facets, and watertight checks.
+
+   .. grid-item-card:: Neighbors and Adjacency
+      :img-top: ../../img/mesh/thumbnails/neighbors.png
+      :link: neighbors
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Point and cell adjacency, and graphs.
+
+   .. grid-item-card:: Spatial Queries
+      :img-top: ../../img/mesh/thumbnails/spatial.png
+      :link: spatial
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Bounding volume hierarchies and signed distance.
+
+   .. grid-item-card:: Sampling and Interpolation
+      :img-top: ../../img/mesh/thumbnails/sampling.png
+      :link: sampling
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Random points on cells, and interpolation at query points.
+
+.. rubric:: Editing
+
+.. grid:: 1 2 3 3
+   :gutter: 3
+
+   .. grid-item-card:: Transformations and Projections
+      :img-top: ../../img/mesh/thumbnails/transformations.png
+      :link: transformations
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Rigid and linear transforms, deformations, and projections.
+
+   .. grid-item-card:: Differentiable Deformation Energies
+      :img-top: ../../img/mesh/thumbnails/deformation.png
+      :link: deformation
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Differentiable penalties that keep a deformation well shaped.
+
+   .. grid-item-card:: Subdivision
+      :img-top: ../../img/mesh/thumbnails/subdivision.png
+      :link: subdivision
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Linear, Loop, and Butterfly refinement.
+
+   .. grid-item-card:: Smoothing
+      :img-top: ../../img/mesh/thumbnails/smoothing.png
+      :link: smoothing
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Laplacian smoothing of point positions.
+
+   .. grid-item-card:: Remeshing
+      :img-top: ../../img/mesh/thumbnails/remeshing.png
+      :link: remeshing
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      A new surface mesh with a target number of vertices.
+
+   .. grid-item-card:: Repair
+      :img-top: ../../img/mesh/thumbnails/repair.png
+      :link: repair
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Duplicates, degenerate cells, orientation, and holes.
+
+.. rubric:: Checking and Viewing
+
+.. grid:: 1 2 3 3
+   :gutter: 3
+
+   .. grid-item-card:: Validation and Quality
+      :img-top: ../../img/mesh/thumbnails/validation.png
+      :link: validation
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Structural checks, cell quality, and statistics.
+
+   .. grid-item-card:: Visualization
+      :img-top: ../../img/mesh/thumbnails/visualization.png
+      :link: visualization
+      :link-type: doc
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Plots of meshes and their data.
+
+Learning Path
+-------------
+
+The tutorial notebooks are in
 `examples/minimal/mesh/ <https://github.com/NVIDIA/physicsnemo/tree/main/examples/minimal/mesh>`_.
-Work through them in order:
+Each one runs on a CPU and uses a GPU when one is present. Work through them
+in order:
 
-1. `Getting Started <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_1_getting_started.ipynb>`__
-2. `Loading, Converting, and Saving Meshes <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_2_io_interop.ipynb>`__
-3. `Primitives and Mesh Generation <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_3_primitives_generation.ipynb>`__
-4. `Mesh Operations <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_4_operations.ipynb>`__
-5. `Discrete Calculus and Curvature <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_5_calculus.ipynb>`__
-6. `Neighbors, Adjacency, and Spatial Queries <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_6_neighbors_spatial.ipynb>`__
-7. `Quality, Validation, and Repair <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_7_quality_repair.ipynb>`__
-8. `Simulation Domains with DomainMesh <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_8_domain_mesh.ipynb>`__
-9. `Meshes in ML Pipelines <https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_9_ml_integration.ipynb>`__
+.. grid:: 1 2 3 3
+   :gutter: 2
+
+   .. grid-item-card:: 1. Getting Started
+      :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_1_getting_started.ipynb
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Build a mesh, attach fields, and compute a gradient.
+
+   .. grid-item-card:: 2. Loading, Converting, and Saving
+      :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_2_io_interop.ipynb
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Read files through PyVista and save to Zarr.
+
+   .. grid-item-card:: 3. Primitives and Mesh Generation
+      :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_3_primitives_generation.ipynb
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Make meshes from the catalog and from implicit shapes.
+
+   .. grid-item-card:: 4. Mesh Operations
+      :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_4_operations.ipynb
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Transform, deform, subdivide, and remesh.
+
+   .. grid-item-card:: 5. Discrete Calculus and Curvature
+      :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_5_calculus.ipynb
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Derivatives, integrals, and curvature on surfaces.
+
+   .. grid-item-card:: 6. Neighbors and Spatial Queries
+      :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_6_neighbors_spatial.ipynb
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Adjacency, graphs, and nearest-point search.
+
+   .. grid-item-card:: 7. Quality, Validation, and Repair
+      :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_7_quality_repair.ipynb
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Find and fix bad cells.
+
+   .. grid-item-card:: 8. Simulation Domains
+      :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_8_domain_mesh.ipynb
+      :shadow: md
+      :class-card: sd-card-hover
+
+      An interior with named boundaries in one object.
+
+   .. grid-item-card:: 9. Meshes in ML Pipelines
+      :link: https://github.com/NVIDIA/physicsnemo/blob/main/examples/minimal/mesh/tutorial_9_ml_integration.ipynb
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Batching, augmentation, and features for a model.
 
 .. toctree::
    :maxdepth: 1

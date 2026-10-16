@@ -3,35 +3,101 @@ Mesh
 
 .. currentmodule:: physicsnemo.mesh.mesh
 
-:class:`Mesh` is the central data structure of PhysicsNeMo-Mesh. It holds an
-n-dimensional simplicial mesh in m-dimensional space, with
-:math:`n \le m`. The manifold dimension :math:`n` (``n_manifold_dims``) is the
-dimension of the cells: 0 for points, 1 for edges, 2 for triangles, 3 for
-tetrahedra. The spatial dimension :math:`m` (``n_spatial_dims``) is the number
-of coordinates of each point. :class:`~physicsnemo.mesh.domain_mesh.DomainMesh`
-groups an interior mesh with named boundary meshes.
+:class:`Mesh` is the central data structure of PhysicsNeMo-Mesh. One type
+holds point clouds, curves, surfaces, and volumes in any number of dimensions,
+and :class:`~physicsnemo.mesh.domain_mesh.DomainMesh` groups an interior mesh
+with named boundary meshes.
 
-A ``Mesh`` has five fields:
+:bdg-success:`CPU and GPU` :bdg-info:`autograd` :bdg-secondary:`any dimension`
+:bdg-secondary:`TensorDict API`
 
-- ``points``: the coordinates, with shape ``(n_points, n_spatial_dims)``.
-- ``cells``: the point indices of each cell, with shape
-  ``(n_cells, n_manifold_dims + 1)`` and an integer dtype.
-- ``point_data``, ``cell_data``, and ``global_data``: ``TensorDict``
-  containers for fields of any rank and with nested keys, one value for each
-  point, for each cell, or for the whole mesh. Refer to :doc:`fields` for details.
+.. figure:: ../../img/mesh/mesh_data_model.png
+   :alt: A planar mesh of five points and four triangles beside its tensors.
+         The points table has five rows of coordinates. The cells table has
+         four rows of point indices, with an arrow from the first row to its
+         triangle. Data columns sit beside each table, and one box holds the
+         global data.
+   :align: center
+   :width: 100%
 
-``Mesh`` and ``DomainMesh`` are
-`tensorclasses <https://pytorch.org/tensordict/stable/reference/tensorclass.html>`_,
-so they also support the TensorDict API, for example ``.to(device)``,
-``.clone()``, ``.detach()``, and ``torch.stack``. One ``.to("cuda")`` call
-moves all points, cells, and data. ``Mesh`` computes geometric quantities,
-such as centroids, areas, normals, and curvature, on first access and caches
-them.
+   A ``Mesh`` is five tensors. ``points`` and ``cells`` carry the geometry,
+   and ``point_data``, ``cell_data``, and ``global_data`` carry the fields.
 
-Most mesh operations are available both as ``Mesh`` methods and as functions
-in the submodules. For many of them, the method is the function itself, and
-Python supplies the mesh as its first argument. For example,
-``mesh.rotate(...)`` is ``rotate(mesh, ...)`` from :doc:`transformations`.
+The five fields have the following shapes:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 38 40
+
+   * - Field
+     - Shape
+     - Holds
+   * - ``points``
+     - ``(n_points, n_spatial_dims)``
+     - The coordinates of each point
+   * - ``cells``
+     - ``(n_cells, n_manifold_dims + 1)``, integer
+     - The point indices of each simplex
+   * - ``point_data``
+     - ``(n_points, ...)`` for each field
+     - Fields with one value for each point
+   * - ``cell_data``
+     - ``(n_cells, ...)`` for each field
+     - Fields with one value for each cell
+   * - ``global_data``
+     - ``(...)`` for each field
+     - Fields with one value for the whole mesh
+
+The manifold dimension (``n_manifold_dims``) is the dimension of the cells: 0
+for points, 1 for edges, 2 for triangles, and 3 for tetrahedra. The spatial
+dimension (``n_spatial_dims``) is the number of coordinates of each point, and
+it is never smaller. The three data containers are ``TensorDict`` objects that
+hold fields of any rank with nested keys. Refer to :doc:`fields` for details.
+
+.. tip::
+
+   ``Mesh`` and ``DomainMesh`` are
+   `tensorclasses <https://pytorch.org/tensordict/stable/reference/tensorclass.html>`_.
+   One ``mesh.to("cuda")`` call moves all points, cells, and data, and
+   ``.clone()``, ``.detach()``, and ``torch.stack`` work as they do on a
+   ``TensorDict``.
+
+The most-used members are the following:
+
+.. grid:: 1 2 4 4
+   :gutter: 2
+
+   .. grid-item-card:: Mesh.merge
+      :link: physicsnemo.mesh.mesh.Mesh.merge
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Join meshes into one, for example to batch them.
+
+   .. grid-item-card:: Mesh.get_facet_mesh
+      :link: physicsnemo.mesh.mesh.Mesh.get_facet_mesh
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Faces, edges, or vertices of the cells as a new mesh.
+
+   .. grid-item-card:: Mesh.compute_point_derivatives
+      :link: physicsnemo.mesh.mesh.Mesh.compute_point_derivatives
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Gradients of point fields, stored as new fields.
+
+   .. grid-item-card:: Mesh.with_data
+      :link: physicsnemo.mesh.mesh.Mesh.with_data
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      A new mesh with new fields that keeps the cached geometry.
 
 Example
 -------
@@ -59,16 +125,26 @@ Example
     mesh = mesh.compute_point_derivatives(keys="T", method="lsq")
     print(mesh.point_data["T_gradient"].shape)  # torch.Size([3, 2])
 
-To build a triangle mesh from a surface whose cells are arbitrary polygons,
-use :meth:`Mesh.from_polygons`, described in :doc:`tessellation`.
+``Mesh`` computes geometric quantities, such as centroids, areas, normals,
+and curvature, on first access and caches them. Most operations are both a
+``Mesh`` method and a function in a submodule, so ``mesh.rotate(...)`` is
+``rotate(mesh, ...)`` from :doc:`transformations`. To build a triangle mesh
+from a surface whose cells are arbitrary polygons, use
+:meth:`Mesh.from_polygons`, described in :doc:`tessellation`.
 
-Cache-Aware Functional Updates
-------------------------------
+.. important::
+
+   :attr:`Mesh.cell_normals` and :attr:`Mesh.point_normals` need codimension 1,
+   such as triangles in 3D or edges in 2D. On any other mesh, they raise
+   ``ValueError``.
+
+Choosing an Update Method
+-------------------------
 
 Use the cache-aware replacement methods to make a mesh that keeps the same
 point or cell indexing. Each method returns a new ``Mesh`` with independent
-``TensorDict`` containers that share their tensor leaves. The following table
-lists the methods:
+``TensorDict`` containers that share their tensor leaves. Pick the method by
+what changes:
 
 .. list-table::
    :header-rows: 1
@@ -89,16 +165,18 @@ lists the methods:
      - Remove cached values without changing the mesh
      - Clear every cache
 
-The ``keep`` override accepts any of the following:
+.. dropdown:: Retaining caches with ``keep``
 
-- A top-level string such as ``"topology"``
-- A single nested-key tuple such as ``("cell", "areas")``
-- A sequence of keys
+   The ``keep`` override accepts any of the following:
 
-Use a list to retain several keys, for example
-``["topology", ("cell", "areas")]``. Retaining a cache that depends on
-replaced geometry or connectivity is an expert operation. You are responsible
-for the validity of the retained cache.
+   - A top-level string such as ``"topology"``
+   - A single nested-key tuple such as ``("cell", "areas")``
+   - A sequence of keys
+
+   Use a list to retain several keys, for example
+   ``["topology", ("cell", "areas")]``. Retaining a cache that depends on
+   replaced geometry or connectivity is an expert operation. You are
+   responsible for the validity of the retained cache.
 
 Summary
 -------
@@ -128,6 +206,10 @@ Summary
    Mesh.strip_caches
    Mesh.cell_data_to_point_data
    Mesh.point_data_to_cell_data
+   Mesh.to
+   Mesh.clone
+   Mesh.save
+   Mesh.load
 
 .. rubric:: Dimensions and Geometry
 
@@ -230,16 +312,185 @@ API Reference
 -------------
 
 .. autoclass:: Mesh
-   :members:
    :show-inheritance:
+
+The members of ``Mesh`` follow, in the groups of the Summary.
+
+.. _mesh-api-construction:
+
+Construction and Data
+^^^^^^^^^^^^^^^^^^^^^
+
+.. automethod:: Mesh.from_polygons
+
+.. automethod:: Mesh.merge
+
+.. automethod:: Mesh.slice_points
+
+.. automethod:: Mesh.slice_cells
+
+.. automethod:: Mesh.pad
+
+.. automethod:: Mesh.pad_to_next_power
+
+.. automethod:: Mesh.with_points
+
+.. automethod:: Mesh.with_cells
+
+.. automethod:: Mesh.with_data
+
+.. automethod:: Mesh.strip_caches
+
+.. automethod:: Mesh.cell_data_to_point_data
+
+.. automethod:: Mesh.point_data_to_cell_data
+
+.. automethod:: Mesh.to
+
+.. automethod:: Mesh.clone
+
+.. automethod:: Mesh.save
+
+.. automethod:: Mesh.load
+
+.. _mesh-api-geometry:
+
+Dimensions and Geometry
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autoproperty:: Mesh.n_points
+
+.. autoproperty:: Mesh.n_cells
+
+.. autoproperty:: Mesh.n_spatial_dims
+
+.. autoproperty:: Mesh.n_manifold_dims
+
+.. autoproperty:: Mesh.codimension
+
+.. autoproperty:: Mesh.cell_centroids
+
+.. autoproperty:: Mesh.cell_areas
+
+.. autoproperty:: Mesh.cell_normals
+
+.. autoproperty:: Mesh.point_normals
+
+.. automethod:: Mesh.compute_point_normals
+
+.. autoproperty:: Mesh.gaussian_curvature_vertices
+
+.. autoproperty:: Mesh.gaussian_curvature_cells
+
+.. autoproperty:: Mesh.mean_curvature_vertices
+
+.. _mesh-api-topology:
+
+Topology and Conversion
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. automethod:: Mesh.get_facet_mesh
+
+.. automethod:: Mesh.get_boundary_mesh
+
+.. automethod:: Mesh.is_manifold
+
+.. automethod:: Mesh.is_watertight
+
+.. automethod:: Mesh.get_point_to_points_adjacency
+
+.. automethod:: Mesh.get_point_to_cells_adjacency
+
+.. automethod:: Mesh.get_cell_to_cells_adjacency
+
+.. automethod:: Mesh.get_cell_to_points_adjacency
+
+.. automethod:: Mesh.to_edge_graph
+
+.. automethod:: Mesh.to_dual_graph
+
+.. automethod:: Mesh.to_point_cloud
+
+.. _mesh-api-calculus:
+
+Calculus, Integration, and Sampling
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. automethod:: Mesh.compute_point_derivatives
+
+.. automethod:: Mesh.compute_cell_derivatives
+
+.. automethod:: Mesh.gradient
+
+.. automethod:: Mesh.divergence
+
+.. automethod:: Mesh.curl
+
+.. automethod:: Mesh.laplacian
+
+.. automethod:: Mesh.integrate
+
+.. automethod:: Mesh.integrate_samples
+
+.. automethod:: Mesh.integrate_flux
+
+.. automethod:: Mesh.integrate_moment
+
+.. automethod:: Mesh.sample_random_points_on_cells
+
+.. automethod:: Mesh.sample_data_at_points
+
+.. _mesh-api-transformations:
+
+Transformations and Deformations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. automethod:: Mesh.translate
+
+.. automethod:: Mesh.rotate
+
+.. automethod:: Mesh.scale
+
+.. automethod:: Mesh.transform
+
+.. automethod:: Mesh.displace
+
+.. automethod:: Mesh.sobolev_deform
+
+.. automethod:: Mesh.morph
+
+.. automethod:: Mesh.radial_basis_function_deform
+
+.. automethod:: Mesh.free_form_deform
+
+.. automethod:: Mesh.shrinkwrap
+
+.. _mesh-api-editing:
+
+Editing, Checking, and Viewing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. automethod:: Mesh.subdivide
+
+.. automethod:: Mesh.remesh
+
+.. automethod:: Mesh.clean
+
+.. automethod:: Mesh.validate
+
+.. autoproperty:: Mesh.quality_metrics
+
+.. autoproperty:: Mesh.statistics
+
+.. automethod:: Mesh.draw
 
 DomainMesh
 ^^^^^^^^^^
 
 .. currentmodule:: physicsnemo.mesh.domain_mesh
 
-:class:`DomainMesh` groups an interior mesh with named boundary meshes and
-domain-level data. Operations such as :meth:`DomainMesh.morph` and
+:class:`DomainMesh` groups an ``interior`` mesh with named ``boundaries``
+meshes and domain-level ``global_data``. Operations such as :meth:`DomainMesh.morph` and
 :meth:`DomainMesh.radial_basis_function_deform` apply one geometry change to
 every component and return a new domain. The following example builds a
 domain from a mesh and its boundary:
@@ -255,3 +506,7 @@ domain from a mesh and its boundary:
 .. autoclass:: DomainMesh
    :members:
    :show-inheritance:
+
+.. automethod:: DomainMesh.clone
+
+.. automethod:: DomainMesh.save

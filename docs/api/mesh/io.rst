@@ -6,22 +6,59 @@ I/O
 ``physicsnemo.mesh.io`` converts between :class:`~physicsnemo.mesh.mesh.Mesh`
 and `PyVista <https://pyvista.org/>`_ meshes, and saves meshes in the native
 Zarr format. PyVista reads and writes many file formats, such as VTK, STL,
-PLY, and OBJ, so it is the main way to load and save files. The module has
-the following functions:
+PLY, and OBJ, so it is the main way to load and save files.
 
-- :func:`from_pyvista` converts a ``pyvista.PolyData``,
-  ``pyvista.UnstructuredGrid``, or ``pyvista.PointSet`` to a ``Mesh``, with
-  its point data and cell data. It detects the manifold dimension, or you set
-  it with ``manifold_dim``. Polygons and polyhedra become triangles and
-  tetrahedra. With ``point_source="cell_centroids"``, the cell centroids
-  become a point cloud or a dual graph, which avoids tetrahedralization of a
-  large polyhedral mesh.
-- :func:`to_pyvista` converts a ``Mesh`` to a ``pyvista.PolyData`` (curves
-  and surfaces), a ``pyvista.UnstructuredGrid`` (volumes), or a
-  ``pyvista.PointSet`` (a point cloud without cells).
-- :func:`to_zarr` and :func:`from_zarr` save and load a ``Mesh`` or a
-  :class:`~physicsnemo.mesh.domain_mesh.DomainMesh`, with all of its data, in
-  a Zarr store.
+:bdg-secondary:`VTK, STL, PLY, OBJ, and more` :bdg-secondary:`Zarr`
+:bdg-info:`point and cell data`
+
+.. figure:: ../../img/mesh/io_cells_to_simplices.png
+   :alt: A grid of eight cubes, and three meshes made from it: the cubes split
+         into shrunk tetrahedra, the unique edges as a graph, and one point at
+         the center of each cube.
+   :align: center
+   :width: 100%
+
+   One PyVista grid of hexahedra, read three ways. ``from_pyvista(grid)``
+   splits the cells into tetrahedra, ``manifold_dim=1`` keeps the edge graph,
+   and ``point_source="cell_centroids"`` gives a point cloud.
+
+The module has the following functions:
+
+.. grid:: 1 1 3 3
+   :gutter: 2
+
+   .. grid-item-card:: from_pyvista
+      :link: physicsnemo.mesh.io.from_pyvista
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      A ``Mesh`` from a ``PolyData``, ``UnstructuredGrid``, or ``PointSet``.
+
+   .. grid-item-card:: to_pyvista
+      :link: physicsnemo.mesh.io.to_pyvista
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      A PyVista mesh, to save in any format that PyVista writes.
+
+   .. grid-item-card:: to_zarr and from_zarr
+      :link: physicsnemo.mesh.io.to_zarr
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      A ``Mesh`` or ``DomainMesh`` with all of its data, in a Zarr store.
+
+:func:`from_pyvista` keeps the point data and cell data, and it detects the
+manifold dimension, or you set it with ``manifold_dim``. Polygons and
+polyhedra become triangles and tetrahedra. With
+``point_source="cell_centroids"``, the cell centroids become a point cloud or
+a dual graph, which avoids tetrahedralization of a large polyhedral mesh.
+:func:`to_pyvista` returns a ``pyvista.PolyData`` for curves and surfaces, a
+``pyvista.UnstructuredGrid`` for volumes, and a ``pyvista.PointSet`` for a
+point cloud without cells.
 
 Example
 -------

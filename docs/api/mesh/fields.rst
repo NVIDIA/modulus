@@ -15,6 +15,8 @@ rank-2 tensor :math:`T` becomes :math:`R T R^\top`.
 it reads or writes, and check data against that declaration. A plain
 concatenation of channels loses this information.
 
+:bdg-secondary:`any rank` :bdg-secondary:`JSON round trip` :bdg-info:`rank-aware rotations`
+
 .. figure:: ../../img/mesh/fields_rank_transforms.png
    :alt: Two rows of three panels. Top: a square triangle mesh colored by
          pressure, the same mesh with arrows that point mostly to the right,
@@ -29,6 +31,35 @@ concatenation of channels loses this information.
    and after ``mesh.rotate(math.radians(30), transform_point_data=True)``. The
    pressure keeps its values, the velocity turns as :math:`v' = R v`, and the
    symmetric stress turns as :math:`T' = R T R^\top`.
+
+The most-used members are the following:
+
+.. grid:: 1 1 3 3
+   :gutter: 2
+
+   .. grid-item-card:: FieldSchema.parse
+      :link: physicsnemo.mesh.fields.FieldSchema.parse
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      A schema from a mapping or a JSON file.
+
+   .. grid-item-card:: FieldSchema.check
+      :link: physicsnemo.mesh.fields.FieldSchema.check
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Every missing field and rank mismatch in one error.
+
+   .. grid-item-card:: RankSpec
+      :link: physicsnemo.mesh.fields.RankSpec
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      The rank, symmetry, and parity of one field.
 
 Example
 -------

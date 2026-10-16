@@ -3,44 +3,65 @@ Tessellation
 
 .. currentmodule:: physicsnemo.mesh.tessellation
 
-``physicsnemo.mesh.tessellation`` has two jobs:
+``physicsnemo.mesh.tessellation`` turns polygons into the simplices that a
+:class:`~physicsnemo.mesh.mesh.Mesh` stores, and fills a closed boundary with
+quality triangles. :func:`triangulate` splits each ``k``-gon of a polygon soup
+into ``k - 2`` triangles, and :func:`fill_interior` meshes the inside of a
+closed boundary without moving it.
 
-- :func:`triangulate` decomposes the polygons of a *polygon soup* into the
-  simplices that the :class:`~physicsnemo.mesh.mesh.Mesh` data structure
-  stores. It uses a vectorized vertex-0 fan for convex polygons and `ear
-  clipping <https://en.wikipedia.org/wiki/Polygon_triangulation>`_ for the
-  rare non-convex ones.
-- :func:`fill_interior` fills a closed boundary mesh with quality simplices.
-  Refer to `Exact-Boundary Interior Filling`_ below.
+:bdg-secondary:`any polygon` :bdg-warning:`fill_interior in 2D only`
 
-Each polygon must be simple (no self-intersections), with no repeated
-consecutive vertices or zero-length edges. :func:`triangulate` does not detect
-these cases, and the result is undefined. Ear clipping also assumes that a
-non-convex polygon is approximately planar.
+.. figure:: ../../img/mesh/tessellation_fan_vs_ear.png
+   :alt: Three panels. Left: a quad, a convex hexagon, and a non-convex arrow
+         outlined. Middle: the same polygons split into triangles colored by
+         their parent polygon. Right: the arrow split two ways, a vertex-0 fan
+         whose triangles leave the polygon, and the ear clipping that stays
+         inside.
+   :align: center
+   :width: 100%
+
+   :func:`triangulate` gives each ``k``-gon ``k - 2`` triangles. A non-convex
+   polygon needs ear clipping, because the triangles of a vertex-0 fan leave
+   the polygon and their unsigned areas add up to more than its area.
+
+The most-used functions are the following:
+
+.. grid:: 1 1 3 3
+   :gutter: 2
+
+   .. grid-item-card:: Mesh.from_polygons
+      :link: physicsnemo.mesh.mesh.Mesh.from_polygons
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      A triangle ``Mesh`` from a polygon soup, with its cell data.
+
+   .. grid-item-card:: triangulate
+      :link: physicsnemo.mesh.tessellation.triangulate
+      :link-type: any
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Triangles and the index of each one's parent polygon.
+
+   .. grid-item-card:: fill_interior
+      :link: mesh-tessellation-fill
+      :link-type: ref
+      :shadow: md
+      :class-card: sd-card-hover
+
+      Quality triangles inside a closed boundary that stays exact.
+
+Example
+-------
 
 A *polygon soup* is a flat list of polygonal cells, each given only by its
 vertex ring, with no shared-edge connectivity between cells. A surface mesh
-takes this form when it is read straight from a polygonal face list, for
-example, a VTP or STL file. Equivalently, it is a surface mesh whose cells can
-be arbitrary polygons rather than triangles.
-
-.. note::
-
-   This is unrelated to the (now deprecated) ``Tessellation`` *geometry* class
-   in PhysicsNeMo-Sym (``physicsnemo.sym.geometry.tessellation``), which
-   represents a tessellated STL surface as a solid for sampling
-   surface and interior points and signed-distance values. The utilities here
-   instead split the polygonal cells of an existing mesh into simplices.
-
-Handling non-convex polygons correctly matters for any unsigned-area-weighted
-quantity, such as wall-shear or viscous force integration, or total wetted
-area. The signed *vector* area of a vertex-0 fan telescopes to the polygon's
-total area regardless of convexity, but the sum of the *unsigned* triangle
-areas does not.
-
+read from a polygonal face list, such as a VTP or STL file, takes this form.
 Every ``k``-gon yields exactly ``k - 2`` triangles, so indexing with the
-returned ``parent_index`` broadcasts per-polygon data to the output identically
-in both paths. The following example triangulates one quad:
+returned ``parent_index`` broadcasts per-polygon data to the triangles. The
+following example triangulates one quad:
 
 .. code:: python
 
@@ -58,12 +79,36 @@ in both paths. The following example triangulates one quad:
     # Low-level: triangle connectivity plus the parent-polygon index.
     cells, parent_index = triangulate(points, polygons)
     cells          # tensor([[0, 1, 2], [0, 2, 3]])
-    parent_index   # tensor([0, 0]); broadcast data via cell_data[parent_index]
+    parent_index   # tensor([0, 0]), so cell_data[parent_index] broadcasts
 
     # High-level: build a Mesh directly, broadcasting per-polygon cell data.
     mesh = Mesh.from_polygons(
         points, polygons, cell_data={"pressure": torch.tensor([2.5])}
     )
+
+
+:func:`triangulate` uses a vectorized vertex-0 fan for convex polygons and
+`ear clipping <https://en.wikipedia.org/wiki/Polygon_triangulation>`_ for the
+rare non-convex ones. Getting non-convex polygons right matters for any
+unsigned-area-weighted quantity, such as wall-shear or viscous force
+integration, or total wetted area.
+
+.. warning::
+
+   Each polygon must be simple (no self-intersections), with no repeated
+   consecutive vertices or zero-length edges. :func:`triangulate` does not detect
+   these cases, and the result is undefined. Ear clipping also assumes that a
+   non-convex polygon is approximately planar.
+
+.. note::
+
+   This is unrelated to the (now deprecated) ``Tessellation`` *geometry* class
+   in PhysicsNeMo-Sym (``physicsnemo.sym.geometry.tessellation``), which
+   represents a tessellated STL surface as a solid for sampling
+   surface and interior points and signed-distance values. The utilities here
+   instead split the polygonal cells of an existing mesh into simplices.
+
+.. _mesh-tessellation-fill:
 
 Exact-Boundary Interior Filling
 -------------------------------
