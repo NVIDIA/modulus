@@ -280,15 +280,17 @@ class TestForceCopy:
 
     @pytest.mark.parametrize("n_manifold_dims", [1, 3])
     def test_to_pyvista_shared_cells_outlive_source_mesh(self, n_manifold_dims):
-        # Without force_copy, the VTK connectivity may share mesh.cells'
-        # storage; it must stay valid after the source Mesh is freed.
+        # Without force_copy, the VTK connectivity shares mesh.cells' storage;
+        # it must stay valid after the source Mesh is freed.
         cells = torch.tensor(
             [[0, 1], [1, 2]] if n_manifold_dims == 1 else [[0, 1, 2, 3]]
         )
         expected = cells.clone()
         mesh = Mesh(points=torch.rand(4, 3), cells=cells)
         pv_mesh = to_pyvista(mesh)
-        del mesh, cells
+        cell_array = pv_mesh.GetLines() if n_manifold_dims == 1 else pv_mesh.GetCells()
+        assert np.shares_memory(cell_array.connectivity_array, cells.numpy())
+        del mesh, cells, cell_array
         gc.collect()
         _ = [torch.full((1000, 4), -1) for _ in range(100)]
 
