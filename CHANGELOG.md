@@ -288,6 +288,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   differentiable with respect to the mesh vertices and the query points.
   Before, `backward` raised because the Warp op had no autograd formula. The
   hit points and hit faces carry no gradients.
+- `Mesh.clean()`, `clean_mesh`, `merge_duplicate_points` and `validate()` find
+  every duplicate point in clusters of more than 100 coincident points. Before,
+  some duplicates were missed and stayed in the cleaned mesh.
+- `fill_holes` works on meshes with point or cell data, where it raised before.
+  The new points and faces hold NaN in floating-point fields and 0 in others.
+- `compute_mesh_statistics` reports the mean and standard deviation of the
+  edge lengths of all cells. Before, the mean averaged each cell's shortest and
+  longest edge, and the standard deviation covered only the longest edges.
+- `is_manifold()` rejects triangle surfaces pinched at a vertex, such as two
+  closed surfaces that share a single vertex.
+- `get_boundary_edges` returns edges, not triangles, for meshes of four or more
+  manifold dimensions.
+- `Mesh.with_data` given a dict no longer shares nested data groups with the
+  source mesh, so changing the result leaves the source unchanged.
+- `cell_data_to_point_data` and `point_data_to_cell_data` raise, unless
+  `overwrite_keys=True`, when a field has the name of a data group in the
+  destination or the reverse. Before, they silently dropped data.
+- Cleaning or repairing a mesh with no cells keeps its point data fields, now
+  empty, so the result can be merged with other meshes.
+- `get_point_to_points_adjacency()` returns no neighbors for meshes of vertex
+  cells, where it raised before.
 - `Mesh` and `DomainMesh` subclasses that add fields no longer need their own
   `__init__` with tensordict 0.15, whose tensorclass subclasses inherit the
   parent's `__init__`. The base `__init__` accepts and stores the fields that a
