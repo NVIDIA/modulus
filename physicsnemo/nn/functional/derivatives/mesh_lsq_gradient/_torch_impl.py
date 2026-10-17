@@ -94,19 +94,23 @@ def _mesh_lsq_gradients_torch(
     counts = neighbor_offsets[1:] - neighbor_offsets[:-1]
 
     ### Flatten component dimensions so scalar and tensor fields share one solve path.
-    values_flat = [
-        field.contiguous().reshape(n_entities, field.shape[1:].numel())
-        for field in values
-    ]
+    # Several fields: each group gathers its rows from the field as it is and
+    # flattens those, so no field is copied whole (they would all stay alive).
+    n_components = [field.shape[1:].numel() for field in values]
+    several = len(values) > 1
+    values_flat = (
+        list(values)
+        if several
+        else [values[0].contiguous().reshape(n_entities, n_components[0])]
+    )
 
     def zero_gradients(i: int) -> torch.Tensor:
         """Zero gradients of field ``i``, flattened."""
-        shape = (n_entities, n_dims, values_flat[i].shape[1])
-        return torch.zeros(shape, dtype=dtype, device=values_flat[i].device)
+        shape = (n_entities, n_dims, n_components[i])
+        return torch.zeros(shape, dtype=dtype, device=values[i].device)
 
     # Several fields: each field's gradients are created before its first
     # solve, as one field at a time would
-    several = len(values_flat) > 1
     gradients_flat = [None if several else zero_gradients(0) for _ in values_flat]
 
     points_cast = points.to(dtype=dtype)
@@ -163,7 +167,12 @@ def _mesh_lsq_gradients_torch(
                     offsets_group.unsqueeze(1) + col_range.unsqueeze(0)
                 ]
             values_center = field_flat[entity_indices]
-            delta_values = field_flat[neighbors] - values_center.unsqueeze(1)
+            neighbor_values = field_flat[neighbors]
+            if several:  # gathered from the field as it is: flatten them
+                values_center = values_center.reshape(group_size, -1)
+                neighbor_values = neighbor_values.reshape(group_size, n_neighbors, -1)
+            delta_values = neighbor_values - values_center.unsqueeze(1)
+            del neighbor_values
             b_weighted = sqrt_w * delta_values
             # Only the weighted system is needed from here on
             del neighbors, values_center, delta_values

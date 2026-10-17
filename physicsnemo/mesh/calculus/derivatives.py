@@ -279,16 +279,20 @@ def compute_cell_derivatives(
 
     ### LSQ: fields of one dtype share their LSQ systems
     if method == "lsq":
-        lsq_gradients = _gradients_by_dtype(
-            [mesh.cell_data[key] for key in key_list],
-            lambda fields: _compute_gradients_cells_lsq(mesh, fields),
+        lsq_gradients: list["torch.Tensor | None"] = list(
+            _gradients_by_dtype(
+                [mesh.cell_data[key] for key in key_list],
+                lambda fields: _compute_gradients_cells_lsq(mesh, fields),
+            )
         )
 
     ### Compute gradients for each key
     for i, key in enumerate(key_list):
         ### Compute extrinsic gradient
         if method == "lsq":
-            grad_extrinsic = lsq_gradients[i]
+            # Released from the list, so that an extrinsic gradient that is
+            # only projected is freed once projected
+            grad_extrinsic, lsq_gradients[i] = lsq_gradients[i], None
         elif method == "dec":
             raise NotImplementedError(
                 "DEC cell gradients not yet implemented. Use method='lsq'."

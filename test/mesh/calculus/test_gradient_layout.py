@@ -190,6 +190,9 @@ def test_lsq_derivatives_of_several_fields_match_one_field_at_a_time(
         ("flow", "u"): torch.randn(n, 3, generator=g, dtype=dtype),
         ("flow", "k"): torch.randn(n, generator=g, dtype=dtype),
         "S": torch.randn(n, 2, 2, generator=g, dtype=dtype),
+        # Strided fields: a transposed tensor and every other column
+        "T": torch.randn(n, 2, 2, generator=g, dtype=dtype).transpose(1, 2),
+        "w": torch.randn(n, 6, generator=g, dtype=dtype)[:, ::2],
     }
     ### A field of the other dtype: its own group. (The intrinsic point
     ### gradient of a field whose dtype differs from the surface mesh's raises.)
