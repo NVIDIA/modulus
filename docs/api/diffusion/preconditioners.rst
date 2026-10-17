@@ -150,6 +150,14 @@ API Reference
     :members:
     :exclude-members: forward
 
+:code:`TrigFlowPreconditioner`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: physicsnemo.diffusion.preconditioners.TrigFlowPreconditioner
+    :show-inheritance:
+    :members:
+    :exclude-members: forward
+
 :code:`VEPreconditioner`
 ~~~~~~~~~~~~~~~~~~~~~~~~
 

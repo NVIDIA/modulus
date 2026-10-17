@@ -23,6 +23,7 @@ from physicsnemo.diffusion import DiffusionExtraTimes
 from physicsnemo.diffusion.preconditioners import (
     EDMPreconditioner,
     IDDPMPreconditioner,
+    TrigFlowPreconditioner,
     VEPreconditioner,
     VPPreconditioner,
 )
@@ -35,8 +36,9 @@ CONFIGS = (
     (VEPreconditioner, {}),
     (VPPreconditioner, {}),
     (IDDPMPreconditioner, {"M": 32}),
+    (TrigFlowPreconditioner, {"sigma_data": 1.4}),
 )
-IDS = ("edm", "ve", "vp", "iddpm")
+IDS = ("edm", "ve", "vp", "iddpm", "trigflow")
 
 
 @pytest.mark.parametrize("preconditioner,kwargs", CONFIGS, ids=IDS)
