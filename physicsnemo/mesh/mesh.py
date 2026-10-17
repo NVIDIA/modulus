@@ -67,7 +67,6 @@ from physicsnemo.mesh.transformations.geometric import (
     translate,
 )
 from physicsnemo.mesh.utilities._gather import gather_rows
-from physicsnemo.mesh.utilities._packing import packed_apply
 from physicsnemo.mesh.utilities._padding import _pad_by_tiling_last, _pad_with_value
 from physicsnemo.mesh.utilities._scatter_ops import scatter_aggregate
 from physicsnemo.mesh.utilities.mesh_repr import format_mesh_repr
@@ -2267,10 +2266,7 @@ class Mesh(
             self.n_cells, device=self.points.device
         ).repeat_interleave(n_vertices_per_cell)
 
-        ### One field at a time, with rows padded off 16-byte multiples (see
-        ### packed_apply).
-        converted = packed_apply(
-            fields,
+        converted = fields.apply(
             lambda cell_values: scatter_aggregate(
                 src_data=cell_values[cell_indices],
                 src_to_dst_mapping=point_indices,
@@ -2279,7 +2275,6 @@ class Mesh(
                 aggregation="mean",
             ),
             batch_size=torch.Size([self.n_points]),
-            group=False,
         )
         new_point_data.update(converted)
 

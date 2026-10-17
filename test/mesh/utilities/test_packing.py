@@ -20,6 +20,7 @@ import pytest
 import torch
 from tensordict import TensorDict
 
+from physicsnemo.mesh.utilities import _packing
 from physicsnemo.mesh.utilities._packing import packed_apply
 from physicsnemo.mesh.utilities._scatter_ops import scatter_aggregate
 
@@ -111,8 +112,10 @@ def test_calls_once_per_group():
 
 
 @pytest.mark.cuda
-def test_cuda_pads_rows_of_16_bytes():
-    """On CUDA, four float32 components get a fifth, zero column."""
+@pytest.mark.parametrize("pad_rows", [True, False])
+def test_cuda_pads_rows_of_16_bytes(monkeypatch, pad_rows):
+    """On CUDA before PyTorch 2.16, four float32 components get a fifth, zero column."""
+    monkeypatch.setattr(_packing, "_PAD_ROWS_OF_16_BYTES", pad_rows)
     widths: list[int] = []
 
     def fn(x):
@@ -125,24 +128,11 @@ def test_cuda_pads_rows_of_16_bytes():
         device="cuda",
     )
     out = packed_apply(data, fn, batch_size=[2])
-    assert widths == [5]
+    assert widths == [5 if pad_rows else 4]
     _assert_same(
         out,
         data.apply(lambda x: x[torch.tensor([1, 0], device="cuda")], batch_size=[2]),
     )
-
-
-def test_group_false_calls_once_per_leaf():
-    calls: list[tuple[int, ...]] = []
-
-    def fn(x):
-        calls.append(tuple(x.shape))
-        return x * 2
-
-    data = TensorDict({"p": torch.ones(5), "u": torch.ones(5, 3)}, batch_size=[5])
-    out = packed_apply(data, fn, batch_size=[5], group=False)
-    assert calls == [(5,), (5, 3)]
-    _assert_same(out, data.apply(fn, batch_size=[5]))
 
 
 def test_keeps_empty_nested_tensordicts():
@@ -166,8 +156,9 @@ def test_a_field_named_like_the_pad_column():
 
 
 @pytest.mark.cuda
-def test_cuda_pads_a_single_float64_vector():
+def test_cuda_pads_a_single_float64_vector(monkeypatch):
     """One float64 (N, 2) field has 16-byte rows, so it is padded even alone."""
+    monkeypatch.setattr(_packing, "_PAD_ROWS_OF_16_BYTES", True)
     widths: list[int] = []
     index = torch.tensor([2, 0, 1], device="cuda")
 
@@ -180,7 +171,7 @@ def test_cuda_pads_a_single_float64_vector():
         batch_size=[4],
         device="cuda",
     )
-    out = packed_apply(data, fn, batch_size=[3], group=False)
+    out = packed_apply(data, fn, batch_size=[3])
     assert widths == [3]
     _assert_same(out, data.apply(lambda x: x[index], batch_size=[3]))
 

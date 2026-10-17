@@ -29,7 +29,6 @@ from tensordict import TensorDict
 
 from physicsnemo.mesh.neighbors._adjacency import Adjacency, build_adjacency_from_pairs
 from physicsnemo.mesh.spatial import BVH
-from physicsnemo.mesh.utilities._packing import packed_apply
 from physicsnemo.nn.functional.neighbors import knn
 from physicsnemo.utils._small_linalg import (
     best_base_first,
@@ -741,14 +740,17 @@ def _accumulate_sampled_data(
 
         return output
 
-    ### One field at a time, with rows padded off 16-byte multiples (see
-    ### packed_apply).
-    return packed_apply(
-        source_data,
+    # apply() always returns a TensorDict here (our fn never returns None),
+    # but the generic return type is TensorDict | None.
+    result = source_data.apply(
         _accumulate_field,
         batch_size=torch.Size([n_queries]),
-        group=False,
     )
+    if not isinstance(
+        result, TensorDict
+    ):  # pragma: no cover — apply() returns TensorDict here
+        raise TypeError(f"Expected TensorDict from apply(), got {type(result)}")
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -145,9 +145,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mesh LSQ derivatives of several fields (`compute_point_derivatives`,
   `compute_cell_derivatives`) solve the fields together, up to 3.7x faster
   on GPU.
-- On CUDA, mesh data operations no longer slow down for fields whose rows are
-  a multiple of 16 bytes wide, such as `(N, 4)` float32 fields:
-  `cell_data_to_point_data` and facet meshes are up to 4.9x faster for them.
 - `ClusterTree.compute_source_aggregates` packs its source data with
   `TensorDict.pack`, so source data with leaves of several dtypes now raises
   a `TypeError` instead of being promoted.

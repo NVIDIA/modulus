@@ -33,7 +33,6 @@ import torch
 from jaxtyping import Float, Int
 from tensordict import TensorDict
 
-from physicsnemo.mesh.utilities._packing import packed_apply
 from physicsnemo.mesh.utilities._tolerances import safe_eps
 from physicsnemo.utils._index_tuple_ops import sort_index_tuples_, unique_index_tuples
 
@@ -391,11 +390,9 @@ def deduplicate_and_aggregate_facets(
         return_inverse=True,
     )
 
-    ### Aggregate data, one field at a time, with rows padded off 16-byte
-    ### multiples (see packed_apply)
+    ### Aggregate data using TensorDict.apply() (handles nested TensorDicts automatically)
     n_unique_facets = len(unique_facets)
-    aggregated_data = packed_apply(
-        parent_cell_data,
+    aggregated_data = parent_cell_data.apply(
         lambda tensor: _aggregate_tensor_data(
             tensor,
             parent_cell_indices,
@@ -404,7 +401,6 @@ def deduplicate_and_aggregate_facets(
             aggregation_weights,
         ),
         batch_size=torch.Size([n_unique_facets]),
-        group=False,
     )
 
     return unique_facets, aggregated_data, inverse_indices
@@ -581,8 +577,7 @@ def extract_facet_mesh_data(
             )
 
             ### Aggregate data from parent cells to unique facets
-            facet_cell_data = packed_apply(
-                filtered_cell_data,
+            facet_cell_data = filtered_cell_data.apply(
                 lambda tensor: _aggregate_tensor_data(
                     tensor,
                     parent_cell_indices,
@@ -591,7 +586,6 @@ def extract_facet_mesh_data(
                     weights,
                 ),
                 batch_size=torch.Size([n_unique_facets]),
-                group=False,
             )
 
     elif data_source == "points":
@@ -661,11 +655,8 @@ def _aggregate_point_data_to_facets(
             aggregation="mean",
         )
 
-    ### One field at a time, with rows padded off 16-byte multiples (see
-    ### packed_apply)
-    return packed_apply(
-        point_data,
+    ### Use TensorDict.apply() to handle nested structure automatically
+    return point_data.apply(
         _aggregate_point_tensor,
         batch_size=torch.Size([n_unique_facets]),
-        group=False,
     )

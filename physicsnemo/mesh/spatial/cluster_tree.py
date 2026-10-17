@@ -970,9 +970,9 @@ class ClusterTree(TensorClass):
         # ``cumsum`` along a non-innermost dimension runs one thread per
         # column, serially over all ``N`` rows (12 ms for ``(80_000, 3)`` in
         # fp64 on a GB300, against 0.24 ms along the innermost dimension).
-        # The leaves are gathered before they are packed: a gather of packed
-        # rows a multiple of 16 bytes wide is 10-20x slower on CUDA
-        # (pytorch/pytorch#200939).
+        # The leaves are gathered before they are packed: before PyTorch 2.16,
+        # a CUDA gather of packed rows a multiple of 16 bytes wide is 10-20x
+        # slower (https://github.com/pytorch/pytorch/issues/200939).
         sorted_points = source_points[self.sorted_source_order]
         sorted_areas = areas[self.sorted_source_order]
         packed = sorted_points

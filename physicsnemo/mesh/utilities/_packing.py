@@ -17,7 +17,7 @@
 """Run a component-wise operation on the fields of a TensorDict in a few packed calls."""
 
 import math
-from typing import Callable, cast
+from typing import Callable
 
 import torch
 from tensordict import NestedKey, TensorDict, TensorDictBase
@@ -25,13 +25,18 @@ from tensordict import NestedKey, TensorDict, TensorDictBase
 ### Name of the zero column that keeps packed rows off multiples of 16 bytes.
 _PAD_KEY = "_packed_apply_pad"
 
+### Before PyTorch 2.16, CUDA gathers of rows a multiple of 16 bytes wide are
+### 10-20x slower than those of other widths, so packed rows of that width get
+### a zero column. Remove this, and the padding, once PhysicsNeMo requires
+### PyTorch 2.16: https://github.com/pytorch/pytorch/issues/200939
+_PAD_ROWS_OF_16_BYTES = torch.__version__ < (2, 16)
+
 
 def packed_apply(
     data: TensorDict,
     fn: Callable[[torch.Tensor], torch.Tensor],
     *,
     batch_size: torch.Size | tuple[int, ...],
-    group: bool = True,
 ) -> TensorDict:
     r"""``data.apply(fn, batch_size=batch_size)``, with the leaves packed together.
 
@@ -52,10 +57,12 @@ def packed_apply(
     each call of ``fn`` has a large fixed cost, such as the batched
     least-squares solves of the LSQ derivatives.  For operations bound by
     memory traffic, such as gathers and scatters of rows, packing saves little
-    time and raises peak memory, so ``group=False`` runs each leaf alone.
+    time and raises peak memory, so use :meth:`TensorDict.apply
+    <tensordict.TensorDictBase.apply>` for those.
 
-    On CUDA, a group (or leaf) whose rows are a multiple of 16 bytes wide gets
-    a column of zeros, because gathering rows of that width is 10-20x slower
+    On CUDA before PyTorch 2.16, a group whose rows are a multiple of 16 bytes
+    wide gets a column of zeros, because gathering rows of that width is
+    10-20x slower there
     (`pytorch/pytorch#200939 <https://github.com/pytorch/pytorch/issues/200939>`_).
 
     Parameters
@@ -66,9 +73,6 @@ def packed_apply(
         Component-wise operation, as above.
     batch_size : torch.Size or tuple[int, ...]
         Batch size of the result: a prefix of :math:`R`.
-    group : bool, optional, default=True
-        Whether to pack several leaves per call of ``fn``.  If ``False``,
-        each leaf runs alone, and only the padding above applies.
 
     Returns
     -------
@@ -87,27 +91,13 @@ def packed_apply(
     >>> out["p"].tolist(), out["u"].shape
     ([3.0, 1.0], torch.Size([2, 3]))
     """
-    leaves = list(data.items(include_nested=True, leaves_only=True))
-
-    def needs_pad(n_components: int, value: torch.Tensor) -> bool:
-        return (
-            value.device.type == "cuda"
-            and n_components * value.element_size() % 16 == 0
-        )
-
-    ### One leaf at a time, and no leaf to pad: ``apply`` itself.
-    if not group and not any(
-        needs_pad(math.prod(value.shape[1:]), value) for _, value in leaves
-    ):
-        return cast(TensorDict, data.apply(fn, batch_size=batch_size))
-
     ### Consecutive leaves of one dtype, at most ``max(widest, 4)`` components.
     by_dtype: dict[torch.dtype, list[tuple[NestedKey, int]]] = {}
-    for key, value in leaves:
+    for key, value in data.items(include_nested=True, leaves_only=True):
         by_dtype.setdefault(value.dtype, []).append((key, math.prod(value.shape[1:])))
     groups: list[tuple[list[NestedKey], int]] = []
     for entries in by_dtype.values():
-        cap = max(4, *(width for _, width in entries)) if group else 0
+        cap = max(4, *(width for _, width in entries))
         keys: list[NestedKey] = []
         n_components = 0
         for key, width in entries:
@@ -121,7 +111,11 @@ def packed_apply(
     results: dict[NestedKey, torch.Tensor] = {}
     for keys, n_components in groups:
         first = data.get(keys[0])
-        pad = needs_pad(n_components, first)
+        pad = (
+            _PAD_ROWS_OF_16_BYTES
+            and first.device.type == "cuda"
+            and n_components * first.element_size() % 16 == 0
+        )
         if len(keys) == 1 and not pad:
             results[keys[0]] = fn(first).contiguous()
             continue
