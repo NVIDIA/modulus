@@ -59,7 +59,6 @@ criterion, dual-tree traversal, and far-field monopole approximation.
 """
 
 import logging
-import math
 from typing import Literal, NamedTuple, Sequence
 
 import torch
@@ -1009,12 +1008,18 @@ class ClusterTree(TensorClass):
             Per-source area weights, shape :math:`(N,)`.
         source_data : TensorDict or None
             Per-source features (normals, latents, etc.) with
-            ``batch_size=(N,)``. ``None`` if no per-source features.
+            ``batch_size=(N,)``, all of one dtype. ``None`` if no per-source
+            features.
 
         Returns
         -------
         SourceAggregates
             Per-node aggregated centroids and source data.
+
+        Raises
+        ------
+        TypeError
+            If the leaves of ``source_data`` have different dtypes.
 
         Notes
         -----
@@ -1059,19 +1064,15 @@ class ClusterTree(TensorClass):
         # ``cumsum`` along a non-innermost dimension runs one thread per
         # column, serially over all ``N`` rows (12 ms for ``(80_000, 3)`` in
         # fp64 on a GB300, against 0.24 ms along the innermost dimension).
-        n_sources = source_points.shape[0]
+        # The leaves are gathered before they are packed: a gather of packed
+        # rows a multiple of 16 bytes wide is 10-20x slower on CUDA
+        # (pytorch/pytorch#200939).
         sorted_points = source_points[self.sorted_source_order]
         sorted_areas = areas[self.sorted_source_order]
-        leaf_keys: list = []
-        leaf_tensors: list[torch.Tensor] = []
+        packed = sorted_points
         if source_data is not None:
-            sorted_source_data = source_data[self.sorted_source_order]
-            for key in sorted_source_data.keys(include_nested=True, leaves_only=True):
-                leaf_keys.append(key)
-                leaf_tensors.append(sorted_source_data[key])
-        packed = torch.cat(
-            [sorted_points] + [t.reshape(n_sources, -1) for t in leaf_tensors], dim=1
-        )
+            data_flat, layout = source_data[self.sorted_source_order].pack()
+            packed = torch.cat([sorted_points, data_flat], dim=1)
         # Both the numerator and denominator must use the call-time weights.
         weighted_64 = (packed * sorted_areas.unsqueeze(-1)).double()
 
@@ -1092,21 +1093,9 @@ class ClusterTree(TensorClass):
         centroid_buf = node_means[:, :D].to(dtype)
         node_source_data: TensorDict | None = None
         if source_data is not None:
-            nested: dict = {}
-            offset = D
-            for key, tensor in zip(leaf_keys, leaf_tensors):
-                width = math.prod(tensor.shape[1:])
-                value = node_means[:, offset : offset + width]
-                value = value.reshape((n_nodes,) + tensor.shape[1:]).to(tensor.dtype)
-                offset += width
-                *parents, name = (key,) if isinstance(key, str) else key
-                level = nested
-                for parent in parents:
-                    level = level.setdefault(parent, {})
-                level[name] = value.contiguous()
-            node_source_data = TensorDict(
-                nested, batch_size=[n_nodes], device=source_data.device
-            )
+            node_source_data = layout.unpack(
+                node_means[:, D:].to(data_flat.dtype)
+            ).apply(torch.Tensor.contiguous)
 
         return SourceAggregates(
             node_centroid=centroid_buf.contiguous(),

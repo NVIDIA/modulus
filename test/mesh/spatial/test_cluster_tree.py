@@ -960,6 +960,56 @@ def test_source_aggregates_use_call_time_weights(device):
         )
 
 
+def test_source_aggregates_keep_nested_keys_dtype_and_contiguity(device):
+    """Nested leaves come back under their keys, in their dtype, contiguous."""
+    n = 40
+    points = _points(n, 3, device, seed=3)
+    areas = _areas(n, device)
+    data = TensorDict(
+        {
+            "normals": _points(n, 3, device, seed=4),
+            "latent": {"s": _points(n, 1, device, seed=5)[:, 0]},
+        },
+        batch_size=[n],
+        device=device,
+    )
+    tree = ClusterTree.from_points(points, leaf_size=4, areas=areas)
+    aggregates = tree.compute_source_aggregates(points, areas, data)
+
+    node_data = aggregates.node_source_data
+    assert set(node_data.keys(include_nested=True, leaves_only=True)) == {
+        "normals",
+        ("latent", "s"),
+    }
+    for key in ("normals", ("latent", "s")):
+        value = node_data[key]
+        assert value.shape == (tree.n_nodes, *data[key].shape[1:])
+        assert value.dtype == data[key].dtype
+        assert value.is_contiguous()
+    ### The root aggregates every source.
+    root = int(torch.argmax(tree.node_range_count))
+    expected = (data["normals"] * areas[:, None]).sum(0) / areas.sum()
+    torch.testing.assert_close(node_data["normals"][root], expected)
+
+
+def test_source_aggregates_reject_mixed_dtypes(device):
+    """Source data is packed into one tensor, so its leaves must share a dtype."""
+    n = 8
+    points = _points(n, 3, device)
+    areas = _areas(n, device)
+    data = TensorDict(
+        {
+            "a": torch.zeros(n, device=device),
+            "b": torch.zeros(n, dtype=torch.float64, device=device),
+        },
+        batch_size=[n],
+        device=device,
+    )
+    tree = ClusterTree.from_points(points, leaf_size=2, areas=areas)
+    with pytest.raises(TypeError, match="different dtypes"):
+        tree.compute_source_aggregates(points, areas, data)
+
+
 # ---------------------------------------------------------------------------
 # Edge cases and validation
 # ---------------------------------------------------------------------------
