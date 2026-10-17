@@ -27,6 +27,7 @@ float32 precision, so 16-bit inputs are computed in float32.
 """
 
 import itertools
+from collections.abc import Callable
 
 import torch
 from jaxtyping import Bool, Float, Int
@@ -366,6 +367,7 @@ def small_lstsq(
         q = torch.where(
             independent.unsqueeze(-1), column / norm.unsqueeze(-1), 0.0
         )  # (..., k)
+        del column  # a view, which would keep this step's `work` alive
 
         r = (q.unsqueeze(-1) * work[..., :, j + 1 :]).sum(-2)  # (..., d-j-1+n_rhs)
         work = torch.cat(
@@ -387,6 +389,8 @@ def small_lstsq(
         )
         QtB_rows.append(r[..., d - j - 1 :])
         dependent.append(~independent)
+
+    del work  # only R and Q^T B are needed from here on
 
     ### Rank decision, as in gelsy
     # Column j is also dependent when the smallest singular value of the leading
@@ -453,18 +457,42 @@ def batched_lstsq(
     CPU. On GB300 they are as fast as CUDA ``torch.linalg.lstsq`` for 2
     unknowns, and about 2 times slower for 3.
     """
+    return _lstsq_solver(A)(B)
+
+
+def _lstsq_solver(
+    A: Float[torch.Tensor, "... k d"],
+) -> Callable[[Float[torch.Tensor, "... k n_rhs"]], Float[torch.Tensor, "... d n_rhs"]]:
+    """Solver of ``A X = B`` for any number of right-hand sides ``B``.
+
+    ``_lstsq_solver(A)(B)`` is ``batched_lstsq(A, B)``, bit for bit. The
+    normal equations factorize ``A`` once, for every ``B``; :func:`small_lstsq`
+    solves each ``B`` from scratch, since its Gram-Schmidt sums over the
+    columns of ``[A | B]`` together, whose order depends on their number.
+    """
     if A.dtype in _HALF_DTYPES:  # the rank tests need float32 precision
-        return batched_lstsq(A.float(), B.float()).to(A.dtype)
+        solve = _lstsq_solver(A.float())
+        return lambda B: solve(B.float()).to(A.dtype)
     if A.dtype == torch.float32 and A.shape[-1] <= 3:
-        return _normal_equations_lstsq(A, B)
-    return small_lstsq(A, B)
+        return _normal_equations_solver(A)
+    return lambda B: small_lstsq(A, B)
 
 
 def _normal_equations_lstsq(
     A: Float[torch.Tensor, "... k d"],
     B: Float[torch.Tensor, "... k n_rhs"],
 ) -> Float[torch.Tensor, "... d n_rhs"]:
+    """Least squares by :func:`_normal_equations_solver`."""
+    return _normal_equations_solver(A)(B)
+
+
+def _normal_equations_solver(
+    A: Float[torch.Tensor, "... k d"],
+) -> Callable[[Float[torch.Tensor, "... k n_rhs"]], Float[torch.Tensor, "... d n_rhs"]]:
     """Minimum-norm least squares of float32 systems with ``d <= 3`` unknowns.
+
+    Returns the solver of ``A X = B`` for any right-hand sides ``B``: the
+    pseudo-inverse of ``M`` below is computed once, here.
 
     Solves the normal equations ``M X = A^T B``, ``M = A^T A``, formed in
     float64, in which products of float32 entries are exact. Squaring the
@@ -494,10 +522,8 @@ def _normal_equations_lstsq(
     k, d = A.shape[-2:]
     eigenvalue_tolerance = (torch.finfo(A.dtype).eps * max(k, d)) ** 2
     a = [A[..., i].double() for i in range(d)]  # columns of A, each (..., k)
-    B = B.double()
     m = {(i, j): (a[i] * a[j]).sum(-1) for i in range(d) for j in range(i, d)}
-    rhs = [(a[i].unsqueeze(-1) * B).sum(-2) for i in range(d)]  # each (..., n_rhs)
-    del a, B  # the float64 copies
+    del a  # the float64 copies
 
     ### Divide M by its trace, the sum of its eigenvalues
     trace = sum(m[i, i] for i in range(d))  # (...)
@@ -617,9 +643,21 @@ def _normal_equations_lstsq(
         return pseudo_inverse
 
     pseudo_inverse = _pseudo_inverse(m)
-    X = times(pseudo_inverse, rhs)
-    del pseudo_inverse, rhs
-    return (torch.stack(X, dim=-2) / trace[..., None, None]).to(A.dtype)
+    del m
+
+    def solve(
+        B: Float[torch.Tensor, "... k n_rhs"],
+    ) -> Float[torch.Tensor, "... d n_rhs"]:
+        """Solution for the right-hand sides ``B``."""
+        B = B.double()
+        # One float64 column of A at a time: at most one copy is alive
+        rhs = [(A[..., i].double().unsqueeze(-1) * B).sum(-2) for i in range(d)]
+        del B  # the float64 copy
+        X = times(pseudo_inverse, rhs)
+        del rhs
+        return (torch.stack(X, dim=-2) / trace[..., None, None]).to(A.dtype)
+
+    return solve
 
 
 def _solve_upper_triangular(

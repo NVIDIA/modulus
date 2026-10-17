@@ -16,9 +16,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import torch
 
-from physicsnemo.utils._small_linalg import batched_lstsq
+from physicsnemo.utils._small_linalg import _lstsq_solver
 
 from .utils import resolve_safe_epsilon, validate_inputs
 
@@ -33,18 +35,51 @@ def mesh_lsq_gradient_torch(
     safe_epsilon: float | None = None,
 ) -> torch.Tensor:
     """Compute weighted LSQ mesh gradients with PyTorch tensor ops."""
-    ### Validate inputs before building LSQ systems.
-    validate_inputs(
+    return _mesh_lsq_gradients_torch(
         points=points,
-        values=values,
+        values=[values],
         neighbor_offsets=neighbor_offsets,
         neighbor_indices=neighbor_indices,
+        weight_power=weight_power,
         min_neighbors=min_neighbors,
-    )
+        safe_epsilon=safe_epsilon,
+    )[0]
+
+
+def _mesh_lsq_gradients_torch(
+    points: torch.Tensor,
+    values: Sequence[torch.Tensor],
+    neighbor_offsets: torch.Tensor,
+    neighbor_indices: torch.Tensor,
+    weight_power: float = 2.0,
+    min_neighbors: int = 0,
+    safe_epsilon: float | None = None,
+) -> list[torch.Tensor]:
+    """Weighted LSQ mesh gradients of several fields of one dtype.
+
+    Each gradient is that of :func:`mesh_lsq_gradient_torch` for its field, bit
+    for bit. The fields share the work that does not depend on them: the
+    neighbor-count groups, the weighted systems and their factorization. Each
+    field is then solved on its own, so the peak memory is that of one field.
+    """
+    ### Validate inputs before building LSQ systems.
+    for field in values:
+        validate_inputs(
+            points=points,
+            values=field,
+            neighbor_offsets=neighbor_offsets,
+            neighbor_indices=neighbor_indices,
+            min_neighbors=min_neighbors,
+        )
+    dtypes = {field.dtype for field in values}
+    if len(dtypes) > 1:
+        raise ValueError(f"values must share one dtype, got {dtypes=}")
+    if not values:
+        return []
+    (dtype,) = dtypes
 
     ### Normalize dtypes/layout for stable downstream linear algebra.
     points = points.contiguous()
-    values = values.contiguous()
     neighbor_offsets = neighbor_offsets.to(
         dtype=torch.int64, device=points.device
     ).contiguous()
@@ -54,19 +89,21 @@ def mesh_lsq_gradient_torch(
 
     n_entities = points.shape[0]
     n_dims = points.shape[1]
-    value_shape = values.shape[1:]
     counts = neighbor_offsets[1:] - neighbor_offsets[:-1]
 
     ### Flatten component dimensions so scalar and tensor fields share one solve path.
-    n_components = value_shape.numel()
-    values_flat = values.reshape(n_entities, n_components)
-    gradients_flat = torch.zeros(
-        (n_entities, n_dims, n_components),
-        dtype=values.dtype,
-        device=values.device,
-    )
+    values_flat = [
+        field.contiguous().reshape(n_entities, field.shape[1:].numel())
+        for field in values
+    ]
+    gradients_flat = [
+        torch.zeros(
+            (n_entities, n_dims, field.shape[1]), dtype=dtype, device=field.device
+        )
+        for field in values_flat
+    ]
 
-    points_cast = points.to(dtype=values.dtype)
+    points_cast = points.to(dtype=dtype)
     dist_eps = resolve_safe_epsilon(safe_epsilon=safe_epsilon, dtype=points_cast.dtype)
 
     ### Process one dense batch per neighbor-count group (mesh-module strategy).
@@ -93,23 +130,33 @@ def mesh_lsq_gradient_torch(
         center_points = points_cast[entity_indices]
         relative = points_cast[neighbors] - center_points.unsqueeze(1)
 
-        values_center = values_flat[entity_indices]
-        delta_values = values_flat[neighbors] - values_center.unsqueeze(1)
-
         dist2 = (relative * relative).sum(dim=-1).clamp_min(dist_eps)
         sqrt_w = dist2.pow(-0.25 * weight_power).unsqueeze(-1)
 
         A_weighted = sqrt_w * relative
-        b_weighted = sqrt_w * delta_values
-        # Only the weighted system is needed from here on
-        del flat_indices, neighbors, center_points, relative
-        del values_center, delta_values, dist2, sqrt_w
+        del flat_indices, neighbors, center_points, relative, dist2
 
-        solution = batched_lstsq(A_weighted, b_weighted)
-        del A_weighted, b_weighted
-        gradients_flat[entity_indices] = solution
+        ### Factorize the weighted system once, for every field
+        solve = _lstsq_solver(A_weighted)
+        del A_weighted  # kept by the solver if it needs it
+
+        for field_flat, field_gradients in zip(values_flat, gradients_flat):
+            # The neighbors are gathered again for each field: kept alive, they
+            # would raise the peak memory above that of one field.
+            neighbors = neighbor_indices[
+                offsets_group.unsqueeze(1) + col_range.unsqueeze(0)
+            ]
+            values_center = field_flat[entity_indices]
+            delta_values = field_flat[neighbors] - values_center.unsqueeze(1)
+            b_weighted = sqrt_w * delta_values
+            # Only the weighted system is needed from here on
+            del neighbors, values_center, delta_values
+            field_gradients[entity_indices] = solve(b_weighted)
+            del b_weighted
+        del solve, sqrt_w  # before the next group's
 
     ### Restore gradient output shape.
-    gradients = gradients_flat.reshape(n_entities, n_dims, *value_shape)
-
-    return gradients
+    return [
+        gradients.reshape(n_entities, n_dims, *field.shape[1:])
+        for gradients, field in zip(gradients_flat, values)
+    ]

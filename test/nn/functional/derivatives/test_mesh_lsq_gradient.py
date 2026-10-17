@@ -459,6 +459,11 @@ def _lstsq_reference(A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
     return solution.to(A.device)
 
 
+def _lstsq_reference_solver(A: torch.Tensor):
+    """``_lstsq_solver`` by :func:`_lstsq_reference`."""
+    return lambda B: _lstsq_reference(A, B)
+
+
 def _make_stencils(kind: str, n_systems: int = 256) -> torch.Tensor:
     """Float64 stencil matrices (n_systems, k, d) of the given rank structure."""
     A = torch.randn(n_systems, 6, 3, dtype=torch.float64)
@@ -599,7 +604,7 @@ def test_mesh_lsq_gradient_torch_rank_deficient_stencils(
     )
     output = _torch_impl.mesh_lsq_gradient_torch(points, values, offsets, indices)
     with monkeypatch.context() as patch:
-        patch.setattr(_torch_impl, "batched_lstsq", _lstsq_reference)
+        patch.setattr(_torch_impl, "_lstsq_solver", _lstsq_reference_solver)
         reference = _torch_impl.mesh_lsq_gradient_torch(
             points, values, offsets, indices
         )
@@ -648,3 +653,31 @@ def test_small_lstsq_bfloat16(device: str, solver: str):
 
     assert solution.dtype == torch.bfloat16
     assert (solution.float() > 0.5).all()
+
+
+@pytest.mark.parametrize(
+    "dtype, n_unknowns",
+    [
+        (torch.float32, 2),  # normal equations
+        (torch.float32, 3),
+        (torch.float64, 3),  # small_lstsq
+        (torch.float32, 4),
+        (torch.bfloat16, 3),  # normal equations in float32
+    ],
+)
+def test_lstsq_solver_matches_batched_lstsq(
+    device: str, dtype: torch.dtype, n_unknowns: int
+):
+    """One solver of ``A`` serves right-hand sides of any width, bit for bit as
+    ``batched_lstsq``, also with rank-deficient systems in the batch."""
+    from physicsnemo.utils._small_linalg import _lstsq_solver, batched_lstsq
+
+    generator = torch.Generator().manual_seed(0)
+    A = torch.randn(300, 8, n_unknowns, generator=generator)
+    A[:100, :, -1] = A[:100, :, 0]  # rank-deficient
+    A[100:110] = 0.0
+    A = A.to(device=device, dtype=dtype)
+    solve = _lstsq_solver(A)
+    for n_rhs in (1, 3, 1, 4):
+        B = torch.randn(300, 8, n_rhs, generator=generator).to(device, dtype)
+        assert torch.equal(solve(B), batched_lstsq(A, B))
