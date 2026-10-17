@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import functools
+import itertools
 from collections.abc import Sequence
 
 import torch
@@ -97,12 +98,16 @@ def _mesh_lsq_gradients_torch(
         field.contiguous().reshape(n_entities, field.shape[1:].numel())
         for field in values
     ]
-    gradients_flat = [
-        torch.zeros(
-            (n_entities, n_dims, field.shape[1]), dtype=dtype, device=field.device
-        )
-        for field in values_flat
-    ]
+
+    def zero_gradients(i: int) -> torch.Tensor:
+        """Zero gradients of field ``i``, flattened."""
+        shape = (n_entities, n_dims, values_flat[i].shape[1])
+        return torch.zeros(shape, dtype=dtype, device=values_flat[i].device)
+
+    # Several fields: each field's gradients are created before its first
+    # solve, as one field at a time would
+    several = len(values_flat) > 1
+    gradients_flat = [None if several else zero_gradients(0) for _ in values_flat]
 
     points_cast = points.to(dtype=dtype)
     dist_eps = resolve_safe_epsilon(safe_epsilon=safe_epsilon, dtype=points_cast.dtype)
@@ -115,9 +120,14 @@ def _mesh_lsq_gradients_torch(
         counts[order], return_counts=True
     )
     group_counts, group_sizes = torch.stack((unique_counts, group_sizes)).tolist()
-    group_end = 0
-    for n_neighbors, group_size in zip(group_counts, group_sizes):
-        group_start, group_end = group_end, group_end + group_size
+    group_starts = itertools.accumulate(group_sizes, initial=0)
+    groups = list(zip(group_counts, group_starts, group_sizes))
+    if several:
+        # The group of the largest systems first: the peak memory then falls
+        # where only the gradients of the fields solved so far exist
+        groups.sort(key=lambda group: group[0] * group[2], reverse=True)
+    for n_neighbors, group_start, group_size in groups:
+        group_end = group_start + group_size
         if n_neighbors < min_neighbors or n_neighbors == 0:
             continue
 
@@ -138,7 +148,7 @@ def _mesh_lsq_gradients_torch(
         del flat_indices, center_points, relative, dist2
 
         ### Factorize the weighted system once, for all fields
-        if len(values_flat) == 1:
+        if not several:
             solve = functools.partial(batched_lstsq, A_weighted)
         else:
             # The neighbors are gathered again for each field: kept alive, they
@@ -147,10 +157,8 @@ def _mesh_lsq_gradients_torch(
             solve = _lstsq_solver(A_weighted)
         del A_weighted  # kept by the solver if it needs it
 
-        for i, (field_flat, field_gradients) in enumerate(
-            zip(values_flat, gradients_flat)
-        ):
-            if len(values_flat) > 1:
+        for i, field_flat in enumerate(values_flat):
+            if several:
                 neighbors = neighbor_indices[
                     offsets_group.unsqueeze(1) + col_range.unsqueeze(0)
                 ]
@@ -161,12 +169,16 @@ def _mesh_lsq_gradients_torch(
             del neighbors, values_center, delta_values
             if i == len(values_flat) - 1:
                 del sqrt_w
-            field_gradients[entity_indices] = solve(b_weighted)
+            if gradients_flat[i] is None:
+                gradients_flat[i] = zero_gradients(i)
+            gradients_flat[i][entity_indices] = solve(b_weighted)
             del b_weighted
         del solve  # before the next group's
 
-    ### Restore gradient output shape.
+    ### Restore gradient output shape (zero for fields never solved).
     return [
-        gradients.reshape(n_entities, n_dims, *field.shape[1:])
-        for gradients, field in zip(gradients_flat, values)
+        (zero_gradients(i) if gradients is None else gradients).reshape(
+            n_entities, n_dims, *field.shape[1:]
+        )
+        for i, (gradients, field) in enumerate(zip(gradients_flat, values))
     ]
