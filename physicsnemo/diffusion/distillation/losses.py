@@ -136,6 +136,10 @@ class DistillationLoss:
             **auxiliary_options,
         )
 
+    def _bind_execution_models(self, models: Mapping[str, torch.nn.Module]) -> None:
+        r"""Rebind trainer execution wrappers while preserving loss configuration."""
+        self._implementation._bind_execution_models(models)
+
     def __call__(
         self,
         x0: Float[Tensor, " B *dims"],
