@@ -17,7 +17,7 @@
 """Run a component-wise operation on the fields of a TensorDict in a few packed calls."""
 
 import math
-from typing import Callable
+from typing import Callable, cast
 
 import torch
 from tensordict import NestedKey, TensorDict, TensorDictBase
@@ -89,6 +89,18 @@ def packed_apply(
     """
     leaves = list(data.items(include_nested=True, leaves_only=True))
 
+    def needs_pad(n_components: int, value: torch.Tensor) -> bool:
+        return (
+            value.device.type == "cuda"
+            and n_components * value.element_size() % 16 == 0
+        )
+
+    ### One leaf at a time, and no leaf to pad: ``apply`` itself.
+    if not group and not any(
+        needs_pad(math.prod(value.shape[1:]), value) for _, value in leaves
+    ):
+        return cast(TensorDict, data.apply(fn, batch_size=batch_size))
+
     ### Consecutive leaves of one dtype, at most ``max(widest, 4)`` components.
     by_dtype: dict[torch.dtype, list[tuple[NestedKey, int]]] = {}
     for key, value in leaves:
@@ -109,20 +121,17 @@ def packed_apply(
     results: dict[NestedKey, torch.Tensor] = {}
     for keys, n_components in groups:
         first = data.get(keys[0])
-        pad = (
-            first.device.type == "cuda"
-            and n_components * first.element_size() % 16 == 0
-        )
+        pad = needs_pad(n_components, first)
         if len(keys) == 1 and not pad:
             results[keys[0]] = fn(first).contiguous()
             continue
-        group = data.select(*keys)
+        selected = data.select(*keys)
         pad_key = _PAD_KEY
-        while pad_key in group.keys():
+        while pad_key in selected.keys():
             pad_key += "_"
         if pad:
-            group[pad_key] = first.new_zeros(data.batch_size)
-        flat, layout = group.pack()
+            selected[pad_key] = first.new_zeros(data.batch_size)
+        flat, layout = selected.pack()
         for key, value in layout.unpack(fn(flat)).items(
             include_nested=True, leaves_only=True
         ):
