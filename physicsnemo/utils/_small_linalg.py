@@ -457,7 +457,11 @@ def batched_lstsq(
     CPU. On GB300 they are as fast as CUDA ``torch.linalg.lstsq`` for 2
     unknowns, and about 2 times slower for 3.
     """
-    return _lstsq_solver(A)(B)
+    if A.dtype in _HALF_DTYPES:  # the rank tests need float32 precision
+        return batched_lstsq(A.float(), B.float()).to(A.dtype)
+    if A.dtype == torch.float32 and A.shape[-1] <= 3:
+        return _normal_equations_lstsq(A, B)
+    return small_lstsq(A, B)
 
 
 def _lstsq_solver(
@@ -474,7 +478,7 @@ def _lstsq_solver(
         solve = _lstsq_solver(A.float())
         return lambda B: solve(B.float()).to(A.dtype)
     if A.dtype == torch.float32 and A.shape[-1] <= 3:
-        return _normal_equations_solver(A)
+        return _normal_equations_solver(A)[1]
     return lambda B: small_lstsq(A, B)
 
 
@@ -482,17 +486,23 @@ def _normal_equations_lstsq(
     A: Float[torch.Tensor, "... k d"],
     B: Float[torch.Tensor, "... k n_rhs"],
 ) -> Float[torch.Tensor, "... d n_rhs"]:
-    """Least squares by :func:`_normal_equations_solver`."""
-    return _normal_equations_solver(A)(B)
+    """Least squares by :func:`_normal_equations_solver`, for ``B`` only."""
+    return _normal_equations_solver(A, B)[0]
 
 
 def _normal_equations_solver(
     A: Float[torch.Tensor, "... k d"],
-) -> Callable[[Float[torch.Tensor, "... k n_rhs"]], Float[torch.Tensor, "... d n_rhs"]]:
+    B: Float[torch.Tensor, "... k n_rhs"] | None = None,
+) -> tuple[
+    Float[torch.Tensor, "... d n_rhs"] | None,
+    Callable[[Float[torch.Tensor, "... k n_rhs"]], Float[torch.Tensor, "... d n_rhs"]],
+]:
     """Minimum-norm least squares of float32 systems with ``d <= 3`` unknowns.
 
-    Returns the solver of ``A X = B`` for any right-hand sides ``B``: the
-    pseudo-inverse of ``M`` below is computed once, here.
+    Returns the solution for ``B`` (``None`` without ``B``) and the solver of
+    ``A X = B`` for further right-hand sides: the pseudo-inverse of ``M``
+    below is computed once, here. ``A^T B`` uses the float64 columns of ``A``
+    that form ``M``; the solver casts them again, one at a time.
 
     Solves the normal equations ``M X = A^T B``, ``M = A^T A``, formed in
     float64, in which products of float32 entries are exact. Squaring the
@@ -523,7 +533,11 @@ def _normal_equations_solver(
     eigenvalue_tolerance = (torch.finfo(A.dtype).eps * max(k, d)) ** 2
     a = [A[..., i].double() for i in range(d)]  # columns of A, each (..., k)
     m = {(i, j): (a[i] * a[j]).sum(-1) for i in range(d) for j in range(i, d)}
-    del a  # the float64 copies
+    rhs = None
+    if B is not None:
+        B = B.double()
+        rhs = [(a[i].unsqueeze(-1) * B).sum(-2) for i in range(d)]  # each (..., n_rhs)
+    del a, B  # the float64 copies
 
     ### Divide M by its trace, the sum of its eigenvalues
     trace = sum(m[i, i] for i in range(d))  # (...)
@@ -655,9 +669,14 @@ def _normal_equations_solver(
         del B  # the float64 copy
         X = times(pseudo_inverse, rhs)
         del rhs
-        return (torch.stack(X, dim=-2) / trace[..., None, None]).to(A.dtype)
+        X = torch.stack(X, dim=-2)  # frees its rows
+        return (X / trace[..., None, None]).to(A.dtype)
 
-    return solve
+    if rhs is None:
+        return None, solve
+    X = times(pseudo_inverse, rhs)
+    del rhs
+    return (torch.stack(X, dim=-2) / trace[..., None, None]).to(A.dtype), solve
 
 
 def _solve_upper_triangular(

@@ -459,11 +459,6 @@ def _lstsq_reference(A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
     return solution.to(A.device)
 
 
-def _lstsq_reference_solver(A: torch.Tensor):
-    """``_lstsq_solver`` by :func:`_lstsq_reference`."""
-    return lambda B: _lstsq_reference(A, B)
-
-
 def _make_stencils(kind: str, n_systems: int = 256) -> torch.Tensor:
     """Float64 stencil matrices (n_systems, k, d) of the given rank structure."""
     A = torch.randn(n_systems, 6, 3, dtype=torch.float64)
@@ -604,7 +599,7 @@ def test_mesh_lsq_gradient_torch_rank_deficient_stencils(
     )
     output = _torch_impl.mesh_lsq_gradient_torch(points, values, offsets, indices)
     with monkeypatch.context() as patch:
-        patch.setattr(_torch_impl, "_lstsq_solver", _lstsq_reference_solver)
+        patch.setattr(_torch_impl, "batched_lstsq", _lstsq_reference)
         reference = _torch_impl.mesh_lsq_gradient_torch(
             points, values, offsets, indices
         )

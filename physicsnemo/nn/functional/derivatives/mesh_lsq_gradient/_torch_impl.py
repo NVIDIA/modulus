@@ -16,11 +16,12 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Sequence
 
 import torch
 
-from physicsnemo.utils._small_linalg import _lstsq_solver
+from physicsnemo.utils._small_linalg import _lstsq_solver, batched_lstsq
 
 from .utils import resolve_safe_epsilon, validate_inputs
 
@@ -134,26 +135,35 @@ def _mesh_lsq_gradients_torch(
         sqrt_w = dist2.pow(-0.25 * weight_power).unsqueeze(-1)
 
         A_weighted = sqrt_w * relative
-        del flat_indices, neighbors, center_points, relative, dist2
+        del flat_indices, center_points, relative, dist2
 
-        ### Factorize the weighted system once, for every field
-        solve = _lstsq_solver(A_weighted)
-        del A_weighted  # kept by the solver if it needs it
-
-        for field_flat, field_gradients in zip(values_flat, gradients_flat):
+        ### Factorize the weighted system once, for all fields
+        if len(values_flat) == 1:
+            solve = functools.partial(batched_lstsq, A_weighted)
+        else:
             # The neighbors are gathered again for each field: kept alive, they
             # would raise the peak memory above that of one field.
-            neighbors = neighbor_indices[
-                offsets_group.unsqueeze(1) + col_range.unsqueeze(0)
-            ]
+            del neighbors
+            solve = _lstsq_solver(A_weighted)
+        del A_weighted  # kept by the solver if it needs it
+
+        for i, (field_flat, field_gradients) in enumerate(
+            zip(values_flat, gradients_flat)
+        ):
+            if len(values_flat) > 1:
+                neighbors = neighbor_indices[
+                    offsets_group.unsqueeze(1) + col_range.unsqueeze(0)
+                ]
             values_center = field_flat[entity_indices]
             delta_values = field_flat[neighbors] - values_center.unsqueeze(1)
             b_weighted = sqrt_w * delta_values
             # Only the weighted system is needed from here on
             del neighbors, values_center, delta_values
+            if i == len(values_flat) - 1:
+                del sqrt_w
             field_gradients[entity_indices] = solve(b_weighted)
             del b_weighted
-        del solve, sqrt_w  # before the next group's
+        del solve  # before the next group's
 
     ### Restore gradient output shape.
     return [
