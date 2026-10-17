@@ -20,7 +20,7 @@ import math
 from typing import Callable
 
 import torch
-from tensordict import NestedKey, TensorDict
+from tensordict import NestedKey, TensorDict, TensorDictBase
 
 ### Name of the zero column that keeps packed rows off multiples of 16 bytes.
 _PAD_KEY = "_packed_apply_pad"
@@ -31,6 +31,7 @@ def packed_apply(
     fn: Callable[[torch.Tensor], torch.Tensor],
     *,
     batch_size: torch.Size | tuple[int, ...],
+    group: bool = True,
 ) -> TensorDict:
     r"""``data.apply(fn, batch_size=batch_size)``, with the leaves packed together.
 
@@ -43,12 +44,18 @@ def packed_apply(
 
     Leaves of one dtype are packed with :meth:`TensorDict.pack
     <tensordict.TensorDictBase.pack>`, so ``fn`` runs once per group of leaves
-    instead of once per leaf.  A group holds consecutive leaves whose
-    components add up to at most those of its widest leaf, or 4 if more:
+    instead of once per leaf.  A group holds leaves of one dtype, consecutive
+    among those of that dtype, whose components add up to at most those of
+    the widest such leaf, or 4 if more:
     ``fn``'s temporaries grow with the number of packed components, and this
-    bound keeps them near those of a 4-component field.  On CUDA, a group
-    whose rows are a multiple of 16 bytes wide gets a column of zeros, because
-    gathering rows of that width is 10-20x slower
+    bound keeps them near those of a 4-component field.  This pays off when
+    each call of ``fn`` has a large fixed cost, such as the batched
+    least-squares solves of the LSQ derivatives.  For operations bound by
+    memory traffic, such as gathers and scatters of rows, packing saves little
+    time and raises peak memory, so ``group=False`` runs each leaf alone.
+
+    On CUDA, a group (or leaf) whose rows are a multiple of 16 bytes wide gets
+    a column of zeros, because gathering rows of that width is 10-20x slower
     (`pytorch/pytorch#200939 <https://github.com/pytorch/pytorch/issues/200939>`_).
 
     Parameters
@@ -59,12 +66,17 @@ def packed_apply(
         Component-wise operation, as above.
     batch_size : torch.Size or tuple[int, ...]
         Batch size of the result: a prefix of :math:`R`.
+    group : bool, optional, default=True
+        Whether to pack several leaves per call of ``fn``.  If ``False``,
+        each leaf runs alone, and only the padding above applies.
 
     Returns
     -------
     TensorDict
         ``fn`` of each leaf, contiguous, under the leaf's key and in the order
-        of ``data``.
+        of ``data``.  Nested tensordicts without leaves are kept, empty.
+        ``data`` must not hold non-tensor data, which :meth:`TensorDict.pack
+        <tensordict.TensorDictBase.pack>` refuses.
 
     Examples
     --------
@@ -83,7 +95,7 @@ def packed_apply(
         by_dtype.setdefault(value.dtype, []).append((key, math.prod(value.shape[1:])))
     groups: list[tuple[list[NestedKey], int]] = []
     for entries in by_dtype.values():
-        cap = max(4, *(width for _, width in entries))
+        cap = max(4, *(width for _, width in entries)) if group else 0
         keys: list[NestedKey] = []
         n_components = 0
         for key, width in entries:
@@ -105,16 +117,23 @@ def packed_apply(
             results[keys[0]] = fn(first).contiguous()
             continue
         group = data.select(*keys)
+        pad_key = _PAD_KEY
+        while pad_key in group.keys():
+            pad_key += "_"
         if pad:
-            group[_PAD_KEY] = first.new_zeros(data.batch_size)
+            group[pad_key] = first.new_zeros(data.batch_size)
         flat, layout = group.pack()
         for key, value in layout.unpack(fn(flat)).items(
             include_nested=True, leaves_only=True
         ):
-            if key != _PAD_KEY:
+            if key != pad_key:
                 results[key] = value.contiguous()
 
+    ### In the order of ``data``, as ``apply`` returns them.
     out = TensorDict(batch_size=batch_size, device=data.device)
-    for key, _ in leaves:
-        out.set(key, results[key])
+    for key, value in data.items(include_nested=True):
+        if key in results:
+            out.set(key, results[key])
+        elif isinstance(value, TensorDictBase) and value.is_empty():
+            out.set(key, TensorDict(batch_size=batch_size, device=data.device))
     return out

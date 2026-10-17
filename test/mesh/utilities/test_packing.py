@@ -132,6 +132,59 @@ def test_cuda_pads_rows_of_16_bytes():
     )
 
 
+def test_group_false_calls_once_per_leaf():
+    calls: list[tuple[int, ...]] = []
+
+    def fn(x):
+        calls.append(tuple(x.shape))
+        return x * 2
+
+    data = TensorDict({"p": torch.ones(5), "u": torch.ones(5, 3)}, batch_size=[5])
+    out = packed_apply(data, fn, batch_size=[5], group=False)
+    assert calls == [(5,), (5, 3)]
+    _assert_same(out, data.apply(fn, batch_size=[5]))
+
+
+def test_keeps_empty_nested_tensordicts():
+    data = TensorDict(
+        {"a": torch.ones(4), "sub": TensorDict({}, batch_size=[4]), "b": torch.ones(4)},
+        batch_size=[4],
+    )
+    fn = lambda x: x[:2]  # noqa: E731
+    out = packed_apply(data, fn, batch_size=[2])
+    assert list(out.keys()) == list(data.apply(fn, batch_size=[2]).keys())
+    assert out["sub"].batch_size == torch.Size([2])
+
+
+def test_a_field_named_like_the_pad_column():
+    """A leaf may share the name of the padding column."""
+    data = TensorDict(
+        {"_packed_apply_pad": torch.arange(4.0), "u": torch.ones(4, 3)}, batch_size=[4]
+    )
+    fn = lambda x: x[torch.tensor([3, 1])]  # noqa: E731
+    _assert_same(packed_apply(data, fn, batch_size=[2]), data.apply(fn, batch_size=[2]))
+
+
+@pytest.mark.cuda
+def test_cuda_pads_a_single_float64_vector():
+    """One float64 (N, 2) field has 16-byte rows, so it is padded even alone."""
+    widths: list[int] = []
+    index = torch.tensor([2, 0, 1], device="cuda")
+
+    def fn(x):
+        widths.append(x.shape[-1])
+        return x[index]
+
+    data = TensorDict(
+        {"v": torch.arange(8.0, dtype=torch.float64).view(4, 2)},
+        batch_size=[4],
+        device="cuda",
+    )
+    out = packed_apply(data, fn, batch_size=[3], group=False)
+    assert widths == [3]
+    _assert_same(out, data.apply(lambda x: x[index], batch_size=[3]))
+
+
 def test_empty_tensordict():
     data = TensorDict({}, batch_size=[3])
     out = packed_apply(data, lambda x: x[:2], batch_size=[2])

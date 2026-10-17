@@ -391,7 +391,8 @@ def deduplicate_and_aggregate_facets(
         return_inverse=True,
     )
 
-    ### Aggregate data, the fields of one dtype together (see packed_apply)
+    ### Aggregate data, one field at a time, with rows padded off 16-byte
+    ### multiples (see packed_apply)
     n_unique_facets = len(unique_facets)
     aggregated_data = packed_apply(
         parent_cell_data,
@@ -403,6 +404,7 @@ def deduplicate_and_aggregate_facets(
             aggregation_weights,
         ),
         batch_size=torch.Size([n_unique_facets]),
+        group=False,
     )
 
     return unique_facets, aggregated_data, inverse_indices
@@ -589,6 +591,7 @@ def extract_facet_mesh_data(
                     weights,
                 ),
                 batch_size=torch.Size([n_unique_facets]),
+                group=False,
             )
 
     elif data_source == "points":
@@ -658,9 +661,11 @@ def _aggregate_point_data_to_facets(
             aggregation="mean",
         )
 
-    ### Average the fields of one dtype together (see packed_apply)
+    ### One field at a time, with rows padded off 16-byte multiples (see
+    ### packed_apply)
     return packed_apply(
         point_data,
         _aggregate_point_tensor,
         batch_size=torch.Size([n_unique_facets]),
+        group=False,
     )

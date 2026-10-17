@@ -741,11 +741,13 @@ def _accumulate_sampled_data(
 
         return output
 
-    ### Fields of one dtype accumulate together (see packed_apply).
+    ### One field at a time, with rows padded off 16-byte multiples (see
+    ### packed_apply).
     return packed_apply(
         source_data,
         _accumulate_field,
         batch_size=torch.Size([n_queries]),
+        group=False,
     )
 
 

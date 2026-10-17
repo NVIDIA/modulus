@@ -157,3 +157,63 @@ def test_dec_and_lsq_preserve_trailing_value_dimensions() -> None:
     assert dec_gradient.shape == (mesh.n_points, 2, 2, 3)
     torch.testing.assert_close(dec_gradient, expected)
     torch.testing.assert_close(lsq_gradient, expected)
+
+
+@pytest.mark.parametrize("location", ["points", "cells"])
+@pytest.mark.parametrize("gradient_type", ["extrinsic", "intrinsic", "both"])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_lsq_derivatives_of_several_fields_match_one_field_at_a_time(
+    location, gradient_type, dtype
+) -> None:
+    """The LSQ derivatives solve several fields together (see ``packed_apply``).
+
+    Every field component is its own right-hand side, so solving fields
+    together must give each field's gradient, with nested keys, mixed ranks
+    and two dtypes in one call.
+    """
+    from physicsnemo.mesh.calculus.derivatives import (
+        compute_cell_derivatives,
+        compute_point_derivatives,
+    )
+    from physicsnemo.mesh.primitives.surfaces import sphere_icosahedral
+
+    mesh = sphere_icosahedral.load(subdivisions=2)
+    mesh = Mesh(points=mesh.points.to(dtype), cells=mesh.cells)
+    n = mesh.n_points if location == "points" else mesh.n_cells
+    g = torch.Generator().manual_seed(0)
+    fields = {
+        "p": torch.randn(n, generator=g, dtype=dtype),
+        ("flow", "u"): torch.randn(n, 3, generator=g, dtype=dtype),
+        ("flow", "k"): torch.randn(n, generator=g, dtype=dtype),
+        "S": torch.randn(n, 2, 2, generator=g, dtype=dtype),
+    }
+    ### A field of the other dtype: its own group.  (The intrinsic point
+    ### gradient of a field whose dtype differs from the mesh's raises, with or
+    ### without packing.)
+    if not (gradient_type == "intrinsic" and location == "points"):
+        other = torch.float64 if dtype == torch.float32 else torch.float32
+        fields["q"] = torch.randn(n, generator=g, dtype=other)
+    data = mesh.point_data if location == "points" else mesh.cell_data
+    for key, value in fields.items():
+        data[key] = value
+    compute = (
+        compute_point_derivatives if location == "points" else compute_cell_derivatives
+    )
+
+    together = compute(mesh, keys=list(fields), gradient_type=gradient_type)
+    out = together.point_data if location == "points" else together.cell_data
+    for key in fields:
+        alone = compute(mesh, keys=key, gradient_type=gradient_type)
+        expected = alone.point_data if location == "points" else alone.cell_data
+        suffixes = (
+            ["_gradient"]
+            if gradient_type != "both"
+            else ["_gradient_extrinsic", "_gradient_intrinsic"]
+        )
+        for suffix in suffixes:
+            out_key = (
+                key + suffix if isinstance(key, str) else key[:-1] + (key[-1] + suffix,)
+            )
+            torch.testing.assert_close(
+                out[out_key], expected[out_key], rtol=1e-12, atol=1e-12
+            )

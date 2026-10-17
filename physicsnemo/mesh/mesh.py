@@ -2267,7 +2267,8 @@ class Mesh(
             self.n_cells, device=self.points.device
         ).repeat_interleave(n_vertices_per_cell)
 
-        ### Fields of one dtype are averaged together (see packed_apply).
+        ### One field at a time, with rows padded off 16-byte multiples (see
+        ### packed_apply).
         converted = packed_apply(
             fields,
             lambda cell_values: scatter_aggregate(
@@ -2278,6 +2279,7 @@ class Mesh(
                 aggregation="mean",
             ),
             batch_size=torch.Size([self.n_points]),
+            group=False,
         )
         new_point_data.update(converted)
 
