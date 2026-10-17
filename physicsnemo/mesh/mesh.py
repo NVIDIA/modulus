@@ -67,6 +67,7 @@ from physicsnemo.mesh.transformations.geometric import (
     translate,
 )
 from physicsnemo.mesh.utilities._gather import gather_rows
+from physicsnemo.mesh.utilities._packing import packed_apply
 from physicsnemo.mesh.utilities._padding import _pad_by_tiling_last, _pad_with_value
 from physicsnemo.mesh.utilities._scatter_ops import scatter_aggregate
 from physicsnemo.mesh.utilities.mesh_repr import format_mesh_repr
@@ -2266,7 +2267,9 @@ class Mesh(
             self.n_cells, device=self.points.device
         ).repeat_interleave(n_vertices_per_cell)
 
-        converted = fields.apply(
+        ### Fields of one dtype are averaged together (see packed_apply).
+        converted = packed_apply(
+            fields,
             lambda cell_values: scatter_aggregate(
                 src_data=cell_values[cell_indices],
                 src_to_dst_mapping=point_indices,

@@ -30,6 +30,7 @@ from jaxtyping import Float, Int
 from tensordict import TensorDict
 
 from physicsnemo.mesh.utilities._duplicate_detection import compute_canonical_indices
+from physicsnemo.mesh.utilities._packing import packed_apply
 from physicsnemo.mesh.utilities._scatter_ops import scatter_aggregate
 from physicsnemo.utils._index_tuple_ops import sort_index_tuples, unique_index_tuples
 
@@ -186,7 +187,8 @@ def _merge_point_data(
             aggregation="mean",
         )
 
-    return point_data.apply(
+    return packed_apply(
+        point_data,
         _merge_tensor,
         batch_size=torch.Size([n_unique]),
     )

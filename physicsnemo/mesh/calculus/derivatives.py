@@ -22,6 +22,8 @@ computations using both DEC and LSQ methods.
 
 from typing import TYPE_CHECKING, Literal, Sequence
 
+from physicsnemo.mesh.utilities._packing import packed_apply
+
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh
 
@@ -126,6 +128,18 @@ def compute_point_derivatives(
     ### Clone point_data so we don't mutate the original mesh
     new_point_data = mesh.point_data.clone()
 
+    ### LSQ: each field component is its own right-hand side, so the fields
+    ### are packed and solved together, building the neighborhoods, weights
+    ### and solves once per group of fields instead of once per field.
+    if method == "lsq":
+        lsq_gradients = packed_apply(
+            mesh.point_data.select(*key_list),
+            lambda values: compute_gradient_points_lsq(
+                mesh, values, intrinsic=gradient_type == "intrinsic"
+            ),
+            batch_size=mesh.point_data.batch_size,
+        )
+
     ### Compute gradients for each key
     for key in key_list:
         field_values = mesh.point_data[key]
@@ -133,19 +147,13 @@ def compute_point_derivatives(
         ### Compute gradient based on method and gradient_type
         if method == "lsq":
             if gradient_type == "intrinsic":
-                grad_intrinsic = compute_gradient_points_lsq(
-                    mesh, field_values, intrinsic=True
-                )
+                grad_intrinsic = lsq_gradients[key]
                 grad_extrinsic = None
             elif gradient_type == "extrinsic":
-                grad_extrinsic = compute_gradient_points_lsq(
-                    mesh, field_values, intrinsic=False
-                )
+                grad_extrinsic = lsq_gradients[key]
                 grad_intrinsic = None
             else:  # "both"
-                grad_extrinsic = compute_gradient_points_lsq(
-                    mesh, field_values, intrinsic=False
-                )
+                grad_extrinsic = lsq_gradients[key]
                 grad_intrinsic = project_to_tangent_space(
                     mesh, grad_extrinsic, location="points"
                 )
@@ -242,13 +250,19 @@ def compute_cell_derivatives(
     ### Clone cell_data so we don't mutate the original mesh
     new_cell_data = mesh.cell_data.clone()
 
+    ### LSQ: one solve per group of fields, as in compute_point_derivatives
+    if method == "lsq":
+        lsq_gradients = packed_apply(
+            mesh.cell_data.select(*key_list),
+            lambda values: compute_gradient_cells_lsq(mesh, values),
+            batch_size=mesh.cell_data.batch_size,
+        )
+
     ### Compute gradients for each key
     for key in key_list:
-        field_values = mesh.cell_data[key]
-
         ### Compute extrinsic gradient
         if method == "lsq":
-            grad_extrinsic = compute_gradient_cells_lsq(mesh, field_values)
+            grad_extrinsic = lsq_gradients[key]
         elif method == "dec":
             raise NotImplementedError(
                 "DEC cell gradients not yet implemented. Use method='lsq'."
