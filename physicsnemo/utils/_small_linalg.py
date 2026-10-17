@@ -659,10 +659,9 @@ def _normal_equations_solver(
     pseudo_inverse = _pseudo_inverse(m)
     del m
 
-    def solve(
-        B: Float[torch.Tensor, "... k n_rhs"],
-    ) -> Float[torch.Tensor, "... d n_rhs"]:
-        """Solution for the right-hand sides ``B``."""
+    # Plain annotations: jaxtyping ones would be built again on every call
+    def solve(B: torch.Tensor) -> torch.Tensor:
+        """Solution ``(..., d, n_rhs)`` for ``B`` of shape ``(..., k, n_rhs)``."""
         B = B.double()
         # One float64 column of A at a time: at most one copy is alive
         rhs = [(A[..., i].double().unsqueeze(-1) * B).sum(-2) for i in range(d)]
