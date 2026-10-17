@@ -116,3 +116,79 @@ def test_strata_conditioning_chunk_mode(chunk_size):
         chunk_size_grouped_conv=chunk_size,
     )
     assert block.adaln_bilinear_dw_conv.chunk_size == chunk_size
+
+
+@pytest.mark.parametrize("chunk_size", ["auto", 2])
+@pytest.mark.parametrize("padding_mode", ["zeros", "replicate"])
+@pytest.mark.parametrize(
+    "padding,kernel_size,dilation",
+    [("same", 3, 1), ("same", 4, 1), ("same", 4, 2), ("valid", 3, 1)],
+)
+def test_depthwise_string_padding(
+    monkeypatch, device, chunk_size, padding_mode, padding, kernel_size, dilation
+):
+    r"""String padding agrees with Conv2d, including asymmetric same padding."""
+    monkeypatch.setattr(layers, "_MAX_CONV_ELEMENTS", 160)
+    reference = torch.nn.Conv2d(
+        3,
+        3,
+        kernel_size,
+        padding=padding,
+        dilation=dilation,
+        padding_mode=padding_mode,
+        groups=3,
+    ).to(device=device, dtype=torch.float64)
+    conv = DepthwiseConv(
+        3,
+        kernel_size,
+        padding=padding,
+        dilation=dilation,
+        padding_mode=padding_mode,
+        chunk_size=chunk_size,
+    ).to(device=device, dtype=torch.float64)
+    conv.load_state_dict(reference.state_dict())
+    x = torch.randn(2, 3, 5, 7, device=device, dtype=torch.float64, requires_grad=True)
+    reference_x = x.detach().clone().requires_grad_()
+    expected = reference(reference_x)
+    actual = conv(x)
+    torch.testing.assert_close(actual, expected)
+    probe = torch.randn_like(actual)
+    (actual * probe).sum().backward()
+    (expected * probe).sum().backward()
+    torch.testing.assert_close(x.grad, reference_x.grad)
+    torch.testing.assert_close(conv.weight.grad, reference.weight.grad)
+    torch.testing.assert_close(conv.bias.grad, reference.bias.grad)
+
+
+@pytest.mark.parametrize("bias", [True, False])
+@pytest.mark.parametrize(
+    "padding,padding_mode", [(1, "zeros"), ("same", "zeros"), ("same", "replicate")]
+)
+def test_auto_depthwise_empty_batch(device, bias, padding, padding_mode):
+    r"""Empty batches preserve Conv2d output shape, dtype, and zero gradients."""
+    reference = torch.nn.Conv2d(
+        3,
+        3,
+        3,
+        padding=padding,
+        padding_mode=padding_mode,
+        groups=3,
+        bias=bias,
+    ).to(device=device, dtype=torch.float64)
+    conv = DepthwiseConv(
+        3,
+        3,
+        padding=padding,
+        padding_mode=padding_mode,
+        bias=bias,
+        chunk_size="auto",
+    ).to(device=device, dtype=torch.float64)
+    conv.load_state_dict(reference.state_dict())
+    x = torch.empty(0, 3, 5, 7, device=device, dtype=torch.float64, requires_grad=True)
+    actual = conv(x)
+    torch.testing.assert_close(actual, reference(x.detach()))
+    actual.sum().backward()
+    assert x.grad.shape == x.shape
+    torch.testing.assert_close(conv.weight.grad, torch.zeros_like(conv.weight))
+    if bias:
+        torch.testing.assert_close(conv.bias.grad, torch.zeros_like(conv.bias))

@@ -536,6 +536,7 @@ def _apply_conv2d(
     padding,
     dilation,
     padding_mode,
+    padding_repeated_twice,
 ) -> torch.Tensor:
     r"""Apply a single-sample 2D convolution (helper for :func:`torch.vmap`).
 
@@ -547,11 +548,15 @@ def _apply_conv2d(
         Convolution weight of shape :math:`(C, 1, k_h, k_w)`.
     bias : torch.Tensor
         Bias of shape :math:`(C,)`.
-    stride, padding, dilation : tuple
+    stride, dilation : tuple
         Standard convolution parameters.
+    padding : tuple | str
+        Symmetric padding widths or a Conv2d string padding mode.
     padding_mode : str
         Padding mode; non-``"zeros"`` modes are applied explicitly with
         :func:`torch.nn.functional.pad`.
+    padding_repeated_twice : tuple
+        Resolved left, right, top, and bottom widths for explicit padding.
 
     Returns
     -------
@@ -562,8 +567,7 @@ def _apply_conv2d(
     w = weight.unsqueeze(0)
     bias = bias.unsqueeze(0)
     if padding_mode != "zeros":
-        pad_h, pad_w = padding
-        x = torch.nn.functional.pad(x, (pad_w, pad_w, pad_h, pad_h), mode=padding_mode)
+        x = torch.nn.functional.pad(x, padding_repeated_twice, mode=padding_mode)
         padding = (0, 0)
     return torch.nn.functional.conv2d(
         x, w, bias=bias, stride=stride, padding=padding, dilation=dilation
@@ -616,6 +620,7 @@ def _build_chunked_depthwise_conv(
             padding=conv.padding,
             dilation=conv.dilation,
             padding_mode=conv.padding_mode,
+            padding_repeated_twice=conv._reversed_padding_repeated_twice,
         ),
         chunk_size=chunk_size,
     )
@@ -686,15 +691,20 @@ class DepthwiseConv(torch.nn.Conv2d):
     def forward(self, x, *args, **kwargs):
         chunked_conv = self._chunked_conv
         if self.chunk_size == "auto":
+            if x.shape[0] == 0:
+                return super().forward(x, *args, **kwargs)
             h, w = x.shape[-2:]
-            ph, pw = h + 2 * self.padding[0], w + 2 * self.padding[1]
+            left, right, top, bottom = self._reversed_padding_repeated_twice
+            ph, pw = h + top + bottom, w + left + right
             oh = (ph - self.dilation[0] * (self.kernel_size[0] - 1) - 1) // self.stride[
                 0
             ] + 1
             ow = (pw - self.dilation[1] * (self.kernel_size[1] - 1) - 1) // self.stride[
                 1
             ] + 1
-            area = max(h * w, oh * ow, ph * pw if self.padding_mode != "zeros" else 0)
+            # String "same" padding can materialize a padded input inside conv2d.
+            explicit_padding = self.padding_mode != "zeros" or self.padding == "same"
+            area = max(h * w, oh * ow, ph * pw if explicit_padding else 0)
             batch_chunk = min(
                 x.shape[0], max(1, _MAX_CONV_ELEMENTS // (x.shape[1] * area))
             )
