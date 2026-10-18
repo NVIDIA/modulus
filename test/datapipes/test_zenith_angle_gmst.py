@@ -65,7 +65,11 @@ def _load_dali_zenith_module():
 
     saved = {
         name: sys.modules.get(name)
-        for name in ("physicsnemo", "physicsnemo.core", "physicsnemo.core.version_check")
+        for name in (
+            "physicsnemo",
+            "physicsnemo.core",
+            "physicsnemo.core.version_check",
+        )
     }
     sys.modules["physicsnemo"] = pkg
     sys.modules["physicsnemo.core"] = core
