@@ -182,7 +182,10 @@ def _input_layout(
 
 
 def _pack_inputs(
-    td: TensorDict, layout: PackLayout, device: torch.device
+    td: TensorDict,
+    layout: PackLayout,
+    device: torch.device,
+    label: Literal["source_data", "global_data"],
 ) -> Float[torch.Tensor, "*batch n_features"]:
     r"""Pack ``td`` in ``layout``, with an empty result on ``device`` if ``layout`` has no fields.
 
@@ -194,6 +197,8 @@ def _pack_inputs(
         Layout from :func:`_input_layout`.
     device : torch.device
         Device of the empty result: a tensordict packs its own fields only.
+    label : {"source_data", "global_data"}
+        Name of ``td`` in error messages.
 
     Returns
     -------
@@ -207,6 +212,31 @@ def _pack_inputs(
     ValueError
         If a leaf has another shape than its field.
     """
+    ### ``pack`` raises for wrong fields too, but without naming ``td``.
+    if not torch.compiler.is_compiling():
+
+        def path(key: NestedKey) -> tuple[str, ...]:
+            return (key,) if isinstance(key, str) else tuple(key)
+
+        actual = {path(k) for k in td.keys(include_nested=True, leaves_only=True)}
+        expected = {path(k) for k in layout.keys}
+        if actual != expected:
+            missing = sorted(expected - actual)
+            extra = sorted(actual - expected)
+            message = (
+                f"{label} must have exactly the declared fields; missing: "
+                f"{[k[0] if len(k) == 1 else k for k in missing]}, extra: "
+                f"{[k[0] if len(k) == 1 else k for k in extra]}."
+            )
+            flat_keys = [
+                k[0] for k in extra if len(k) == 1 and tuple(k[0].split(".")) in missing
+            ]
+            if flat_keys:
+                message += (
+                    f" Flat keys such as {flat_keys[0]!r} must be nested, as "
+                    f"{tuple(flat_keys[0].split('.'))!r}."
+                )
+            raise KeyError(message)
     flat, _ = td.pack(layout=layout)
     if not layout.keys:
         return torch.zeros(td.batch_size + (0,), device=device)
@@ -806,8 +836,12 @@ class Kernel(Module):
         if global_data is None:
             global_data = TensorDict({}, device=device)
 
-        source_features = _pack_inputs(source_data, self._source_layout, device)
-        global_features = _pack_inputs(global_data, self._global_layout, device)
+        source_features = _pack_inputs(
+            source_data, self._source_layout, device, "source_data"
+        )
+        global_features = _pack_inputs(
+            global_data, self._global_layout, device, "global_data"
+        )
 
         ### Input validation
         # Skip validation when running under torch.compile for performance
@@ -1267,8 +1301,12 @@ class BarnesHutKernel(Kernel):
 
         ### Pack the features once; every phase gathers from these tensors.
         with record_function("bh_kernel::prepare_data"):
-            source_features = _pack_inputs(source_data, self._source_layout, device)
-            global_features = _pack_inputs(global_data, self._global_layout, device)
+            source_features = _pack_inputs(
+                source_data, self._source_layout, device, "source_data"
+            )
+            global_features = _pack_inputs(
+                global_data, self._global_layout, device, "global_data"
+            )
 
         ### Source aggregates for far-field clusters, packed like the sources.
         node_centroids, node_features = _aggregate_features(
@@ -2253,8 +2291,12 @@ class MultiscaleKernel(Module):
         with record_function("multiscale_kernel::prepare_data"):
             ### Every branch has the same schemas, so the same layouts.
             branch = next(iter(self.kernels.values()))
-            source_features = _pack_inputs(source_data, branch._source_layout, device)
-            global_features = _pack_inputs(global_data, branch._global_layout, device)
+            source_features = _pack_inputs(
+                source_data, branch._source_layout, device, "source_data"
+            )
+            global_features = _pack_inputs(
+                global_data, branch._global_layout, device, "global_data"
+            )
 
         ### Aggregates and target-node centroids, shared by all branches.
         with record_function("multiscale_kernel::compute_aggregates"):

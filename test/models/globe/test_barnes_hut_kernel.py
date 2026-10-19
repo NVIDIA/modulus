@@ -1759,6 +1759,52 @@ def test_bh_chunked_forward_and_gradients_match_single_chunk(
         torch.testing.assert_close(chunked_grad, single_grad, atol=1e-6, rtol=1e-5)
 
 
+@pytest.mark.parametrize("label", ["source_data", "global_data"])
+def test_bh_wrong_fields_raise_labelled_key_error(label: str) -> None:
+    """Wrong input fields raise a KeyError that names the input and lists the
+    missing and extra fields, with a hint for flat keys of nested fields."""
+    n_src = 12
+    bh_kernel = BarnesHutKernel(
+        n_spatial_dims=2,
+        output_schema={"p": {"rank": 0}},
+        source_schema={"a": {"rank": 0}, "grp.v": {"rank": 1}},
+        global_schema={"g": {"rank": 0}, "grp.w": {"rank": 0}},
+        hidden_layer_sizes=[8],
+        leaf_size=DEFAULT_LEAF_SIZE,
+    ).eval()
+    data = {
+        "source_data": TensorDict(
+            {"a": torch.rand(n_src), "grp": {"v": torch.rand(n_src, 2)}},
+            batch_size=[n_src],
+        ),
+        "global_data": TensorDict(
+            {"g": torch.rand(()), "grp": {"w": torch.rand(())}}, batch_size=[]
+        ),
+    }
+    leaf = "v" if label == "source_data" else "w"
+    wrong = data[label].clone()
+    del wrong["grp"]
+    wrong[f"grp.{leaf}"] = data[label]["grp", leaf]
+    wrong["zzz"] = data[label]["a" if label == "source_data" else "g"]
+    data[label] = wrong
+
+    with pytest.raises(KeyError) as excinfo:
+        bh_kernel(
+            reference_length=torch.ones(()),
+            source_points=torch.rand(n_src, 2),
+            target_points=torch.rand(5, 2),
+            **data,
+        )
+    message = str(excinfo.value)
+    for part in (
+        label,
+        f"missing: [('grp', '{leaf}')]",
+        f"extra: ['grp.{leaf}', 'zzz']",
+        f"Flat keys such as 'grp.{leaf}' must be nested",
+    ):
+        assert part in message, f"{part!r} not in {message!r}"
+
+
 @pytest.mark.parametrize("near_chunk_count", [0, -1])
 def test_bh_rejects_near_chunk_count_below_one(near_chunk_count: int) -> None:
     """``near_chunk_count`` below 1 raises instead of dividing by zero or
