@@ -329,11 +329,14 @@ target tree.  This eliminates redundant traversals.
 
 ---
 
-## 5. Two-Phase Kernel Evaluation
+## 5. Kernel Evaluation Phases
 
-`BarnesHutKernel.forward()` evaluates near-field and far-field interactions in
-two distinct phases, each with its own gather-evaluate-scatter pipeline.  The
-same `_evaluate_packed()` method handles both - it operates on generic
+`BarnesHutKernel._evaluate_plan()` evaluates the plan's four interaction
+streams in four phases, each with its own gather-evaluate-scatter pipeline:
+near-field pairs (Phase A), far-field node pairs (Phase B), target points
+against source nodes (Phase C, chunked like Phase A), and target nodes
+against source points (Phase D, broadcast like Phase B).  The same
+`_evaluate_packed()` method handles all four - it operates on generic
 `(N_pairs, ...)` tensors and is agnostic to whether the pairs are individual
 points or node centroids.
 
@@ -393,8 +396,8 @@ interactions are dense `(N_tgt, N_src)` or sparse `(N_chunk,)`.
 
 - `Kernel.forward()` calls it with `interaction_dims = (N_tgt, N_src)` (dense,
   brute-force evaluation)
-- `BarnesHutKernel.forward()` calls it with `interaction_dims = (N_chunk,)` in
-  both Phase A and Phase B
+- `BarnesHutKernel._evaluate_plan()` calls it with
+  `interaction_dims = (N_chunk,)` in every phase
 
 This avoids duplicating the ~250-line feature engineering pipeline.
 
@@ -487,7 +490,9 @@ normally.
 ### 7.2 Shared Aggregates Across Branches
 
 `MultiscaleKernel` packs the features and computes source aggregates once,
-and passes them to all `BarnesHutKernel` branches (`_evaluate_plan`).  Since
+with the setup that `BarnesHutKernel.forward()` uses too
+(`_prepare_plan_inputs`), and passes them to all `BarnesHutKernel` branches
+(`_evaluate_plan`).  Since
 aggregates depend only on geometry and source data (both shared across
 branches), this eliminates redundant computation.  Only per-node strength
 summation (which depends on per-branch strengths) is computed per-branch.
@@ -613,8 +618,9 @@ GLOBE.forward()
   |           |
   |           +-- MultiscaleKernel.forward_packed()   [once per source BC]
   |                 |
-  |                 +-- pack source and global features
-  |                 +-- compute_source_aggregates()  [once, shared across branches]
+  |                 +-- BarnesHutKernel._prepare_plan_inputs()
+  |                 |     pack source and global features
+  |                 |     compute_source_aggregates()  [once, shared across branches]
   |                 +-- precompute near_chunk_counts [outside checkpoint boundary]
   |                 |
   |                 +-- for each branch:

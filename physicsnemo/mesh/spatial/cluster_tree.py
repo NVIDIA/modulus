@@ -1672,9 +1672,8 @@ class ClusterTree(TensorClass):
         target points by a single-tree walk.
 
         Every target point walks the source tree (``self``) from its root, or
-        from every root, in order, when ``self`` is a forest from
-        :meth:`merge`. A
-        node is admitted to the far field when ``D_S / r < theta``, with
+        from every root in order when ``self`` is a forest from :meth:`merge`.
+        A node is admitted to the far field when ``D_S / r < theta``, with
         ``D_S`` its AABB diagonal and ``r`` the minimum distance from the point
         to its AABB: the source-side half of the dual criterion, since a point
         has no extent. A leaf that is not admitted contributes its sources
