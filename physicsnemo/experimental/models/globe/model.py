@@ -39,17 +39,6 @@ from physicsnemo.mesh.spatial.cluster_tree import (
 )
 from physicsnemo.utils.logging import PythonLogger
 
-# allow_in_graph wraps these TensorDict methods as opaque graph nodes so that
-# torch.compile doesn't trace into them (their internals cause graph breaks).
-# This is safe because flatten_keys/unflatten_keys are pure structural
-# key-renaming operations with no tensor-data side effects — the set of tensor
-# storages in equals the set coming out.  Do NOT generalise this pattern to
-# functions with tensor-value-dependent control flow or side effects.
-# If a future tensordict version makes these natively Dynamo-traceable, remove
-# these wrappers.
-_flatten_keys = torch.compiler.allow_in_graph(TensorDict.flatten_keys)
-_unflatten_keys = torch.compiler.allow_in_graph(TensorDict.unflatten_keys)
-
 logger = PythonLogger("globe.model")
 
 @dataclass
@@ -131,22 +120,24 @@ class GLOBE(Module):
     n_spherical_harmonics : int, optional, default=4
         Number of Legendre polynomial terms used for angle-dependent features in
         kernel functions.
-    theta : float, optional, default=1.0
+    theta : float, optional, default=1.5
         Barnes-Hut opening angle controlling the near/far-field split in the
         dual-tree traversal. The criterion is :math:`(D_T + D_S) / r < \theta`,
         where :math:`D_T` and :math:`D_S` are AABB diagonals and :math:`r` is
         the minimum inter-AABB distance. Larger values approximate more
         aggressively; ``0`` forces all interactions to be exact (no far-field
-        approximation).
+        approximation). A trained model adapts to its ``theta``, so evaluate it
+        with the value it was trained with.
     leaf_size : int, optional, default=1
         Maximum number of source points per leaf node in the cluster tree.
         Larger values produce shallower trees (fewer traversal iterations) at
         the cost of more exact near-field interactions per leaf hit.
-    expand_far_targets : bool, optional, default=False
+    expand_far_targets : bool, optional, default=True
         If ``True``, far-field target nodes are expanded to individual points,
         converting ``(far, far)`` pairs into ``(near, far)`` pairs. This
-        eliminates the target-side approximation at the cost of more kernel
-        evaluations.
+        eliminates the target-side approximation, which makes the output
+        piecewise constant over each far target node, at the cost of more
+        kernel evaluations.
     use_gradient_checkpointing : bool, optional, default=True
         If ``True``, applies ``torch.utils.checkpoint.checkpoint`` to each
         kernel evaluation during training, trading compute for memory. See
@@ -243,12 +234,12 @@ class GLOBE(Module):
         smoothing_radius: float = 1e-8,
         hidden_layer_sizes: Sequence[int] | None = None,
         n_spherical_harmonics: int = 4,
-        theta: float = 1.0,
+        theta: float = 1.5,
         leaf_size: int = 1,
         network_type: Literal["pade", "mlp"] = "pade",
         self_regularization_beta: float | None = None,
         latent_compression_scale: float | None = None,
-        expand_far_targets: bool = False,
+        expand_far_targets: bool = True,
         use_gradient_checkpointing: bool = True,
         tree_build_device: torch.device | str | None = None,
     ):
@@ -407,6 +398,20 @@ class GLOBE(Module):
         normals, and optionally latent features into a single schema
         declaration that mirrors the ``source_data`` structure produced by
         :meth:`_evaluate_hyperlayer`.
+
+        Parameters
+        ----------
+        bc_source_schema : FieldSchemaLike
+            Schema of the per-face physical source features for one BC type.
+        include_latents : bool
+            Whether to add the latent scalars and vectors, which exist only
+            after the first hyperlayer.
+
+        Returns
+        -------
+        FieldSchemaLike
+            Nested declaration with keys ``"physical"``, ``"normals"``, and
+            (if ``include_latents``) ``"latent"``.
         """
         result: dict[str, Any] = {
             "physical": bc_source_schema,
@@ -464,10 +469,10 @@ class GLOBE(Module):
         ### inside the ``@torch.compiler.disable`` body for nothing.  See the
         ### ``tree_build_device`` docstring on :class:`GLOBE` for why building
         ### on CPU can be faster than on CUDA at small ``N``.
+        ### ``boundary_meshes`` may be a TensorDict, which has no truth value.
+        meshes = list(boundary_meshes.values())
         original_device = (
-            next(iter(boundary_meshes.values())).points.device
-            if boundary_meshes
-            else self.reference_area.device
+            meshes[0].points.device if meshes else self.reference_area.device
         )
         build_device = self.tree_build_device or original_device
 
@@ -495,7 +500,7 @@ class GLOBE(Module):
                     n_src = src_mesh.n_cells
                     plan = cluster_trees_built[src_bc].find_dual_interaction_pairs(
                         target_tree=cluster_trees_built[dst_bc], theta=self.theta,
-                        expand_far_targets=self.expand_far_targets,
+                        expand_far_targets=self.expand_far_targets, validate=False,
                     )
                     comm_plans_built[dst_bc][src_bc] = plan
                     logger.logger.debug(
@@ -509,7 +514,7 @@ class GLOBE(Module):
                     )
 
         ### Transfer to the original device.  ``ClusterTree`` and
-        ### ``DualInteractionPlan`` are both ``@tensorclass``, so ``.to`` moves
+        ### ``DualInteractionPlan`` are both tensorclasses, so ``.to`` moves
         ### all member tensors at once.  No-op when devices already match.
         cluster_trees = {
             bc: t.to(original_device)  # ty: ignore[unresolved-attribute]
@@ -566,7 +571,7 @@ class GLOBE(Module):
             for bc_type, tree in cluster_trees.items():
                 plan = tree.to(build_device).find_dual_interaction_pairs(  # ty: ignore[unresolved-attribute]
                     target_tree=pred_target_tree_built, theta=self.theta,
-                    expand_far_targets=self.expand_far_targets,
+                    expand_far_targets=self.expand_far_targets, validate=False,
                 )
                 pred_plans_built[bc_type] = plan
                 logger.logger.debug(
@@ -659,7 +664,7 @@ class GLOBE(Module):
             ### enforced by ``FieldSchema.check`` at ``GLOBE.forward``
             ### entry.
             kernel_source_keys = kernel.source_schema.keys() - {"normals"}
-            source_data = _flatten_keys(mesh.cell_data).select(*kernel_source_keys)
+            source_data = mesh.cell_data.flatten_keys().select(*kernel_source_keys)
             source_data["normals"] = mesh.cell_normals
 
             kernel_result: TensorDict[str, Float[torch.Tensor, "n_targets ..."]] = kernel(
@@ -675,7 +680,7 @@ class GLOBE(Module):
                 dual_plan=dual_plans[bc_type],
                 source_areas=source_areas[bc_type],
             )
-            result_pieces.append(_unflatten_keys(kernel_result))
+            result_pieces.append(kernel_result.unflatten_keys())
 
         return reduce(operator.add, result_pieces)
 

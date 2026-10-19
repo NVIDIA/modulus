@@ -27,7 +27,7 @@ from __future__ import annotations
 import glob as _glob
 import logging
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, Literal
 
 import torch
 
@@ -146,16 +146,20 @@ def _zarr_mesh_subsampled(
     n_cells: int | None,
     n_points: int | None,
     generator: torch.Generator | None,
+    drop_cells: bool = False,
 ) -> Mesh:
     """Partial-read a zarr mesh group: fetch only the subsample window.
 
     Reproduces :func:`_subsample_mesh` semantics (cyclic contiguous blocks,
     vertex compaction, Horvitz-Thompson measure corrections) while reading only
     the selected rows from the store instead of materializing the full mesh.
+    The generator advances as in :func:`_subsample_mesh`, so a seed selects the
+    same rows as on the memmap path. ``drop_cells`` reads the mesh as a point
+    cloud, as ``DomainMeshReader(drop_interior_cells=True)`` does.
     """
     from physicsnemo.mesh.io import io_zarr as _ioz
 
-    total_cells = group["cells"].shape[0] if "cells" in group else 0
+    total_cells = group["cells"].shape[0] if "cells" in group and not drop_cells else 0
     total_points = group["points"].shape[0]
 
     if total_cells > 0 and n_cells is not None and total_cells > n_cells:
@@ -191,16 +195,25 @@ def _zarr_mesh_subsampled(
             point_data=_ioz._read_tree(
                 group, "point_data", leaf_reader=lambda a: _ioz._read_rows(a, runs)
             ),
-            cell_data=_ioz._read_tree(group, "cell_data"),
+            cell_data=None if drop_cells else _ioz._read_tree(group, "cell_data"),
             global_data=_ioz._read_tree(group, "global_data"),
         )
         if EFFECTIVE_MEASURE_KEY in mesh.point_data:
             scale_measures(mesh, total_points / n_points, association="points")
         return mesh
 
-    # No subsampling applies (small mesh, or unsupported combination):
-    # eager full read keeps semantics identical to the memmap path.
-    return _ioz._mesh_from_group(group, None)
+    # No window read applies (small mesh, or a point subsample of a mesh with
+    # cells): read in full and subsample in memory, as the memmap path does.
+    # Subsampling here, not in __getitem__, keeps the generator's draws in
+    # sub-mesh order, so later sub-meshes also select the memmap path's rows.
+    mesh = _ioz._mesh_from_group(group, None)
+    if drop_cells:
+        mesh = Mesh(
+            points=mesh.points,
+            point_data=mesh.point_data,
+            global_data=mesh.global_data,
+        )
+    return _subsample_mesh(mesh, n_cells, n_points, generator=generator)
 
 
 def _subsample_mesh(
@@ -333,7 +346,9 @@ class MeshReader:
                     generator,
                 )
             return from_zarr(mesh_path)
-        return Mesh.load(mesh_path)
+        # mode="r": copy-on-write maps, so in-place edits of a sample never
+        # reach the dataset files, and readers on Lustre take no write locks.
+        return Mesh.load(mesh_path, mode="r")
 
     def _get_sample_metadata(self, index: int) -> dict[str, Any]:
         """Return metadata for the sample (e.g. source path)."""
@@ -421,6 +436,7 @@ class DomainMeshReader:
         include_index_in_metadata: bool = True,
         subsample_n_points: int | None = None,
         subsample_n_cells: int | None = None,
+        boundary_subsample: Literal["both", "cells", "points"] = "both",
         extra_boundaries: dict[str, dict] | None = None,
         drop_interior_cells: bool = False,
         drop_in_file_boundaries: bool = False,
@@ -461,6 +477,18 @@ class DomainMeshReader:
             :mod:`physicsnemo.mesh.calculus.measure`).  Applied
             before
             ``subsample_n_points`` when both are set.
+        boundary_subsample : {"both", "cells", "points"}, default="both"
+            Which of the two subsamples apply to the in-file boundary
+            meshes.  ``"both"`` applies ``subsample_n_cells`` then
+            ``subsample_n_points`` (the historical behaviour);
+            ``"cells"`` applies only ``subsample_n_cells``; ``"points"``
+            applies only ``subsample_n_points``.  The interior is
+            unaffected.  Use ``"cells"`` when both sizes are set to the
+            same ``N`` for a point-cloud interior next to a triangulated
+            boundary: composing cells-then-points on that boundary keeps
+            only the cells whose vertices *all* survive the point cut, so
+            a surface meant to keep ``N`` cells (about ``3N`` vertices)
+            keeps roughly ``N * (N / 3N)**3 ≈ N / 27`` of them.
         extra_boundaries : dict[str, dict] or None, optional
             Load additional sibling meshes as extra boundaries on each
             sample.  Each key is the boundary name to assign; each value
@@ -506,6 +534,12 @@ class DomainMeshReader:
         self.drop_in_file_boundaries = drop_in_file_boundaries
         self.subsample_n_points = subsample_n_points
         self.subsample_n_cells = subsample_n_cells
+        if boundary_subsample not in ("both", "cells", "points"):
+            raise ValueError(
+                "boundary_subsample must be one of 'both', 'cells', 'points'; "
+                f"got {boundary_subsample!r}"
+            )
+        self.boundary_subsample = boundary_subsample
         # Base seed + epoch for deterministic per-index RNG (see
         # :meth:`set_generator`). ``None`` means unseeded.
         self._seed_base: int | None = None
@@ -524,6 +558,16 @@ class DomainMeshReader:
         )
         if not self._paths:
             raise ValueError(f"No paths matching {pattern!r} found in {self._root}")
+
+    def _boundary_subsample_sizes(self) -> tuple[int | None, int | None]:
+        """``(n_cells, n_points)`` to apply to boundaries per ``boundary_subsample``."""
+        n_cells = (
+            self.subsample_n_cells if self.boundary_subsample != "points" else None
+        )
+        n_points = (
+            self.subsample_n_points if self.boundary_subsample != "cells" else None
+        )
+        return n_cells, n_points
 
     def _load_sample(self, index: int) -> DomainMesh:
         """Load a single DomainMesh from disk."""
@@ -555,14 +599,16 @@ class DomainMeshReader:
                     self.subsample_n_cells,
                     self.subsample_n_points,
                     generator,
+                    drop_cells=self.drop_interior_cells,
                 )
                 boundaries = {}
                 if not self.drop_in_file_boundaries and "boundaries" in root:
+                    bnd_n_cells, bnd_n_points = self._boundary_subsample_sizes()
                     boundaries = {
                         name: _zarr_mesh_subsampled(
                             grp,
-                            self.subsample_n_cells,
-                            self.subsample_n_points,
+                            bnd_n_cells,
+                            bnd_n_points,
                             generator,
                         )
                         for name, grp in root["boundaries"].groups()
@@ -573,7 +619,7 @@ class DomainMeshReader:
                     global_data=io_zarr._read_tree(root, "global_data"),
                 )
             return from_zarr(path)
-        return DomainMesh.load(path)
+        return DomainMesh.load(path, mode="r")  # see MeshReader._load_sample
 
     def __len__(self) -> int:
         return len(self._paths)
@@ -637,14 +683,20 @@ class DomainMeshReader:
                 if self._seed_base is None
                 else spawn_generator(self._seed_base, self._epoch, index)
             )
-            sub_kw = dict(
+            interior = _subsample_mesh(
+                dm.interior,
                 n_cells=self.subsample_n_cells,
                 n_points=self.subsample_n_points,
                 generator=generator,
             )
-            interior = _subsample_mesh(dm.interior, **sub_kw)
+            bnd_n_cells, bnd_n_points = self._boundary_subsample_sizes()
             boundaries = {
-                name: _subsample_mesh(dm.boundaries[name], **sub_kw)
+                name: _subsample_mesh(
+                    dm.boundaries[name],
+                    n_cells=bnd_n_cells,
+                    n_points=bnd_n_points,
+                    generator=generator,
+                )
                 for name in dm.boundary_names
             }
             dm = DomainMesh(
@@ -699,7 +751,7 @@ class DomainMeshReader:
 
                 new_boundaries[bnd_name] = from_zarr(matches[0])
             else:
-                new_boundaries[bnd_name] = Mesh.load(matches[0])
+                new_boundaries[bnd_name] = Mesh.load(matches[0], mode="r")
 
         return DomainMesh(
             interior=dm.interior,
