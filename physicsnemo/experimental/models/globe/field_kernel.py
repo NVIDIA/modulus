@@ -1390,19 +1390,20 @@ class BarnesHutKernel(Kernel):
             source_areas = torch.ones(n_sources, device=device)
 
         ### Build trees and the plan if not precomputed
-        if cluster_tree is None:
-            cluster_tree = ClusterTree.from_points(
-                source_points, leaf_size=self.leaf_size, areas=source_areas
-            )
-        if dual_plan is None:
-            if target_tree is None:
-                target_tree = ClusterTree.from_points(
-                    target_points, leaf_size=self.leaf_size,
+        with record_function("bh_kernel::build_tree"):
+            if cluster_tree is None:
+                cluster_tree = ClusterTree.from_points(
+                    source_points, leaf_size=self.leaf_size, areas=source_areas
                 )
-            dual_plan = cluster_tree.find_dual_interaction_pairs(
-                target_tree=target_tree, theta=theta,
-                expand_far_targets=expand_far_targets, validate=False,
-            )
+            if dual_plan is None:
+                if target_tree is None:
+                    target_tree = ClusterTree.from_points(
+                        target_points, leaf_size=self.leaf_size,
+                    )
+                dual_plan = cluster_tree.find_dual_interaction_pairs(
+                    target_tree=target_tree, theta=theta,
+                    expand_far_targets=expand_far_targets, validate=False,
+                )
 
         ### Pack the features once; every phase gathers from these tensors.
         with record_function("bh_kernel::prepare_data"):
@@ -1413,20 +1414,23 @@ class BarnesHutKernel(Kernel):
                 global_data, self._global_layout, device, "global_data"
             )
 
-        ### Source aggregates for far-field clusters, packed like the sources.
-        node_centroids, node_features = _aggregate_features(
-            cluster_tree, source_points, source_areas, source_features
-        )
-
-        ### Target-node centroids, needed only by the far-target phases.
-        if target_centroids is None and dual_plan.n_far_nodes + dual_plan.n_fn > 0:
-            if target_tree is None:
-                target_tree = ClusterTree.from_points(
-                    target_points, leaf_size=self.leaf_size,
-                )
-            target_centroids = _target_node_centroids(
-                cluster_tree, target_tree, target_points, node_centroids
+        ### Source aggregates for far-field clusters, packed like the sources,
+        ### and the target-node centroids that only the far-target phases use.
+        with record_function("bh_kernel::compute_aggregates"):
+            node_centroids, node_features = _aggregate_features(
+                cluster_tree, source_points, source_areas, source_features
             )
+            if (
+                target_centroids is None
+                and dual_plan.n_far_nodes + dual_plan.n_fn > 0
+            ):
+                if target_tree is None:
+                    target_tree = ClusterTree.from_points(
+                        target_points, leaf_size=self.leaf_size,
+                    )
+                target_centroids = _target_node_centroids(
+                    cluster_tree, target_tree, target_points, node_centroids
+                )
 
         return dict(
             source_features=source_features,
