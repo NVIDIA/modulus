@@ -30,6 +30,7 @@ from physicsnemo.experimental.models.globe.field_kernel import (
     MultiscaleKernel,
     _output_layout,
     _require_supported,
+    _target_node_centroids,
 )
 from physicsnemo.mesh import FieldSchema, FieldSchemaLike, Mesh
 from physicsnemo.mesh.calculus.measure import cell_measures
@@ -508,7 +509,9 @@ class GLOBE(Module):
         comm_target_centroids : dict[str, torch.Tensor or None]
             Target-node centroids that each communication plan refers to,
             concatenated the same way, or ``None`` if the plan has no
-            far-target pairs (always so with ``expand_far_targets``).
+            far-target pairs (always so with ``expand_far_targets``). They
+            are area-weighted for the source's own tree and plain node means
+            for the others, as in the kernels.
         """
         from physicsnemo.mesh.spatial.cluster_tree import ClusterTree
 
@@ -572,22 +575,22 @@ class GLOBE(Module):
                     src_mesh.n_cells, n_targets, self.theta, self.leaf_size,
                 )
                 ### Target-node centroids, only for plans that use them, in
-                ### the forest's node order: the area-weighted node centroids
-                ### for self-interaction (the source aggregates' own), plain
-                ### node means otherwise.
+                ### the forest's node order, one block per destination tree
+                ### by the kernels' rule (``_target_node_centroids``).
                 if plan.n_far_nodes + plan.n_fn > 0:
+                    src_tree = cluster_trees_built[src_bc]
+                    src_node_centroids = src_tree.compute_source_aggregates(
+                        source_points=centroids_built[src_bc],
+                        areas=bc_areas_built[src_bc],
+                    ).node_centroid
                     comm_centroids_built[src_bc] = torch.cat(
                         [
-                            cluster_trees_built[dst_bc]
-                            .compute_source_aggregates(
-                                source_points=centroids_built[dst_bc],
-                                areas=(
-                                    bc_areas_built[dst_bc]
-                                    if dst_bc == src_bc
-                                    else torch.ones_like(bc_areas_built[dst_bc])
-                                ),
+                            _target_node_centroids(
+                                src_tree,
+                                cluster_trees_built[dst_bc],
+                                centroids_built[dst_bc],
+                                src_node_centroids,
                             )
-                            .node_centroid
                             for dst_bc in bc_types
                         ]
                     )
