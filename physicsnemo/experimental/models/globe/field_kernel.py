@@ -44,7 +44,6 @@ if TYPE_CHECKING:
     from physicsnemo.mesh.spatial.cluster_tree import (
         ClusterTree,
         DualInteractionPlan,
-        SourceAggregates,
     )
 
 
@@ -1109,9 +1108,6 @@ class BarnesHutKernel(Kernel):
         trees and target points on each call.
     source_areas : Float[torch.Tensor, "n_sources"] or None, optional, default=None
         Per-source areas for aggregate weighting. Defaults to ones.
-    source_aggregates : SourceAggregates or None, optional, default=None
-        Precomputed per-node aggregates. If ``None``, computed on each
-        call.  Pass this to avoid redundant computation across branches.
 
     Outputs
     -------
@@ -1165,7 +1161,6 @@ class BarnesHutKernel(Kernel):
         target_tree: "ClusterTree | None" = None,
         dual_plan: "DualInteractionPlan | None" = None,
         source_areas: Float[torch.Tensor, " n_sources"] | None = None,
-        source_aggregates: "SourceAggregates | None" = None,
         target_centroids: Float[torch.Tensor, "n_target_nodes n_dims"] | None = None,
         near_chunk_count: int | None = None,
         expand_far_targets: bool = False,
@@ -1207,8 +1202,6 @@ class BarnesHutKernel(Kernel):
             Precomputed dual traversal plan. Computed on-the-fly if ``None``.
         source_areas : Float[torch.Tensor, "n_sources"] or None
             Per-source areas for aggregate weighting. Defaults to ones.
-        source_aggregates : SourceAggregates or None
-            Precomputed per-node source aggregates.
         target_centroids : Float[torch.Tensor, "n_target_nodes n_dims"] or None
             Per-node centroids for the target tree. If ``None`` and
             ``target_tree is cluster_tree`` (self-interaction), source
@@ -1265,20 +1258,9 @@ class BarnesHutKernel(Kernel):
             global_features = _pack_inputs(global_data, self._global_layout, device)
 
         ### Source aggregates for far-field clusters, packed like the sources.
-        if source_aggregates is None:
-            node_centroids, node_features = _aggregate_features(
-                cluster_tree, source_points, source_areas, source_features
-            )
-        else:
-            node_centroids = source_aggregates.node_centroid
-            if source_aggregates.node_source_data is None:
-                node_features = source_features.new_zeros(
-                    (node_centroids.shape[0], source_features.shape[-1])
-                )
-            else:
-                node_features = _pack_inputs(
-                    source_aggregates.node_source_data, self._source_layout, device
-                )
+        node_centroids, node_features = _aggregate_features(
+            cluster_tree, source_points, source_areas, source_features
+        )
 
         ### Target-node centroids, needed only by the far-target phases.
         if target_centroids is None and dual_plan.n_far_nodes + dual_plan.n_fn > 0:
