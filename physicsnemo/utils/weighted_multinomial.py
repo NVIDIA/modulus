@@ -26,6 +26,7 @@ SamplingStrategy = Literal["exact", "poisson_gap"]
 
 _SAMPLE_CHUNK_SIZE = 1 << 22
 _RANDPERM_POPULATION_LIMIT = 1 << 24
+_MULTINOMIAL_CATEGORY_LIMIT = 1 << 24
 
 
 def _devices_match(
@@ -95,6 +96,33 @@ def _sample_exact_without_replacement(
     return indices[selected]
 
 
+def _sample_weighted_with_replacement(
+    weights: torch.Tensor,
+    num_samples: int,
+    *,
+    generator: torch.Generator | None,
+) -> torch.Tensor:
+    """Sample with replacement, inverting the CDF where torch.multinomial cannot."""
+    if weights.shape[0] <= _MULTINOMIAL_CATEGORY_LIMIT:
+        return torch.multinomial(
+            weights,
+            num_samples,
+            replacement=True,
+            generator=generator,
+        )
+
+    # Float64 keeps every category's share of the CDF resolvable. Scanning a
+    # copy in place needs one float64 buffer instead of two.
+    cdf = weights.to(torch.float64, copy=True).cumsum_(0)
+    draws = torch.rand(
+        num_samples,
+        dtype=torch.float64,
+        device=weights.device,
+        generator=generator,
+    )
+    return torch.searchsorted(cdf, draws.mul_(cdf[-1]), right=True)
+
+
 def _sample_poisson_gap(
     population_size: int,
     num_samples: int,
@@ -140,8 +168,9 @@ class WeightedMultinomial(FunctionSpec):
     uniform random subset. It is only available for integer ``input`` without
     replacement.
 
-    With replacement, integer input uses :func:`torch.randint` and tensor input
-    uses :func:`torch.multinomial`.
+    With replacement, integer input uses :func:`torch.randint`. Tensor input
+    uses :func:`torch.multinomial` up to its :math:`2^{24}` category limit and
+    inverts a float64 cumulative sum of the weights above it.
 
     Parameters
     ----------
@@ -327,10 +356,9 @@ class WeightedMultinomial(FunctionSpec):
                     device=sample_device,
                     generator=generator,
                 )
-            return torch.multinomial(
+            return _sample_weighted_with_replacement(
                 weights,
                 num_samples,
-                replacement=True,
                 generator=generator,
             )
         if strategy == "poisson_gap":

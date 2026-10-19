@@ -168,6 +168,29 @@ def test_weighted_sampling_with_replacement_matches_torch_multinomial():
     assert 0 not in indices
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_weighted_sampling_with_replacement_above_category_limit(monkeypatch, dtype):
+    """Above torch.multinomial's category limit, sampling inverts the CDF."""
+    monkeypatch.setattr(sampling_module, "_MULTINOMIAL_CATEGORY_LIMIT", 2)
+    weights = torch.tensor([0.0, 1.0, 3.0, 0.0], dtype=dtype)
+    original = weights.clone()
+
+    indices = weighted_multinomial(
+        weights,
+        40_000,
+        replacement=True,
+        generator=torch.Generator().manual_seed(0),
+    )
+
+    assert indices.dtype == torch.long
+    assert torch.equal(weights, original)  # The in-place scan runs on a copy.
+    counts = torch.bincount(indices, minlength=4)
+    assert counts[0] == 0 and counts[3] == 0
+    torch.testing.assert_close(
+        counts[2] / counts[1], torch.tensor(3.0), rtol=0.05, atol=0.0
+    )
+
+
 @pytest.mark.parametrize("device", ["cpu:0", "cpu:1"])
 def test_accepts_equivalent_cpu_device_aliases(device):
     indices = weighted_multinomial(

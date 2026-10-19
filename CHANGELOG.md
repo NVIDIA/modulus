@@ -281,6 +281,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `weighted_multinomial` with `replacement=True` accepts more than 2^24
+  weights, instead of raising `torch.multinomial`'s category-limit error. So
+  DoMINO's `sample_points_on_mesh` now works on meshes with over 2^24 faces.
 - `GLOBE` accepts `boundary_meshes` as a TensorDict, as the DrivAerML example
   passes them. Before, every forward pass of that example failed.
 - The GLOBE examples' requirements no longer downgrade PyVista and Matplotlib
