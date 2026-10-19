@@ -1289,20 +1289,99 @@ class BarnesHutKernel(Kernel):
         ValueError
             If ``near_chunk_count`` is given and below 1.
         """
-        from physicsnemo.mesh.spatial.cluster_tree import ClusterTree
-
         ### A plain int, so this check also runs under torch.compile.
         if near_chunk_count is not None and near_chunk_count < 1:
             raise ValueError(
                 f"near_chunk_count must be at least 1, got {near_chunk_count}"
             )
 
+        if source_strengths is None:
+            source_strengths = torch.ones(
+                source_points.shape[0], device=source_points.device
+            )
+        packed = self._evaluate_plan(
+            reference_length=reference_length,
+            source_points=source_points,
+            target_points=target_points,
+            source_strengths=source_strengths,
+            near_chunk_count=near_chunk_count,
+            **self._prepare_plan_inputs(
+                source_points=source_points,
+                target_points=target_points,
+                source_data=source_data,
+                global_data=global_data,
+                theta=theta,
+                cluster_tree=cluster_tree,
+                target_tree=target_tree,
+                dual_plan=dual_plan,
+                source_areas=source_areas,
+                target_centroids=target_centroids,
+                expand_far_targets=expand_far_targets,
+            ),
+        )
+        return self.output_layout.unpack(packed)
+
+    def _prepare_plan_inputs(
+        self,
+        *,
+        source_points: Float[torch.Tensor, "n_sources n_dims"],
+        target_points: Float[torch.Tensor, "n_targets n_dims"],
+        source_data: TensorDict | None,
+        global_data: TensorDict | None,
+        theta: float,
+        cluster_tree: "ClusterTree | None",
+        target_tree: "ClusterTree | None",
+        dual_plan: "DualInteractionPlan | None",
+        source_areas: Float[torch.Tensor, " n_sources"] | None,
+        target_centroids: Float[torch.Tensor, "n_target_nodes n_dims"] | None,
+        expand_far_targets: bool,
+    ) -> dict[str, object]:
+        r"""Trees, plan, packed features and aggregates for :meth:`_evaluate_plan`.
+
+        This is the setup of :meth:`forward`, shared with
+        :meth:`MultiscaleKernel.forward_packed`: it fills in the defaults,
+        builds what is not precomputed, packs the features once, and
+        aggregates them over the source tree.
+
+        Parameters
+        ----------
+        source_points : Float[torch.Tensor, "n_sources n_dims"]
+            Source coordinates, of shape :math:`(N_{sources}, D)`.
+        target_points : Float[torch.Tensor, "n_targets n_dims"]
+            Target coordinates, of shape :math:`(N_{targets}, D)`.
+        source_data : TensorDict or None
+            Per-source features; none if ``None``.
+        global_data : TensorDict or None
+            Problem-level features; none if ``None``.
+        theta : float
+            Barnes-Hut opening angle, used only to plan.
+        cluster_tree : ClusterTree or None
+            Source tree, built if ``None``.
+        target_tree : ClusterTree or None
+            Target tree or forest, built if ``None`` and needed.
+        dual_plan : DualInteractionPlan or None
+            Interaction plan, computed if ``None``.
+        source_areas : Float[torch.Tensor, "n_sources"] or None
+            Per-source areas for aggregate weighting. Defaults to ones.
+        target_centroids : Float[torch.Tensor, "n_target_nodes n_dims"] or None
+            Target-node centroids, derived if ``None`` and the plan needs
+            them (see :meth:`forward`).
+        expand_far_targets : bool
+            Passed to :meth:`ClusterTree.find_dual_interaction_pairs`.
+
+        Returns
+        -------
+        dict[str, object]
+            The ``source_features``, ``global_features``, ``dual_plan``,
+            ``cluster_tree``, ``node_centroids``, ``node_features`` and
+            ``target_centroids`` arguments of :meth:`_evaluate_plan`.
+        """
+        from physicsnemo.mesh.spatial.cluster_tree import ClusterTree
+
         n_sources = source_points.shape[0]
         device = source_points.device
 
         ### Set defaults
-        if source_strengths is None:
-            source_strengths = torch.ones(n_sources, device=device)
         if source_data is None:
             source_data = TensorDict({}, batch_size=[n_sources], device=device)
         if global_data is None:
@@ -1349,11 +1428,7 @@ class BarnesHutKernel(Kernel):
                 cluster_tree, target_tree, target_points, node_centroids
             )
 
-        packed = self._evaluate_plan(
-            reference_length=reference_length,
-            source_points=source_points,
-            target_points=target_points,
-            source_strengths=source_strengths,
+        return dict(
             source_features=source_features,
             global_features=global_features,
             dual_plan=dual_plan,
@@ -1361,9 +1436,7 @@ class BarnesHutKernel(Kernel):
             node_centroids=node_centroids,
             node_features=node_features,
             target_centroids=target_centroids,
-            near_chunk_count=near_chunk_count,
         )
-        return self.output_layout.unpack(packed)
 
     def _evaluate_plan(
         self,
@@ -2253,8 +2326,6 @@ class MultiscaleKernel(Module):
             :math:`(N_{targets}, F_{out})`, packed as :attr:`output_layout`
             describes.
         """
-        from physicsnemo.mesh.spatial.cluster_tree import ClusterTree
-
         n_sources: int = len(source_points)
         device = source_points.device
 
@@ -2268,12 +2339,8 @@ class MultiscaleKernel(Module):
                 batch_size=torch.Size([n_sources]),
                 device=device,
             )
-        if source_data is None:
-            source_data = TensorDict({}, batch_size=[n_sources], device=device)
         if global_data is None:
             global_data = TensorDict({}, device=device)
-        if source_areas is None:
-            source_areas = torch.ones(n_sources, device=device)
 
         # Skip validation when running under torch.compile for performance
         if not torch.compiler.is_compiling():
@@ -2293,22 +2360,6 @@ class MultiscaleKernel(Module):
                         f"but the forward-method input gives {actual} {name}."
                     )
 
-        ### Build the shared tree and dual plan (reused across branches)
-        with record_function("multiscale_kernel::build_tree"):
-            if cluster_tree is None:
-                cluster_tree = ClusterTree.from_points(
-                    source_points, leaf_size=self.leaf_size, areas=source_areas,
-                )
-            if dual_plan is None:
-                if target_tree is None:
-                    target_tree = ClusterTree.from_points(
-                        target_points, leaf_size=self.leaf_size,
-                    )
-                dual_plan = cluster_tree.find_dual_interaction_pairs(
-                    target_tree=target_tree, theta=theta,
-                    expand_far_targets=expand_far_targets, validate=False,
-                )
-
         ### Augment global_data with log-ratios of reference lengths.
         log_ratios = TensorDict(
             {
@@ -2324,31 +2375,24 @@ class MultiscaleKernel(Module):
         global_data = global_data.copy()
         global_data["log_reference_length_ratios"] = log_ratios
 
-        ### Pack the features once for all branches and phases: one tensor
-        ### of source features and one of global features.
+        ### The shared tree, plan, packed features, aggregates and target-node
+        ### centroids, built once for all branches.  Every branch has the
+        ### same schemas and leaf size, so any branch can build them.
         with record_function("multiscale_kernel::prepare_data"):
-            ### Every branch has the same schemas, so the same layouts.
-            branch = next(iter(self.kernels.values()))
-            source_features = _pack_inputs(
-                source_data, branch._source_layout, device, "source_data"
+            plan_inputs = next(iter(self.kernels.values()))._prepare_plan_inputs(
+                source_points=source_points,
+                target_points=target_points,
+                source_data=source_data,
+                global_data=global_data,
+                theta=theta,
+                cluster_tree=cluster_tree,
+                target_tree=target_tree,
+                dual_plan=dual_plan,
+                source_areas=source_areas,
+                target_centroids=target_centroids,
+                expand_far_targets=expand_far_targets,
             )
-            global_features = _pack_inputs(
-                global_data, branch._global_layout, device, "global_data"
-            )
-
-        ### Aggregates and target-node centroids, shared by all branches.
-        with record_function("multiscale_kernel::compute_aggregates"):
-            node_centroids, node_features = _aggregate_features(
-                cluster_tree, source_points, source_areas, source_features
-            )
-            if target_centroids is None and dual_plan.n_far_nodes + dual_plan.n_fn > 0:
-                if target_tree is None:
-                    target_tree = ClusterTree.from_points(
-                        target_points, leaf_size=self.leaf_size,
-                    )
-                target_centroids = _target_node_centroids(
-                    cluster_tree, target_tree, target_points, node_centroids
-                )
+        dual_plan = plan_inputs["dual_plan"]
 
         ### Precompute near-field chunk counts outside the checkpoint boundary,
         # so that each branch's chunking is a fixed checkpoint input.
@@ -2407,14 +2451,8 @@ class MultiscaleKernel(Module):
                     source_points=source_points,
                     target_points=target_points,
                     source_strengths=source_strengths[name],
-                    source_features=source_features,
-                    global_features=global_features,
-                    dual_plan=dual_plan,
-                    cluster_tree=cluster_tree,
-                    node_centroids=node_centroids,
-                    node_features=node_features,
-                    target_centroids=target_centroids,
                     near_chunk_count=near_chunk_counts[name],
+                    **plan_inputs,
                 )
                 if use_branch_ckpt:
                     piece = checkpoint(
