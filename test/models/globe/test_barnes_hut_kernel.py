@@ -801,6 +801,17 @@ def test_multiscale_bh_convergence(n_dims: int):
     )
 
 
+def test_multiscale_kernel_rejects_empty_reference_length_names():
+    """A MultiscaleKernel without reference lengths raises at construction."""
+    with pytest.raises(ValueError, match="reference_length_names is empty"):
+        MultiscaleKernel(
+            n_spatial_dims=2,
+            output_schema={"p": {"rank": 0}},
+            reference_length_names=[],
+            hidden_layer_sizes=[8],
+        )
+
+
 # ---------------------------------------------------------------------------
 # Source permutation equivariance
 # ---------------------------------------------------------------------------

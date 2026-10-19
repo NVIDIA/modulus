@@ -1846,6 +1846,7 @@ class MultiscaleKernel(Module):
     reference_length_names : Sequence[str]
         Sequence of identifiers for reference length scales. Each creates an
         independent kernel branch. Examples: ``["viscous", "geometric"]``.
+        Must not be empty: a ``ValueError`` is raised otherwise.
     source_schema : FieldSchemaLike or None, optional
         Field schema for per-source features (see :class:`Kernel`).
     global_schema : FieldSchemaLike or None, optional
@@ -1942,6 +1943,12 @@ class MultiscaleKernel(Module):
         self_regularization_beta: float | None = None,
     ):
         super().__init__()
+
+        if len(reference_length_names) == 0:
+            raise ValueError(
+                "reference_length_names is empty; MultiscaleKernel needs at "
+                "least one reference length, one per kernel branch"
+            )
 
         self.n_spatial_dims = n_spatial_dims
         self.reference_length_names = reference_length_names
@@ -2324,8 +2331,4 @@ class MultiscaleKernel(Module):
                     piece = kernel._evaluate_plan(**branch_kwargs)
                 result = piece if result is None else result + piece
 
-        if result is None:  # no reference lengths, so no branches
-            result = torch.zeros(
-                (len(target_points), self.output_layout.numel), device=device
-            )
         return result
