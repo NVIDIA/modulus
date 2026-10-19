@@ -1759,6 +1759,15 @@ def test_bh_chunked_forward_and_gradients_match_single_chunk(
         torch.testing.assert_close(chunked_grad, single_grad, atol=1e-6, rtol=1e-5)
 
 
+@pytest.mark.parametrize("near_chunk_count", [0, -1])
+def test_bh_rejects_near_chunk_count_below_one(near_chunk_count: int) -> None:
+    """``near_chunk_count`` below 1 raises instead of dividing by zero or
+    silently dropping the near field."""
+    bh_kernel, _, data = _make_bh_kernel_and_data(output_fields={"p": "scalar"})
+    with pytest.raises(ValueError, match=rf"near_chunk_count.*{near_chunk_count}"):
+        bh_kernel(**data, theta=1.0, near_chunk_count=near_chunk_count)
+
+
 def test_bh_compiled_forward_reuses_graph_for_new_pair_counts() -> None:
     """Under ``torch.compile(dynamic=True)``, a new geometry reuses the graph.
 

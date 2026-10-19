@@ -1208,7 +1208,9 @@ class BarnesHutKernel(Kernel):
             aggregates' centroids are reused. Otherwise computed from
             the target tree.
         near_chunk_count : int or None
-            Number of chunks for near-field pair processing. When provided,
+            Number of chunks for near-field pair processing, at least 1.
+            This is a count of chunks, not a chunk size. A count above the
+            number of near pairs only adds empty chunks. When provided,
             overrides :meth:`_auto_chunk_count`, e.g. to fix the chunking
             from an outer scope.
         expand_far_targets : bool, optional, default=False
@@ -1221,8 +1223,19 @@ class BarnesHutKernel(Kernel):
         -------
         TensorDict[str, Float[torch.Tensor, "n_targets ..."]]
             Kernel output fields at target points.
+
+        Raises
+        ------
+        ValueError
+            If ``near_chunk_count`` is given and below 1.
         """
         from physicsnemo.mesh.spatial.cluster_tree import ClusterTree
+
+        ### A plain int, so this check also runs under torch.compile.
+        if near_chunk_count is not None and near_chunk_count < 1:
+            raise ValueError(
+                f"near_chunk_count must be at least 1, got {near_chunk_count}"
+            )
 
         n_sources = source_points.shape[0]
         device = source_points.device
