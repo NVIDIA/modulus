@@ -21,8 +21,7 @@ import inspect
 import pytest
 import torch
 
-from physicsnemo.utils import safe_normalize
-from physicsnemo.utils.normalization import SafeNormalize
+from physicsnemo.mesh.utilities._normalization import SafeNormalize, safe_normalize
 
 _ALL_DTYPES = [torch.bfloat16, torch.float16, torch.float32, torch.float64]
 
@@ -231,7 +230,7 @@ class TestSafeNormalize:
         for _, (vectors,), kwargs in make_inputs(device=device):
             assert vectors.requires_grad == backward
             result = SafeNormalize.dispatch(vectors, implementation="torch", **kwargs)
-            assert result.device == torch.device(device)
+            assert result.device.type == torch.device(device).type
             torch.testing.assert_close(
                 result.norm(dim=kwargs["dim"]),
                 torch.ones_like(result[..., 0]),

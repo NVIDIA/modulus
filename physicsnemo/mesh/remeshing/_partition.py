@@ -37,9 +37,9 @@ from typing import TYPE_CHECKING, NamedTuple
 import torch
 from jaxtyping import Float, Int
 
+from physicsnemo.mesh.utilities._normalization import safe_normalize
 from physicsnemo.mesh.utilities._scatter_ops import scatter_aggregate
 from physicsnemo.nn.functional.neighbors import knn
-from physicsnemo.utils import safe_normalize
 
 if TYPE_CHECKING:
     from physicsnemo.mesh.mesh import Mesh

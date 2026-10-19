@@ -17,6 +17,7 @@
 """Vector normalization across floating-point dtypes and scales."""
 
 import torch
+from jaxtyping import Float
 
 from physicsnemo.core.function_spec import FunctionSpec
 
@@ -30,7 +31,7 @@ class SafeNormalize(FunctionSpec):
 
     Parameters
     ----------
-    vectors : torch.Tensor
+    vectors : Float[torch.Tensor, "..."]
         Floating-point vectors of any shape.
     dim : int
         Dimension holding the vector components.
@@ -40,7 +41,7 @@ class SafeNormalize(FunctionSpec):
 
     Returns
     -------
-    torch.Tensor
+    Float[torch.Tensor, "..."]
         Unit vectors with the input shape, device, and dtype, including under
         autocast. Exactly zero vectors remain zero.
 
@@ -65,9 +66,9 @@ class SafeNormalize(FunctionSpec):
 
     @FunctionSpec.register(name="torch", rank=0, baseline=True)
     def torch_forward(
-        vectors: torch.Tensor,
+        vectors: Float[torch.Tensor, "..."],
         dim: int,
-    ) -> torch.Tensor:
+    ) -> Float[torch.Tensor, "..."]:
         """Normalize vectors using rescaled PyTorch operations."""
         # Avoid an empty reduction, which amax does not support.
         if vectors.shape[dim] == 0:

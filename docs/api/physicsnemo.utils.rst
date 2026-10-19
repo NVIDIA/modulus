@@ -57,12 +57,6 @@ These are particularly useful when implementing custom training loops or special
     :show-inheritance:
 
 
-Normalization Utils
--------------------
-
-.. autofunction:: physicsnemo.utils.safe_normalize
-
-
 Sampling Utils
 --------------
 

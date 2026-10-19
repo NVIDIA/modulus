@@ -25,7 +25,7 @@ from benchmarks.physicsnemo.nn.functional.plot_functional_benchmarks import (
 )
 from benchmarks.physicsnemo.nn.functional.registry import FUNCTIONAL_SPECS
 from physicsnemo.core.function_spec import FunctionSpec
-from physicsnemo.utils.normalization import SafeNormalize
+from physicsnemo.mesh.utilities._normalization import SafeNormalize
 
 
 class FirstPlottableSpec(FunctionSpec):
