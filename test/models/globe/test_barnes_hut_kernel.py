@@ -902,8 +902,8 @@ def test_bh_nested_source_data_keys(n_dims: int):
         {"physical": {"velocity": ...}, "latent": {"scalars": {"0": ...},
          "vectors": {"0": ...}}, "normals": ...}
 
-    The aggregation, split_by_leaf_rank, and TensorDict.cat operations must
-    handle this nesting correctly.
+    The packing of the nested fields into one feature tensor, and the
+    aggregation of the packed features, must handle this nesting correctly.
     """
     torch.manual_seed(DEFAULT_SEED)
     n_src, n_tgt = 30, 15
@@ -2035,9 +2035,10 @@ def test_bh_compiled_forward_reuses_graph_for_ragged_chunks(
     """Pair counts that split evenly or unevenly into chunks share a graph.
 
     With a fixed number of chunks, whether the last chunk is full depends on
-    the pair count modulo the chunk count.  Each chunk loop clamps its ends
-    with ``min``: a slice that ran past the end made torch.compile guard on
-    that remainder, so a new geometry often recompiled the (near,far) phase.
+    the pair count modulo the chunk count.  Each chunk loop ends its last
+    chunk at the pair count itself: a slice that ran past the end made
+    torch.compile guard on that remainder, so a new geometry often recompiled
+    the (near,far) phase.
     """
     from torch._dynamo.testing import CompileCounter
 

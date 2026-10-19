@@ -333,7 +333,7 @@ def _target_node_centroids(
     cluster_tree : ClusterTree
         Source tree of the plan.
     target_tree : ClusterTree
-        Target tree of the plan, over ``target_points``.
+        Target tree or forest of the plan, over ``target_points``.
     target_points : Float[torch.Tensor, "n_targets n_dims"]
         Target coordinates, of shape :math:`(N_{targets}, D)`.
     node_centroids : Float[torch.Tensor, "n_nodes n_dims"]
@@ -562,8 +562,8 @@ class Kernel(Module):
 
         ### Pre-squared smoothing radius as a registered tensor buffer.
         ### A buffer (rather than a Python float) is required because
-        ### ``_evaluate_interactions`` adds this scalar to a TensorDict
-        ### inside a checkpoint sub-graph; Python free variables cannot
+        ### ``_evaluate_packed`` adds this scalar to a tensor of squared
+        ### magnitudes inside a checkpoint sub-graph; Python free variables cannot
         ### be lifted across nested Dynamo SubgraphTracers (the lift
         ### chain bottoms out at the root tracer with no parent and
         ### asserts ``lift_tracked_freevar_to_input should not be
@@ -1107,9 +1107,10 @@ class BarnesHutKernel(Kernel):
       same network with the cluster's area-weighted centroid, average normal,
       and average features as a "virtual source."
 
-    Both near- and far-field interactions are accumulated into a single batch
-    and evaluated in one call to :meth:`Kernel._evaluate_interactions`,
-    minimizing kernel launch overhead ("accumulate pairs, evaluate once").
+    The interactions fall into four phases (near, far, near-far, far-near).
+    Each phase gathers its pairs from the packed features and evaluates them
+    with :meth:`Kernel._evaluate_packed`, in chunks for the near and near-far
+    phases, and scatters the results into one packed output buffer.
 
     The ``ClusterTree`` spatial structure can be precomputed per mesh geometry
     and reused across kernel branches and hyperlayers. The
@@ -1137,11 +1138,29 @@ class BarnesHutKernel(Kernel):
     cluster_tree : ClusterTree or None, optional, default=None
         Precomputed spatial tree over source points. If ``None``, built
         from ``source_points`` on each call.
+    target_tree : ClusterTree or None, optional, default=None
+        Precomputed spatial tree over target points, or a forest from
+        :meth:`ClusterTree.merge`. If ``None``, built from ``target_points``
+        when needed: to plan, or for target-node centroids. For
+        self-interaction, pass the same tree as ``cluster_tree``. For any
+        other tree or forest, the target-node centroids are plain means of
+        the nodes' points unless ``target_centroids`` is given.
     dual_plan : DualInteractionPlan or None, optional, default=None
         Precomputed dual traversal plan. If ``None``, computed from the
         trees and target points on each call.
     source_areas : Float[torch.Tensor, "n_sources"] or None, optional, default=None
         Per-source areas for aggregate weighting. Defaults to ones.
+    target_centroids : Float[torch.Tensor, "n_target_nodes n_dims"] or None, optional, default=None
+        Centroids of the target nodes that ``dual_plan`` refers to. If
+        ``None``, the source tree's area-weighted centroids are used for
+        self-interaction, and otherwise the plain mean of each target
+        node's points.
+    near_chunk_count : int or None, optional, default=None
+        Number of chunks for the near-field phase, at least 1. If ``None``,
+        chosen by :meth:`_auto_chunk_count`.
+    expand_far_targets : bool, optional, default=False
+        If ``True``, far-field node pairs are expanded to individual target
+        points during plan construction.
 
     Outputs
     -------
@@ -1201,7 +1220,7 @@ class BarnesHutKernel(Kernel):
     ) -> TensorDict[str, Float[torch.Tensor, "n_targets ..."]]:
         r"""Evaluate the kernel with dual-tree Barnes-Hut acceleration.
 
-        Uses two separate evaluation phases:
+        Uses four evaluation phases (see :meth:`_evaluate_plan`):
 
         - **Phase A (near-field)**: individual target-source pairs from
           nearby leaf nodes, evaluated exactly with chunked processing.
@@ -1209,6 +1228,10 @@ class BarnesHutKernel(Kernel):
           at ``(centroid_T, centroid_S, avg_data_S)`` per well-separated
           node pair, then broadcast to all individual targets in the
           target node via scatter_add.
+        - **Phase C (near,far)**: individual targets against source-node
+          aggregates, chunked like Phase A.
+        - **Phase D (far,near)**: target-node centroids against individual
+          sources, broadcast like Phase B.
 
         Parameters
         ----------
@@ -1229,9 +1252,12 @@ class BarnesHutKernel(Kernel):
         cluster_tree : ClusterTree or None
             Precomputed source tree. Built on-the-fly if ``None``.
         target_tree : ClusterTree or None
-            Precomputed target tree, built on-the-fly if ``None`` and needed
-            (to plan, or for target-node centroids). For self-interaction
-            (comm layers), pass the same tree as ``cluster_tree``.
+            Precomputed target tree, or a forest from :meth:`ClusterTree.merge`,
+            built on-the-fly if ``None`` and needed (to plan, or for
+            target-node centroids). For self-interaction (comm layers), pass
+            the same tree as ``cluster_tree``. For any other tree or forest,
+            the target-node centroids are plain means of the nodes' points
+            unless ``target_centroids`` is given.
         dual_plan : DualInteractionPlan or None
             Precomputed dual traversal plan. Computed on-the-fly if ``None``.
         source_areas : Float[torch.Tensor, "n_sources"] or None
@@ -1942,12 +1968,20 @@ class MultiscaleKernel(Module):
         Pre-built cluster tree for source points.  If ``None``, one is
         built from ``source_points`` using the kernel's ``leaf_size``.
     target_tree : ClusterTree or None, optional, default=None
-        Pre-built target tree.  For self-interaction, pass the same tree
-        as ``cluster_tree``.
+        Pre-built target tree, or a forest from :meth:`ClusterTree.merge`.
+        For self-interaction, pass the same tree as ``cluster_tree``. For
+        any other tree or forest, the target-node centroids are plain means
+        of the nodes' points unless ``target_centroids`` is given.
     dual_plan : DualInteractionPlan or None, optional, default=None
         Pre-computed dual traversal plan.  If ``None``, computed from trees.
     source_areas : Float[torch.Tensor, " n_sources"] or None, optional, default=None
         Area weight per source, used for cluster aggregation.
+    expand_far_targets : bool, optional, default=False
+        If ``True``, far-field node pairs are expanded to individual target
+        points during plan construction.
+    target_centroids : Float[torch.Tensor, "n_target_nodes n_dims"] or None, optional, default=None
+        Centroids of the target nodes that ``dual_plan`` refers to. If
+        ``None``, derived from ``target_tree`` when the plan needs them.
 
     Outputs
     -------
@@ -2103,9 +2137,11 @@ class MultiscaleKernel(Module):
         cluster_tree : ClusterTree or None, optional
             Precomputed source tree. Built from ``source_points`` if ``None``.
         target_tree : ClusterTree or None, optional
-            Precomputed target tree. Built from ``target_points`` if ``None``
-            and needed: to plan, or for the target-node centroids of a plan
-            with far-target pairs.
+            Precomputed target tree, or a forest from :meth:`ClusterTree.merge`.
+            Built from ``target_points`` if ``None`` and needed: to plan, or
+            for the target-node centroids of a plan with far-target pairs.
+            Unless it is ``cluster_tree`` or ``target_centroids`` is given,
+            the target-node centroids are plain means of the nodes' points.
         dual_plan : DualInteractionPlan or None, optional
             Precomputed dual traversal plan. Computed if ``None``.
         source_areas : Float[torch.Tensor, "n_sources"] or None, optional
@@ -2191,9 +2227,11 @@ class MultiscaleKernel(Module):
         cluster_tree : ClusterTree or None, optional
             Precomputed source tree. Built from ``source_points`` if ``None``.
         target_tree : ClusterTree or None, optional
-            Precomputed target tree. Built from ``target_points`` if ``None``
-            and needed: to plan, or for the target-node centroids of a plan
-            with far-target pairs.
+            Precomputed target tree, or a forest from :meth:`ClusterTree.merge`.
+            Built from ``target_points`` if ``None`` and needed: to plan, or
+            for the target-node centroids of a plan with far-target pairs.
+            Unless it is ``cluster_tree`` or ``target_centroids`` is given,
+            the target-node centroids are plain means of the nodes' points.
         dual_plan : DualInteractionPlan or None, optional
             Precomputed dual traversal plan. Computed if ``None``.
         source_areas : Float[torch.Tensor, "n_sources"] or None, optional

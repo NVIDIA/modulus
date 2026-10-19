@@ -618,18 +618,29 @@ GLOBE.forward()
   |                 +-- precompute near_chunk_counts [outside checkpoint boundary]
   |                 |
   |                 +-- for each branch:
-  |                       checkpoint(BarnesHutKernel.forward(), ...)
+  |                       BarnesHutKernel._evaluate_plan()
+  |                       [in checkpoint() only if use_branch_ckpt]
   |                       |
   |                       +-- _compute_node_strengths()
   |                       |
-  |                       +-- Phase A: Near-field
+  |                       +-- Phase A: near (target points x source points)
   |                       |     for each chunk:
   |                       |       checkpoint(_gather_and_evaluate())
   |                       |       weight by strength, scatter_add to output
   |                       |
-  |                       +-- Phase B: Far-field
-  |                             checkpoint(_gather_and_evaluate())  [node centroids]
-  |                             weight by node strength
+  |                       +-- Phase B: far (target nodes x source nodes)
+  |                       |     checkpoint(_gather_and_evaluate())  [node centroids]
+  |                       |     weight by node strength
+  |                       |     broadcast to individual targets via scatter_add
+  |                       |
+  |                       +-- Phase C: nf (target points x source nodes)
+  |                       |     for each chunk:
+  |                       |       checkpoint(_gather_and_evaluate())
+  |                       |       weight by node strength, scatter_add to output
+  |                       |
+  |                       +-- Phase D: fn (target nodes x source points)
+  |                             checkpoint(_gather_and_evaluate())  [target centroids]
+  |                             weight by strength
   |                             broadcast to individual targets via scatter_add
   |
   +-- _build_prediction_plans()             [outside torch.compile]
