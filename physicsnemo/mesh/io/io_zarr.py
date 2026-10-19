@@ -17,9 +17,8 @@
 """Zarr I/O for :class:`~physicsnemo.mesh.Mesh` and
 :class:`~physicsnemo.mesh.DomainMesh`, built on tensordict's zarr backend.
 
-Serialization is delegated to tensordict (``to_zarr`` / ``from_zarr``;
-requires a tensordict release with the zarr storage backend and
-``zarr >= 3``). This module adds only the two things tensordict cannot know:
+Serialization is delegated to tensordict (``to_zarr`` / ``from_zarr``, which
+need ``zarr >= 3``). This module adds only the two things tensordict cannot know:
 
 - **Layout policy**: chunks aligned to training-subsample sizes plus zstd
   compression. tensordict's default (one uncompressed chunk per leaf) is a
@@ -154,8 +153,8 @@ def _read_tree(group: "zarr.Group", name: str, device=None, leaf_reader=None):
 
 def _mesh_from_group(group: "zarr.Group", device) -> Mesh:
     """Materialize one mesh group as an in-memory Mesh."""
-    # The memmap format does not persist 0-element tensors but zarr does;
-    # map an empty cells array back to "no cells" for a clean point cloud.
+    # An empty cells array loads as "no cells", so that Mesh builds the
+    # empty-cells sentinel of a point cloud.
     cells = None
     if "cells" in group and group["cells"].shape[0] > 0:
         cells = _read_full(group["cells"], device)

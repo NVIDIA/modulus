@@ -107,18 +107,21 @@ def radius_search_impl(
         points, queries, p=2.0, compute_mode="donot_use_mm_for_euclid_dist"
     )
 
-    # topk along dim=1 (points dim): (B, max_points, Q)
+    # topk along dim=1 (points dim): (B, k, Q)
     k = min(max_points, dists.shape[1])
     values, indices = torch.topk(dists, k=k, dim=1, largest=False)
 
-    # Pad if k < max_points (fewer points than requested)
-    if k < max_points:
-        pad_size = max_points - k
-        values = torch.nn.functional.pad(values, (0, 0, 0, pad_size), value=0.0)
-        indices = torch.nn.functional.pad(indices, (0, 0, 0, pad_size), value=0)
-
-    # Filter to within radius: (B, max_points, Q)
+    # Filter to within radius: (B, k, Q)
     selection = values <= radius
+
+    # Pad to (B, max_points, Q) if there are fewer points than max_points.
+    # Padded slots are never selected, whatever the radius.
+    if k < max_points:
+        pad = (0, 0, 0, max_points - k)
+        values = torch.nn.functional.pad(values, pad, value=0.0)
+        indices = torch.nn.functional.pad(indices, pad, value=0)
+        selection = torch.nn.functional.pad(selection, pad, value=False)
+
     selected_indices = torch.where(selection, indices, 0)
     # Transpose to (B, Q, max_points)
     selected_indices = selected_indices.permute(0, 2, 1)

@@ -23,20 +23,31 @@ import torch
 from jaxtyping import Int
 from tensordict import TensorDict
 
-from physicsnemo.core.version_check import OptionalImport, require_version_spec
+from physicsnemo.core.version_check import (
+    OptionalImport,
+    get_package_hint,
+    require_version_spec,
+)
 from physicsnemo.mesh.mesh import Mesh
 
 ### Optional dependencies. Construction does not import the package; the
 ### nicely-formatted ``ImportError`` (with the ``[mesh-extras]`` install hint)
-### fires only on first attribute access on ``pv`` / ``vtk``. The
+### fires only on first attribute access on ``pv`` / ``vtk_*``. The
 ### ``@require_version_spec`` decorators on the public entry points raise
 ### that same error proactively, before any function-body work happens.
+### Only the VTK modules in use are imported: ``import vtk`` loads every VTK
+### extension module, which takes seconds, while PyVista already loads these.
 if TYPE_CHECKING:
     import pyvista as pv
     import vtk
+    from vtkmodules import vtkCommonCore as vtk_core
+    from vtkmodules import vtkCommonDataModel as vtk_data_model
 else:
     pv = OptionalImport("pyvista")
-    vtk = OptionalImport("vtk")
+    vtk_core = OptionalImport("vtkmodules.vtkCommonCore", get_package_hint("vtk"))
+    vtk_data_model = OptionalImport(
+        "vtkmodules.vtkCommonDataModel", get_package_hint("vtk")
+    )
 
 _PARENT_CELL_ID_KEY = "__physicsnemo_parent_cell_id"
 _ORIGINAL_POINT_ID_KEY = "vtkOriginalPointIds"
@@ -937,14 +948,14 @@ def _validate_selected_polyhedra_for_tetrahedralization(
         return
 
     source_point_dtype = pyvista_mesh.points.dtype
-    vtk_version = vtk.vtkVersion()
+    vtk_version = vtk_core.vtkVersion()
     trust_vtk_result = (
         vtk_version.GetVTKMajorVersion(),
         vtk_version.GetVTKMinorVersion(),
     ) >= (9, 6)
 
     for parent_id in polyhedron_parent_ids:
-        polyhedron = vtk.vtkPolyhedron.SafeDownCast(
+        polyhedron = vtk_data_model.vtkPolyhedron.SafeDownCast(
             pyvista_mesh.GetCell(int(parent_id))
         )
         if polyhedron is None:
@@ -1659,6 +1670,10 @@ def from_pyvista(
             if polydata_tri_faces is None:
                 raise RuntimeError("PolyData surface triangles were not initialized.")
             tri_faces = _maybe_copy(polydata_tri_faces)
+        elif homogeneous_simplex_selected:
+            # All cells are 3-point TRIANGLEs (_homogeneous_simplex_dimension);
+            # copy the connectivity view into independent storage.
+            tri_faces = np.asarray(pyvista_mesh.cell_connectivity).reshape(-1, 3).copy()
         elif isinstance(pyvista_mesh, pv.UnstructuredGrid):
             # cells_dict materializes independent regular connectivity arrays.
             tri_faces = pyvista_mesh.cells_dict[np.uint8(pv.CellType.TRIANGLE)]
@@ -1671,17 +1686,23 @@ def from_pyvista(
     elif manifold_dim == 3:
         # Tetrahedral cells - extract from cells
         # After triangulation, all cells should be tetrahedra
-        cells_dict = pyvista_mesh.cells_dict
-        if pv.CellType.TETRA not in cells_dict:
-            cell_type_names = ", ".join(
-                _vtk_cell_type_name(int(cell_type)) for cell_type in cells_dict
-            )
-            raise ValueError(
-                "Expected TETRA cells after triangulation, but got "
-                f"{cell_type_names or 'no cells'}."
-            )
-        # cells_dict materializes independent regular connectivity arrays.
-        tetra_cells = cells_dict[np.uint8(pv.CellType.TETRA)]
+        if homogeneous_simplex_selected:
+            # All cells are 4-point TETRAs (_homogeneous_simplex_dimension);
+            # copy the connectivity view into independent storage.
+            tetra_cells = np.asarray(pyvista_mesh.cell_connectivity)
+            tetra_cells = tetra_cells.reshape(-1, 4).copy()
+        else:
+            cells_dict = pyvista_mesh.cells_dict
+            if pv.CellType.TETRA not in cells_dict:
+                cell_type_names = ", ".join(
+                    _vtk_cell_type_name(int(cell_type)) for cell_type in cells_dict
+                )
+                raise ValueError(
+                    "Expected TETRA cells after triangulation, but got "
+                    f"{cell_type_names or 'no cells'}."
+                )
+            # cells_dict materializes independent regular connectivity arrays.
+            tetra_cells = cells_dict[np.uint8(pv.CellType.TETRA)]
         cells = torch.from_numpy(tetra_cells).long()
 
     ### Restore source point IDs after dimension selection compacted the grid.
@@ -1802,8 +1823,10 @@ def to_pyvista(
         if mesh.n_cells == 0:
             pv_mesh = pv.PolyData(points_np)
         else:
-            # _to_vtk_cell_array returns independent VTK-format connectivity.
-            pv_mesh = pv.PolyData(points_np, lines=_to_vtk_cell_array(cells_np))
+            # Offsets-free connectivity; it shares storage with mesh.cells
+            # (kept alive by VTK) unless force_copy requests a deep copy.
+            lines = pv.CellArray.from_regular_cells(cells_np, deep=force_copy)
+            pv_mesh = pv.PolyData(points_np, lines=lines)
 
     elif mesh.n_manifold_dims == 2:
         cells_np = mesh.cells.cpu().numpy()
@@ -1823,11 +1846,12 @@ def to_pyvista(
                 points_np,
             )
         else:
-            celltypes = np.full(mesh.n_cells, pv.CellType.TETRA, dtype=np.uint8)
-            # _to_vtk_cell_array returns independent VTK-format connectivity.
-            pv_mesh = pv.UnstructuredGrid(
-                _to_vtk_cell_array(cells_np), celltypes, points_np
-            )
+            # Offsets-free connectivity; it shares storage with mesh.cells
+            # (kept alive by VTK) unless force_copy requests a deep copy.
+            cell_array = pv.CellArray.from_regular_cells(cells_np, deep=force_copy)
+            pv_mesh = pv.UnstructuredGrid()
+            pv_mesh.points = points_np
+            pv_mesh.SetCells(pv.CellType.TETRA, cell_array)
 
     else:
         raise ValueError(f"Unsupported {mesh.n_manifold_dims=}. Must be 0, 1, 2, or 3.")
@@ -1924,28 +1948,6 @@ def _from_pyvista_cell_centroids(
     )
 
 
-def _to_vtk_cell_array(cells_np: np.ndarray) -> np.ndarray:
-    """Prepend per-cell vertex counts to a regular connectivity array.
-
-    Converts an ``(n_cells, n_verts_per_cell)`` array into the flat
-    VTK cell-array format ``[n_verts, v0, v1, ..., n_verts, v0, ...]``.
-
-    Parameters
-    ----------
-    cells_np : np.ndarray
-        Shape ``(n_cells, n_verts_per_cell)``.
-
-    Returns
-    -------
-    np.ndarray
-        Flattened 1-D array of dtype ``int64``.
-    """
-    n_verts = cells_np.shape[1]
-    return np.column_stack(
-        [np.full(len(cells_np), n_verts, dtype=np.int64), cells_np]
-    ).ravel()
-
-
 def _cell_facet_point_ids(cell: "vtk.vtkCell") -> Iterator[list[int]]:
     """Yield the point-id lists of a cell's (d-1)-facets (dimension-generic).
 
@@ -1991,6 +1993,218 @@ def _cell_facet_point_ids(cell: "vtk.vtkCell") -> Iterator[list[int]]:
         yield [sub.GetPointId(p) for p in range(sub.GetNumberOfPoints())]
 
 
+### Local (d-1)-facets of LINE, TRIANGLE and TETRA cells, keyed by cell size, in
+### VTK's canonical order (vtkLine points, vtkTriangle edges, vtkTetra faces).
+_SIMPLEX_FACETS = {
+    2: np.array([[0], [1]]),
+    3: np.array([[0, 1], [1, 2], [2, 0]]),
+    4: np.array([[0, 1, 3], [1, 2, 3], [2, 0, 3], [0, 2, 1]]),
+}
+
+
+def _homogeneous_simplex_cells(
+    pyvista_mesh: "pv.PolyData | pv.UnstructuredGrid",
+) -> np.ndarray | None:
+    """Return ``(n_cells, k)`` connectivity if all cells are one LINE/TRIANGLE/TETRA type.
+
+    Returns ``None`` for any other mesh (mixed types, polygons, polylines,
+    strips, vertices, or other cell types).
+    """
+    n_cells = pyvista_mesh.n_cells
+    if isinstance(pyvista_mesh, pv.UnstructuredGrid):
+        cell_types = np.asarray(pyvista_mesh.celltypes)
+        cell_type = int(cell_types[0])
+        cell_sizes = {
+            int(pv.CellType.LINE): 2,
+            int(pv.CellType.TRIANGLE): 3,
+            int(pv.CellType.TETRA): 4,
+        }
+        if (
+            cell_type not in cell_sizes
+            or int(cell_types.min()) != cell_type
+            or int(cell_types.max()) != cell_type
+        ):
+            return None
+        cell_size = cell_sizes[cell_type]
+        cell_array = pyvista_mesh.GetCells()
+    elif isinstance(pyvista_mesh, pv.PolyData):
+        # PolyData resolves 2-point lines to VTK_LINE and 3-point polys to
+        # VTK_TRIANGLE; any vertex or strip cell rules out the fast path.
+        if pyvista_mesh.GetNumberOfVerts() > 0 or pyvista_mesh.GetNumberOfStrips() > 0:
+            return None
+        if pyvista_mesh.GetNumberOfPolys() == n_cells:
+            cell_size, cell_array = 3, pyvista_mesh.GetPolys()
+        elif pyvista_mesh.GetNumberOfLines() == n_cells:
+            cell_size, cell_array = 2, pyvista_mesh.GetLines()
+        else:
+            return None
+    else:
+        return None
+    if int(cell_array.IsHomogeneous()) != cell_size:
+        return None
+    connectivity = np.asarray(cell_array.GetConnectivityArray())
+    return connectivity.reshape(n_cells, cell_size)
+
+
+def _packed_facet_keys(
+    cells: np.ndarray,
+    local_facets: np.ndarray,
+) -> np.ndarray | None:
+    """Pack each cell's sorted facets into one ``int64`` key per facet.
+
+    With base ``n_points``, the key orders facets exactly like their sorted
+    vertex tuples, so a stable argsort of the keys equals the lexsort of the
+    tuples. Returns ``None`` (use the tuple lexsort) when the keys could
+    overflow ``int64`` or a point id is negative.
+
+    Parameters
+    ----------
+    cells : np.ndarray
+        Shape ``(n_cells, k)`` connectivity.
+    local_facets : np.ndarray
+        Shape ``(n_facets, k - 1)`` local vertex indices of each facet.
+
+    Returns
+    -------
+    np.ndarray or None
+        Shape ``(n_cells * n_facets,)``, row ``cell * n_facets + facet``.
+    """
+    n_cells = len(cells)
+    n_facets, facet_size = local_facets.shape
+    if int(cells.min()) < 0:
+        return None
+    n_points = int(cells.max()) + 1
+    if n_points**facet_size > np.iinfo(np.int64).max:
+        return None
+    keys = np.empty((n_cells, n_facets), dtype=np.int64)
+    for f, facet in enumerate(local_facets):
+        facet_vertices = np.sort(cells[:, facet], axis=1)
+        key = facet_vertices[:, 0].astype(np.int64)
+        for c in range(1, facet_size):
+            key *= n_points
+            key += facet_vertices[:, c]
+        keys[:, f] = key
+    return keys.reshape(-1)
+
+
+def _sorted_facets(
+    cells: np.ndarray,
+    local_facets: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Sort every facet's vertices, then sort all facets so equal ones are adjacent.
+
+    Parameters
+    ----------
+    cells : np.ndarray
+        Shape ``(n_cells, k)`` connectivity.
+    local_facets : np.ndarray
+        Shape ``(n_facets, k - 1)`` local vertex indices of each facet.
+
+    Returns
+    -------
+    owner : np.ndarray
+        Shape ``(n_cells * n_facets,)``, the cell of each sorted facet.
+    local_index : np.ndarray
+        Shape ``(n_cells * n_facets,)`` with dtype ``int8``, the local index
+        of each sorted facet in its cell.
+    same : np.ndarray
+        Shape ``(n_cells * n_facets,)``. ``same[t]`` says sorted facets ``t``
+        and ``t + 1`` are equal. The last entry is ``False``.
+    """
+    n_facets = len(local_facets)
+    keys = _packed_facet_keys(cells, local_facets)
+    if keys is not None:
+        order = np.argsort(keys, kind="stable")
+        keys = keys[order]
+        same = keys[1:] == keys[:-1]
+    else:
+        facets = cells[:, local_facets]
+        facets.sort(axis=2)
+        facets = facets.reshape(len(cells) * n_facets, -1)
+        order = np.lexsort(facets.T[::-1])
+        facets = facets[order]
+        same = (facets[1:] == facets[:-1]).all(axis=1)
+    local_index = (order % n_facets).astype(np.int8)
+    return order // n_facets, local_index, np.append(same, False)
+
+
+def _shared_facet_pairs(
+    cells: np.ndarray,
+    local_facets: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Find the pairs of cells that share a facet, once per shared facet.
+
+    Parameters
+    ----------
+    cells : np.ndarray
+        Shape ``(n_cells, k)`` connectivity without repeated vertices.
+    local_facets : np.ndarray
+        Shape ``(n_facets, k - 1)`` local vertex indices of each facet.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        ``(i, f, j)``, each of shape ``(n_pairs,)``: cells ``i < j`` share
+        the local facet ``f`` of cell ``i``.
+    """
+    owner, local_index, same = _sorted_facets(cells, local_facets)
+    # The empty first slices let the lists concatenate when no facet is shared.
+    pairs_i, pairs_f, pairs_j = [owner[:0]], [local_index[:0]], [owner[:0]]
+
+    ### Pair facets at distance d inside each run of equal facets (d = 1, 2, ...).
+    # a holds each t whose sorted facets t..t+d are all equal.
+    a = np.flatnonzero(same)
+    d = 1
+    while len(a):
+        b = a + d
+        # Emit each pair once, from the lower cell id, as the VTK loop does.
+        a_is_lower = owner[a] < owner[b]
+        pairs_i.append(np.where(a_is_lower, owner[a], owner[b]))
+        pairs_j.append(np.where(a_is_lower, owner[b], owner[a]))
+        pairs_f.append(np.where(a_is_lower, local_index[a], local_index[b]))
+        # Keep only the runs that go on past b, so a pass costs only its pairs.
+        a = a[same[b]]
+        d += 1
+    return np.concatenate(pairs_i), np.concatenate(pairs_f), np.concatenate(pairs_j)
+
+
+def _simplex_dual_graph_edges(
+    cells: np.ndarray,
+) -> np.ndarray | None:
+    """Vectorized dual-graph edges of a homogeneous LINE/TRIANGLE/TETRA mesh.
+
+    Produces exactly the pairs of the VTK loop in :func:`_build_dual_graph_edges`,
+    in the same order: ``(i, j)`` with ``j > i``, sorted by ``i``, then by the
+    VTK local facet index of ``i``, then by ``j``. Non-manifold facets (shared
+    by more than two cells) and duplicate cells are handled.
+
+    Parameters
+    ----------
+    cells : np.ndarray
+        Shape ``(n_cells, k)`` with ``k`` in ``{2, 3, 4}``.
+
+    Returns
+    -------
+    np.ndarray or None
+        Shape ``(n_edges, 2)`` with dtype ``int64``, or ``None`` if a cell
+        repeats a vertex (VTK's point-set neighbor matching then differs from
+        facet matching, so the caller must use the VTK loop).
+    """
+    # Without repeated vertices, a cell contains all points of another cell's
+    # facet exactly when it has that facet, and only once, so matching facets
+    # reproduces GetCellNeighbors' point-set matching.
+    if (np.diff(np.sort(cells, axis=1), axis=1) == 0).any():
+        return None
+    # Each step is its own function, so its full-size arrays are freed when it
+    # returns. This keeps the peak memory low.
+    i, f, j = _shared_facet_pairs(cells, _SIMPLEX_FACETS[cells.shape[1]])
+    order = np.lexsort((j, f, i))
+    edges = np.empty((len(i), 2), dtype=np.int64)
+    edges[:, 0] = i[order]
+    edges[:, 1] = j[order]
+    return edges
+
+
 @require_version_spec("vtk")
 def _build_dual_graph_edges(
     pyvista_mesh: "pv.PolyData | pv.UnstructuredGrid",
@@ -2005,11 +2219,11 @@ def _build_dual_graph_edges(
     directly to chunked numpy buffers to minimize Python-level overhead
     (~10x faster than the equivalent PyVista ``cell_neighbors`` wrapper).  The
     overall cost is one pass over all cells and their facets; for very large
-    meshes (>10M cells) this may still take minutes.  A fully vectorized
-    facet-hashing pass (sorting each cell's facets and matching duplicates) is
-    ~6-10x faster again, but only for homogeneous, manifold meshes; the VTK
-    ``GetCellNeighbors`` path is kept here because it also handles mixed cell
-    types, polyhedra, and non-manifold facets generically.
+    meshes (>10M cells) this may still take minutes.  Homogeneous LINE,
+    TRIANGLE and TETRA meshes instead take a vectorized facet-sorting pass
+    (:func:`_simplex_dual_graph_edges`, ~30x faster) with identical output;
+    the VTK ``GetCellNeighbors`` loop handles everything else (mixed cell
+    types, polyhedra, degenerate cells) generically.
 
     Parameters
     ----------
@@ -2021,14 +2235,21 @@ def _build_dual_graph_edges(
     torch.Tensor
         Shape ``(n_edges, 2)`` with dtype ``torch.long``.
     """
-    pyvista_mesh.BuildLinks()
     n_cells = pyvista_mesh.n_cells
 
     if n_cells == 0:
         return torch.empty((0, 2), dtype=torch.long)
 
-    facet_pt_ids = vtk.vtkIdList()
-    nbr_ids = vtk.vtkIdList()
+    simplex_cells = _homogeneous_simplex_cells(pyvista_mesh)
+    if simplex_cells is not None:
+        edges = _simplex_dual_graph_edges(simplex_cells)
+        if edges is not None:
+            return torch.from_numpy(edges)
+
+    pyvista_mesh.BuildLinks()
+
+    facet_pt_ids = vtk_core.vtkIdList()
+    nbr_ids = vtk_core.vtkIdList()
 
     # Collect upper-triangular neighbor pairs into chunked numpy buffers.
     _CHUNK = 1 << 20
