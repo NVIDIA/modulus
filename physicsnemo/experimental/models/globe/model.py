@@ -549,16 +549,16 @@ class GLOBE(Module):
             ### already joined (B traversals instead of B^2).
             n_targets = sum(mesh.n_cells for mesh in meshes)
             if len(bc_types) == 1:  # the tree itself: self-interaction
-                forest, roots = cluster_trees_built[bc_types[0]], None
+                forest = cluster_trees_built[bc_types[0]]
             else:
-                forest, roots = ClusterTree.merge(
+                forest = ClusterTree.merge(
                     [cluster_trees_built[bc] for bc in bc_types]
                 )
             comm_plans_built: dict[str, DualInteractionPlan] = {}
             comm_centroids_built: dict[str, torch.Tensor | None] = {}
             for src_bc, src_mesh in zip(bc_types, meshes):
                 plan = cluster_trees_built[src_bc].find_dual_interaction_pairs(
-                    target_tree=forest, theta=self.theta, target_roots=roots,
+                    target_tree=forest, theta=self.theta,
                     expand_far_targets=self.expand_far_targets, validate=False,
                 )
                 comm_plans_built[src_bc] = plan

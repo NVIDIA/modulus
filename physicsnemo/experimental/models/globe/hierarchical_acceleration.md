@@ -310,13 +310,13 @@ BC) pair needs its own plan: B^2 plans for B BC types.
 
 GLOBE finds them in B traversals rather than B^2.  `ClusterTree.merge`
 combines the B trees into one forest whose points are the B centroid sets laid
-end to end, and `find_dual_interaction_pairs(target_tree=forest,
-target_roots=roots)` traverses a source tree against all B trees at once,
-starting from each tree's root.  It makes the same decisions as B separate
-traversals, and its plan is their plans joined: one `DualInteractionPlan` per
-source BC that indexes the centroids of every BC.  Each traversal pays a host
-sync and a few dozen kernel launches per tree level, so cutting their number
-matters at small N.
+end to end and whose `root_ids` list the root of each tree.
+`find_dual_interaction_pairs(target_tree=forest)` traverses a source tree
+against all B trees at once, starting from each tree's root.  It makes the
+same decisions as B separate traversals, and its plan is their plans joined:
+one `DualInteractionPlan` per source BC that indexes the centroids of every BC.
+Each traversal pays a host sync and a few dozen kernel launches per tree level,
+so cutting their number matters at small N.
 
 ### 4.5 Caching Interaction Plans
 
