@@ -22,12 +22,10 @@ import inspect
 import pytest
 import torch
 
-from physicsnemo.nn.functional import weighted_multinomial
-from physicsnemo.nn.functional.weighted_multinomial import WeightedMultinomial
+from physicsnemo.utils import weighted_multinomial
+from physicsnemo.utils.weighted_multinomial import WeightedMultinomial
 
-sampling_module = importlib.import_module(
-    "physicsnemo.nn.functional.weighted_multinomial"
-)
+sampling_module = importlib.import_module("physicsnemo.utils.weighted_multinomial")
 
 
 def test_public_signature_follows_torch_multinomial():

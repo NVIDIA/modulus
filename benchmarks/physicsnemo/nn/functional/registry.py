@@ -58,12 +58,12 @@ from physicsnemo.nn.functional.interpolation import (
     PointToGridInterpolation,
 )
 from physicsnemo.nn.functional.neighbors import KNN, RadiusSearch
-from physicsnemo.nn.functional.normalization import SafeNormalize
 from physicsnemo.nn.functional.regularization_parameterization import (
     DropPath,
     WeightFact,
 )
-from physicsnemo.nn.functional.weighted_multinomial import WeightedMultinomial
+from physicsnemo.utils.normalization import SafeNormalize
+from physicsnemo.utils.weighted_multinomial import WeightedMultinomial
 
 # FunctionSpec classes listed here must implement ``make_inputs_forward`` for ASV.
 # ``make_inputs_backward`` is optional and only used when backward benchmarks run.
