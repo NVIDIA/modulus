@@ -61,6 +61,38 @@ def test_fieldless_subclass_keeps_constructor_defaults():
     assert not list(domain.global_data.keys())
 
 
+def test_subclass_with_extra_field_needs_no_init(tmp_path):
+    """A subclass that adds a field constructs, clones, moves, indexes, rebuilds
+    and round-trips without an ``__init__`` of its own."""
+    interior = single_triangle_2d.load()
+    domain = DomainMeshWithExtra(
+        interior=interior,
+        boundaries={"wall": interior.clone()},
+        extra=torch.tensor(2.0),
+    )
+    assert type(domain) is DomainMeshWithExtra
+    assert torch.equal(domain.extra, torch.tensor(2.0))
+    assert domain.boundary_names == ["wall"]
+    assert DomainMeshWithExtra(interior=interior).extra is None
+
+    for result in (
+        domain.clone(),
+        domain.to(torch.float64),
+        domain.to("cpu"),
+        domain[...],
+        domain.apply_to_meshes(lambda m: m.clone()),  # rebuilds through __init__
+    ):
+        assert type(result) is DomainMeshWithExtra
+        assert torch.equal(result.extra.float(), domain.extra)
+        assert torch.equal(result.boundaries["wall"].points.float(), interior.points)
+
+    domain.save(tmp_path / "domain")
+    loaded = DomainMeshWithExtra.load(tmp_path / "domain")
+    assert type(loaded) is DomainMeshWithExtra
+    assert torch.equal(loaded.extra, domain.extra)
+    assert torch.equal(loaded.boundaries["wall"].cells, interior.cells)
+
+
 def test_domain_mesh_is_not_subscriptable():
     """Inheriting TensorClass must not expose its configuration subscript.
 

@@ -120,22 +120,24 @@ class GLOBE(Module):
     n_spherical_harmonics : int, optional, default=4
         Number of Legendre polynomial terms used for angle-dependent features in
         kernel functions.
-    theta : float, optional, default=1.0
+    theta : float, optional, default=1.5
         Barnes-Hut opening angle controlling the near/far-field split in the
         dual-tree traversal. The criterion is :math:`(D_T + D_S) / r < \theta`,
         where :math:`D_T` and :math:`D_S` are AABB diagonals and :math:`r` is
         the minimum inter-AABB distance. Larger values approximate more
         aggressively; ``0`` forces all interactions to be exact (no far-field
-        approximation).
+        approximation). A trained model adapts to its ``theta``, so evaluate it
+        with the value it was trained with.
     leaf_size : int, optional, default=1
         Maximum number of source points per leaf node in the cluster tree.
         Larger values produce shallower trees (fewer traversal iterations) at
         the cost of more exact near-field interactions per leaf hit.
-    expand_far_targets : bool, optional, default=False
+    expand_far_targets : bool, optional, default=True
         If ``True``, far-field target nodes are expanded to individual points,
         converting ``(far, far)`` pairs into ``(near, far)`` pairs. This
-        eliminates the target-side approximation at the cost of more kernel
-        evaluations.
+        eliminates the target-side approximation, which makes the output
+        piecewise constant over each far target node, at the cost of more
+        kernel evaluations.
     use_gradient_checkpointing : bool, optional, default=True
         If ``True``, applies ``torch.utils.checkpoint.checkpoint`` to each
         kernel evaluation during training, trading compute for memory. See
@@ -232,12 +234,12 @@ class GLOBE(Module):
         smoothing_radius: float = 1e-8,
         hidden_layer_sizes: Sequence[int] | None = None,
         n_spherical_harmonics: int = 4,
-        theta: float = 1.0,
+        theta: float = 1.5,
         leaf_size: int = 1,
         network_type: Literal["pade", "mlp"] = "pade",
         self_regularization_beta: float | None = None,
         latent_compression_scale: float | None = None,
-        expand_far_targets: bool = False,
+        expand_far_targets: bool = True,
         use_gradient_checkpointing: bool = True,
         tree_build_device: torch.device | str | None = None,
     ):
@@ -396,6 +398,20 @@ class GLOBE(Module):
         normals, and optionally latent features into a single schema
         declaration that mirrors the ``source_data`` structure produced by
         :meth:`_evaluate_hyperlayer`.
+
+        Parameters
+        ----------
+        bc_source_schema : FieldSchemaLike
+            Schema of the per-face physical source features for one BC type.
+        include_latents : bool
+            Whether to add the latent scalars and vectors, which exist only
+            after the first hyperlayer.
+
+        Returns
+        -------
+        FieldSchemaLike
+            Nested declaration with keys ``"physical"``, ``"normals"``, and
+            (if ``include_latents``) ``"latent"``.
         """
         result: dict[str, Any] = {
             "physical": bc_source_schema,
@@ -453,10 +469,10 @@ class GLOBE(Module):
         ### inside the ``@torch.compiler.disable`` body for nothing.  See the
         ### ``tree_build_device`` docstring on :class:`GLOBE` for why building
         ### on CPU can be faster than on CUDA at small ``N``.
+        ### ``boundary_meshes`` may be a TensorDict, which has no truth value.
+        meshes = list(boundary_meshes.values())
         original_device = (
-            next(iter(boundary_meshes.values())).points.device
-            if boundary_meshes
-            else self.reference_area.device
+            meshes[0].points.device if meshes else self.reference_area.device
         )
         build_device = self.tree_build_device or original_device
 
