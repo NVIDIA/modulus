@@ -123,6 +123,99 @@ def test_radius_search_torch(
     )
 
 
+@pytest.mark.parametrize("batched", [False, True])
+def test_radius_search_torch_fewer_points_than_max_points(device: str, batched: bool):
+    """Padded top-k slots must not be reported as neighbors.
+
+    With fewer points than `max_points`, the padded slots had distance 0.0, so
+    they passed the radius mask as phantom neighbors at point 0.
+    """
+    points = torch.tensor(
+        [[1.0, 2.0, 3.0], [10.0, 10.0, 10.0], [20.0, 20.0, 20.0]],
+        device=device,
+        requires_grad=True,
+    )
+    # First query has exactly one neighbor (point 1); second has none.
+    queries = torch.tensor(
+        [[10.0, 10.0, 10.1], [50.0, 50.0, 50.0]],
+        device=device,
+    )
+
+    # Use batched or unbatched input
+    if batched:
+        points_in, queries_in = points[None], queries[None]
+    else:
+        points_in, queries_in = points, queries
+
+    max_points = 5
+
+    indices, selected_points, distances = radius_search(
+        points=points_in,
+        queries=queries_in,
+        radius=0.5,
+        max_points=max_points,
+        return_dists=True,
+        return_points=True,
+        implementation="torch",
+    )
+
+    if batched:
+        indices, selected_points, distances = (
+            indices[0],
+            selected_points[0],
+            distances[0],
+        )
+
+    assert indices.shape == (2, max_points)
+    assert selected_points.shape == (2, max_points, 3)
+    assert distances.shape == (2, max_points)
+
+    # Query 0: a single neighbor (point 1), remaining slots unused.
+    assert indices[0, 0] == 1
+    torch.testing.assert_close(selected_points[0, 0], points[1], atol=0.0, rtol=0.0)
+    torch.testing.assert_close(distances[0, 0], torch.tensor(0.1, device=device))
+    assert (indices[0, 1:] == 0).all()
+    assert (selected_points[0, 1:] == 0).all()
+    assert (distances[0, 1:] == 0).all()
+
+    # Query 1: no neighbors at all, every slot unused and zero-filled.
+    assert (indices[1] == 0).all()
+    assert (selected_points[1] == 0).all()
+    assert (distances[1] == 0).all()
+
+    # Gradient only flows into the one real neighbor.
+    selected_points.sum().backward()
+    expected_grad = torch.zeros_like(points)
+    expected_grad[1] = 1.0
+    torch.testing.assert_close(points.grad, expected_grad)
+
+
+def test_radius_search_torch_infinite_radius_fewer_points_than_max_points(
+    device: str,
+):
+    """With an infinite radius, every point is a neighbor and padded slots stay unused."""
+    points = torch.randn(3, 3, device=device, requires_grad=True)
+    queries = torch.randn(2, 3, device=device)
+
+    _, selected_points, distances = radius_search(
+        points=points,
+        queries=queries,
+        radius=float("inf"),
+        max_points=5,
+        return_dists=True,
+        return_points=True,
+        implementation="torch",
+    )
+
+    # The 3 points fill slots 0-2 of each query; slots 3-4 are padding.
+    assert (selected_points[:, 3:] == 0).all()
+    assert (distances[:, 3:] == 0).all()
+
+    # Each point is a neighbor of both queries, so each gets a gradient of 2.
+    selected_points.sum().backward()
+    torch.testing.assert_close(points.grad, torch.full_like(points, 2.0))
+
+
 # Validate the warp implementation across return modes.
 @requires_module("warp")
 @pytest.mark.parametrize("return_dists", [True, False])

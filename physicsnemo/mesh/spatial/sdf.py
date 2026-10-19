@@ -251,6 +251,11 @@ def signed_distance_field(
     Distances are computed in float32 (inputs are cast as needed) and results
     are cast back to the ``query_points`` dtype.
 
+    ``sdf`` is differentiable with respect to ``mesh.points`` and
+    ``query_points``, including through the degenerate-face repair below;
+    ``hit_points`` and ``hit_faces`` carry no gradients. See
+    :func:`physicsnemo.nn.functional.signed_distance_field`.
+
     (Near-)degenerate faces -- repeated vertices or collinear points, which
     Warp's mesh query would otherwise skip -- are repaired into equivalent
     thin-but-valid triangles over the same longest edge before the query, so a
