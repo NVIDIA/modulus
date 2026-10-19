@@ -131,6 +131,20 @@ class TestScatterAggregateMeanWithWeights:
         expected = torch.tensor([1.5])
         assert torch.allclose(result, expected)
 
+    def test_mean_with_tiny_weights(self):
+        """A weighted mean of a constant is that constant however small the
+        positive weights, such as the cell volumes of a 1-mm float32 mesh in
+        metres; a destination without sources stays 0."""
+        src_data = torch.tensor([3.0, 3.0, 5.0])
+        src_to_dst = torch.tensor([0, 0, 1])
+        weights = torch.tensor([1e-10, 2e-10, 1e-20])
+
+        result = scatter_aggregate(
+            src_data, src_to_dst, n_dst=3, weights=weights, aggregation="mean"
+        )
+
+        torch.testing.assert_close(result, torch.tensor([3.0, 5.0, 0.0]))
+
 
 class TestScatterAggregateSum:
     """Tests for sum aggregation mode."""

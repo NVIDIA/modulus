@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import dataclasses
+import itertools
 import math
 import types
 from collections.abc import Mapping
@@ -32,7 +34,7 @@ from typing import (
 
 import torch
 from jaxtyping import Float
-from tensordict import NonTensorData, TensorClass, TensorDict
+from tensordict import TensorClass, TensorDict
 
 from physicsnemo.mesh.boundaries import is_manifold, is_watertight
 from physicsnemo.mesh.calculus import (
@@ -44,7 +46,11 @@ from physicsnemo.mesh.calculus import (
     integrate_samples,
 )
 from physicsnemo.mesh.geometry._cell_areas import compute_cell_areas
-from physicsnemo.mesh.geometry._cell_normals import compute_cell_normals
+from physicsnemo.mesh.geometry._cell_normals import _compute_cell_normals_from_points
+
+### Imported at run time, not only for type checking: `Mesh.load` must find
+### this class to rebuild the adjacencies cached in a saved mesh.
+from physicsnemo.mesh.neighbors._adjacency import Adjacency
 from physicsnemo.mesh.remeshing import remesh
 from physicsnemo.mesh.transformations.deform import (
     displace,
@@ -60,6 +66,7 @@ from physicsnemo.mesh.transformations.geometric import (
     transform,
     translate,
 )
+from physicsnemo.mesh.utilities._gather import gather_rows
 from physicsnemo.mesh.utilities._padding import _pad_by_tiling_last, _pad_with_value
 from physicsnemo.mesh.utilities._scatter_ops import scatter_aggregate
 from physicsnemo.mesh.utilities.mesh_repr import format_mesh_repr
@@ -71,9 +78,6 @@ from physicsnemo.nn.functional import safe_normalize
 ### has more than this many points per cell-vertex entry, in which case it
 ### binary-searches the kept ids instead (see slice_points for the measurement).
 _SEARCH_REMAP_RATIO = 64
-
-if TYPE_CHECKING:
-    from physicsnemo.mesh.neighbors._adjacency import Adjacency
 
 
 # A field on a `Mesh` is "associated with" either points (e.g. a per-vertex
@@ -128,6 +132,69 @@ def _check_geometry_values(valid: torch.Tensor, message: str) -> None:
         raise ValueError(message)
 
 
+def _set_subclass_fields(obj: Any, base: type, fields: dict[str, Any]) -> None:
+    """Set the fields that ``type(obj)`` declares beyond those of ``base``.
+
+    Lets the ``__init__`` of ``base`` construct subclasses that add fields,
+    which inherit that ``__init__`` from tensordict 0.15 onwards.
+    """
+    subclass_fields = {f.name for f in dataclasses.fields(type(obj))} - {
+        f.name for f in dataclasses.fields(base)
+    }
+    for name, value in fields.items():
+        if name not in subclass_fields:
+            raise TypeError(
+                f"{type(obj).__name__}.__init__() got an unexpected keyword "
+                f"argument {name!r}"
+            )
+        setattr(obj, name, value)
+
+
+def _conflicting_keys(src: TensorDict, dst: TensorDict) -> set[str | tuple[str, ...]]:
+    """Return the keys of ``src`` that would overwrite data in ``dst``.
+
+    A key conflicts if a leaf key of ``dst`` equals it or is a prefix of it (a
+    leaf or group, even an empty one, replacing a leaf), or if it is a leaf
+    that is a prefix of a leaf key of ``dst`` (a leaf replacing a group).
+    Groups of the same name with disjoint leaves merge.
+    """
+
+    def as_tuple(key: str | tuple[str, ...]) -> tuple[str, ...]:
+        return key if isinstance(key, tuple) else (key,)
+
+    dst_keys = [as_tuple(k) for k in dst.keys(include_nested=True, leaves_only=True)]
+    src_leaves = {as_tuple(k) for k in src.keys(include_nested=True, leaves_only=True)}
+    conflicts = set()
+    for key in src.keys(include_nested=True):
+        k = as_tuple(key)
+        is_leaf = k in src_leaves
+        if any(k[: len(d)] == d or (is_leaf and d[: len(k)] == k) for d in dst_keys):
+            conflicts.add(key)
+    return conflicts
+
+
+def _requested_dtype(
+    args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> torch.dtype | None:
+    """Return the dtype requested through any supported ``Tensor.to`` overload.
+
+    Covers ``to(dtype, ...)``, ``to(device, dtype, ...)``, ``to(other, ...)`` (a
+    tensor whose dtype is copied), and ``to(..., dtype=...)``; a device-only move
+    returns ``None``. Crucially the result does not depend on the caller's current
+    dtype, so re-casting to the dtype a mesh already has (e.g. ``float64 ->
+    float64``) still routes through the cells-safe path rather than the
+    tensorclass ``to`` that would cast the integer ``cells`` and raise.
+    """
+    dtype = kwargs.get("dtype")
+    if dtype is None:
+        for arg in args:
+            if isinstance(arg, torch.dtype):
+                return arg
+            if isinstance(arg, torch.Tensor):
+                return arg.dtype
+    return dtype if isinstance(dtype, torch.dtype) else None
+
+
 class _MeshTensorClassMeta(type(TensorClass)):
     """Preserve ``Mesh[m, s]`` over TensorClass's configuration subscript."""
 
@@ -138,7 +205,6 @@ class _MeshTensorClassMeta(type(TensorClass)):
 class Mesh(
     TensorClass,
     tensor_only=True,
-    shadow=True,
     metaclass=_MeshTensorClassMeta,
 ):
     r"""A PyTorch-based, dimensionally-generic Mesh data structure.
@@ -252,6 +318,9 @@ class Mesh(
         Per-cell data. Dicts are automatically converted to TensorDict.
     global_data : TensorDict or dict[str, torch.Tensor], optional
         Mesh-level data. Dicts are automatically converted to TensorDict.
+    **fields
+        Values for the fields that a subclass of ``Mesh`` declares, so that
+        such a subclass needs no ``__init__`` of its own.
 
     Raises
     ------
@@ -262,7 +331,8 @@ class Mesh(
         represented exactly in ``float64``, or ``uint64`` connectivity overflows
         ``int64``. Compiled value checks raise a backend assertion instead.
     TypeError
-        If cell indices are not an integer dtype.
+        If cell indices are not an integer dtype, or if a keyword argument
+        names no field of the class.
 
     Examples
     --------
@@ -404,12 +474,14 @@ class Mesh(
         global_data: TensorDict | dict[str, torch.Tensor] | None = None,
         *,
         _cache: TensorDict | None = None,
+        **fields: Any,
     ) -> None:
         self.points = points
         self.cells = cells  # type: ignore[assignment]  # normalized by __post_init__
-        # The tensorclass setter silently drops entries from non-dict Mappings
-        # (e.g. PyVista DataSetAttributes). Wrapping with dict() converts any
-        # Mapping to a plain dict that the setter handles correctly.
+        # The tensorclass setter stores a mapping-like object that is not a
+        # dict, such as PyVista's DataSetAttributes, as NonTensorData.
+        # dict() turns it into a plain dict, which the setter converts to a
+        # TensorDict.
         self.point_data = (  # type: ignore[assignment]  # normalized by __post_init__
             dict(point_data)
             if point_data is not None and not isinstance(point_data, TensorDict)
@@ -426,6 +498,8 @@ class Mesh(
             else global_data
         )
         self._cache = _cache  # type: ignore[assignment]  # normalized by __post_init__
+        if fields:
+            _set_subclass_fields(self, Mesh, fields)
         # tensorclass only auto-calls __post_init__ from the *generated* __init__
         # (same semantics as dataclasses). Since we define a custom __init__,
         # we must call it explicitly. During load(), tensorclass calls it
@@ -439,19 +513,15 @@ class Mesh(
         Called automatically during ``load()`` by tensorclass, and explicitly
         from ``__init__`` during normal construction. This is the single source
         of truth for all default values, type coercions, and shape validation.
+        Tensordict also runs it when it rebuilds a mesh without ``__init__``
+        (``clone``, ``to``, ``apply``, ``double``, ``torch.stack``, ...), which
+        catches the rebuilds that would change a dtype or a shape.
         """
         ### cells: default empty-cells sentinel for point clouds
-        # The tensordict memmap format does not persist tensors with 0 elements,
-        # so this also restores cells after deserialization.
         if self.cells is None:
             self.cells = torch.zeros(0, 1, dtype=torch.long, device=self.points.device)
 
         ### Coerce every data field to a TensorDict with the right batch_size.
-        # The auto-init's ``tensor_only=True`` fast path silently wraps any
-        # non-dict ``Mapping`` (e.g. PyVista ``DataSetAttributes``) as
-        # ``NonTensorData(data=<original Mapping>)`` instead of converting it
-        # to a ``TensorDict``.  We unwrap that here so all data fields end up
-        # as proper ``TensorDict`` instances regardless of what the user passed.
         for field_name, batch_size in (
             ("point_data", torch.Size([self.n_points])),
             ("cell_data", torch.Size([self.n_cells])),
@@ -459,10 +529,9 @@ class Mesh(
         ):
             value = getattr(self, field_name)
             if isinstance(value, TensorDict):
-                value.batch_size = batch_size
+                if value.batch_size != batch_size:
+                    value.batch_size = batch_size
                 continue
-            if isinstance(value, NonTensorData):
-                value = value.data  # extract original Mapping from fast-path wrapper
             setattr(
                 self,
                 field_name,
@@ -693,56 +762,92 @@ class Mesh(
             MeshDims(n_manifold_dims=n_manifold_dims, n_spatial_dims=n_spatial_dims)
         )
 
+    def __repr__(self) -> str:
+        """Summarize the mesh: its dimensions, sizes and data fields."""
+        return format_mesh_repr(self)
+
+    def to(self, *args: Any, **kwargs: Any) -> Self:
+        """Move mesh and all attached data to specified device, dtype, or format.
+
+        Maps this Mesh to another device and/or dtype. All tensors in ``points``,
+        ``cells``, ``point_data``, ``cell_data``, and ``global_data`` are moved
+        together.
+
+        Parameters
+        ----------
+        *args : Any
+            Positional arguments passed to the tensorclass ``to`` method.
+            Common usage: ``mesh.to("cuda")`` or ``mesh.to(torch.float32)``.
+        **kwargs : Any
+            Keyword arguments passed to the tensorclass ``to`` method.
+
+        Keyword Arguments
+        -----------------
+        device : torch.device, optional
+            The desired device of the mesh.
+        dtype : torch.dtype, optional
+            The desired floating-point or complex dtype of the mesh tensors.
+        non_blocking : bool, optional
+            Whether the operations should be non-blocking.
+        memory_format : torch.memory_format, optional
+            The desired memory format for 4D parameters and buffers.
+
+        Returns
+        -------
+        Mesh
+            A new Mesh on the target device and dtype. Tensors that need no
+            change are shared with this mesh, not copied.
+
+        Raises
+        ------
+        TypeError
+            If ``dtype`` is neither floating-point nor complex. Coordinates
+            must stay real- or complex-valued, and the cast would also be
+            applied to the integer ``cells``.
+
+        Examples
+        --------
+        >>> import torch
+        >>> from physicsnemo.mesh import Mesh
+        >>> mesh = Mesh(points=torch.zeros(3, 2), cells=torch.tensor([[0, 1, 2]]))
+        >>> mesh_gpu = mesh.to("cuda")  # doctest: +SKIP
+        >>> mesh_cpu = mesh.to(device="cpu")
+        >>> mesh_fp16 = mesh.to(torch.float16)
+        >>> mesh_fp16.points.dtype, mesh_fp16.cells.dtype
+        (torch.float16, torch.int64)
+        """
+        cast_dtype = _requested_dtype(args, kwargs)
+        if cast_dtype is not None and not (
+            cast_dtype.is_floating_point or cast_dtype.is_complex
+        ):
+            raise TypeError(
+                "Mesh coordinates must remain floating point or complex; "
+                f"cannot convert a Mesh to {cast_dtype}."
+            )
+        if cast_dtype is None:
+            # For a device-only move, the tensorclass ``to`` preserves
+            # per-leaf dtypes and forwards ``non_blocking``/etc. unchanged.
+            return super().to(*args, **kwargs)
+
+        # The tensorclass ``to`` casts *every* leaf, including the integer
+        # connectivity. Resolve the target device by probing a zero-length
+        # slice of the (always-floating) points -- this reuses torch's own
+        # ``.to`` overload parsing without copying data. Move every leaf to
+        # that device (forwarding all transfer options except ``dtype``), then
+        # cast only the floating leaves so the integer cells (and any integer
+        # data) are never cast to a float dtype.
+        probe = self.points[:0].to(*args, **kwargs)
+        transfer_kwargs = {k: v for k, v in kwargs.items() if k != "dtype"}
+        transfer_kwargs["device"] = probe.device
+        moved = super().to(**transfer_kwargs)
+
+        def _cast(t: torch.Tensor) -> torch.Tensor:
+            return t.to(cast_dtype) if (t.is_floating_point() or t.is_complex()) else t
+
+        return moved.apply(_cast)
+
     if TYPE_CHECKING:
-        # Type stub for the `to` method dynamically added by TensorClass.
-        # This provides proper type hints without shadowing the runtime implementation.
-        def to(self, *args: Any, **kwargs: Any) -> Self:
-            """Move mesh and all attached data to specified device, dtype, or format.
-
-            Maps this Mesh to another device and/or dtype. All tensors in ``points``,
-            ``cells``, ``point_data``, ``cell_data``, and ``global_data`` are moved
-            together.
-
-            Parameters
-            ----------
-            *args : Any
-                Positional arguments passed to the underlying tensorclass ``to`` method.
-                Common usage: ``mesh.to("cuda")`` or ``mesh.to(torch.float32)``.
-            **kwargs : Any
-                Keyword arguments passed to the underlying tensorclass ``to`` method.
-
-            Keyword Arguments
-            -----------------
-            device : torch.device, optional
-                The desired device of the mesh.
-            dtype : torch.dtype, optional
-                The desired floating-point or complex dtype of the mesh tensors.
-            non_blocking : bool, optional
-                Whether the operations should be non-blocking.
-            memory_format : torch.memory_format, optional
-                The desired memory format for 4D parameters and buffers.
-
-            Returns
-            -------
-            Mesh
-                A new Mesh instance on the target device/dtype, or the same mesh if
-                no changes were required.
-
-            Raises
-            ------
-            TypeError
-                If ``dtype`` is neither floating-point nor complex. Coordinates
-                must stay real- or complex-valued, and the cast would also be
-                applied to the integer ``cells``.
-
-            Examples
-            --------
-            >>> mesh_gpu = mesh.to("cuda")
-            >>> mesh_cpu = mesh.to(device="cpu")
-            >>> mesh_fp16 = mesh.to(torch.float16)
-            """
-            ...
-
+        # Type stubs for methods that TensorClass adds to the class.
         def clone(self) -> Self:
             """Return a deep clone of this Mesh.
 
@@ -894,7 +999,7 @@ class Mesh(
         """
         cached = self._cache.get(("cell", "centroids"), None)
         if cached is None:
-            cached = self.points[self.cells].mean(dim=1)
+            cached = gather_rows(self.points, self.cells).mean(dim=1)
             self._cache["cell", "centroids"] = cached
         return cached
 
@@ -923,9 +1028,9 @@ class Mesh(
         """
         cached = self._cache.get(("cell", "areas"), None)
         if cached is None:
-            relative_vectors = (
-                self.points[self.cells[:, 1:]] - self.points[self.cells[:, [0]]]
-            )
+            cell_vertices = gather_rows(self.points, self.cells)
+            relative_vectors = cell_vertices[:, 1:] - cell_vertices[:, :1]
+            del cell_vertices
             cached = compute_cell_areas(relative_vectors)
             self._cache["cell", "areas"] = cached
 
@@ -963,10 +1068,7 @@ class Mesh(
                     f"Required: n_manifold_dims = n_spatial_dims - 1 (codimension-1).\n"
                     f"Current codimension: {self.codimension}"
                 )
-            rh_index = self.cells[:, 1:]
-            lh_index = self.cells[:, 0].unsqueeze(-1)
-            relative_vectors = self.points[rh_index] - self.points[lh_index]
-            cached = compute_cell_normals(relative_vectors)
+            cached = _compute_cell_normals_from_points(self.points, self.cells)
             self._cache["cell", "normals"] = cached
 
         return cached
@@ -1118,51 +1220,32 @@ class Mesh(
         ### Get cell normals (triggers computation if not cached)
         cell_normals = self.cell_normals  # (n_cells, n_spatial_dims)
 
-        ### Initialize accumulated normals for each point
-        accumulated_normals = torch.zeros(
-            (self.n_points, self.n_spatial_dims),
-            dtype=self.points.dtype,
-            device=self.points.device,
-        )
-
         n_vertices_per_cell = self.cells.shape[1]
-        point_indices = self.cells.flatten()
 
-        # Repeat cell normals for each vertex in the cell
-        cell_normals_repeated = cell_normals.unsqueeze(1).expand(
-            -1, n_vertices_per_cell, -1
-        )
-        cell_normals_flat = cell_normals_repeated.reshape(-1, self.n_spatial_dims)
-
-        ### Compute weights based on scheme
+        ### Weight each cell normal at each of its vertices: (n_cells, V or 1, d)
+        # Broadcast products: the (n_cells * V, d) source is materialized only
+        # once, for the scatter
         if weighting == "unweighted":
-            weights = torch.ones(
-                self.n_cells * n_vertices_per_cell,
-                dtype=self.points.dtype,
-                device=self.points.device,
-            )
+            normals_to_accumulate = cell_normals.unsqueeze(1)
 
         elif weighting == "area":
-            cell_areas = self.cell_areas
-            weights = cell_areas.unsqueeze(1).expand(-1, n_vertices_per_cell).flatten()
+            normals_to_accumulate = (
+                cell_normals.unsqueeze(1) * self.cell_areas[:, None, None]
+            )
 
         elif weighting in ("angle", "angle_area"):
             # Compute interior angles at each vertex of each cell
             # For a simplex, angle at vertex k is between edges to other vertices
             from physicsnemo.mesh.geometry._angles import compute_vertex_angles
 
-            vertex_angles = compute_vertex_angles(
-                self
-            )  # (n_cells, n_vertices_per_cell)
-            weights = vertex_angles.flatten()
+            weights = compute_vertex_angles(self)  # (n_cells, n_vertices_per_cell)
 
             if weighting == "angle_area":
                 # Multiply by cell area
-                cell_areas = self.cell_areas
-                area_weights = (
-                    cell_areas.unsqueeze(1).expand(-1, n_vertices_per_cell).flatten()
-                )
-                weights = weights * area_weights
+                weights = weights * self.cell_areas.unsqueeze(1)
+
+            normals_to_accumulate = cell_normals.unsqueeze(1) * weights.unsqueeze(-1)
+            del weights
 
         else:
             raise ValueError(
@@ -1170,17 +1253,23 @@ class Mesh(
                 f"'unweighted', 'area', 'angle', 'angle_area'."
             )
 
-        ### Apply weights and accumulate
-        normals_to_accumulate = cell_normals_flat * weights.unsqueeze(-1)
-
-        point_indices_expanded = point_indices.unsqueeze(-1).expand(
+        ### Accumulate at each point
+        accumulated_normals = torch.zeros(
+            (self.n_points, self.n_spatial_dims),
+            dtype=self.points.dtype,
+            device=self.points.device,
+        )
+        point_indices_expanded = self.cells.reshape(-1, 1).expand(
             -1, self.n_spatial_dims
         )
         accumulated_normals.scatter_add_(
             dim=0,
             index=point_indices_expanded,
-            src=normals_to_accumulate,
+            src=normals_to_accumulate.expand(-1, n_vertices_per_cell, -1).reshape(
+                -1, self.n_spatial_dims
+            ),
         )
+        del normals_to_accumulate
 
         ### Normalize to get unit normals
         return safe_normalize(accumulated_normals, dim=-1)
@@ -1400,14 +1489,11 @@ class Mesh(
         ### Merge the meshes
 
         # Compute the number of points for each mesh, cumulatively, so that we can update
-        # the point indices for the constituent cells arrays accordingly.
-        n_points_for_meshes = torch.tensor(
-            [m.n_points for m in meshes],
-            device=meshes[0].points.device,
+        # the point indices for the constituent cells arrays accordingly. Python ints
+        # keep this on the host (device offsets would cost synchronizations).
+        cell_index_offsets = itertools.accumulate(
+            (m.n_points for m in meshes[:-1]), initial=0
         )
-        cumsum_n_points = torch.cumsum(n_points_for_meshes, dim=0)
-        cell_index_offsets = cumsum_n_points.roll(1)
-        cell_index_offsets[0] = 0
 
         from physicsnemo.mesh.calculus.measure import (
             EFFECTIVE_MEASURE_KEY,
@@ -2093,12 +2179,15 @@ class Mesh(
         def _replacement(
             value: TensorDict | dict[str, torch.Tensor] | None,
             current: TensorDict,
-        ) -> TensorDict | dict[str, torch.Tensor]:
+        ) -> TensorDict:
             if value is None:
                 return current.copy()
             if isinstance(value, TensorDict):
                 return value.copy()
-            return value
+            # dict() unwraps mappings that TensorDict rejects, such as PyVista's
+            # DataSetAttributes, as the constructor does. A dict may hold the
+            # source's nested TensorDicts, so copy them too.
+            return TensorDict(dict(value)).copy()
 
         return replace(
             self,
@@ -2153,9 +2242,7 @@ class Mesh(
         # Effective measures are not interpolated; use lumped_point_measures.
         ### Check for key conflicts
         if not overwrite_keys:
-            src_keys = set(fields.keys(include_nested=True, leaves_only=True))
-            dst_keys = set(self.point_data.keys(include_nested=True, leaves_only=True))
-            conflicts = src_keys & dst_keys
+            conflicts = _conflicting_keys(fields, self.point_data)
             if conflicts:
                 raise ValueError(
                     f"Keys {conflicts} already exist in point_data. "
@@ -2235,9 +2322,7 @@ class Mesh(
         fields = self.point_data.exclude(EFFECTIVE_MEASURE_KEY)
         ### Check for key conflicts
         if not overwrite_keys:
-            src_keys = set(fields.keys(include_nested=True, leaves_only=True))
-            dst_keys = set(self.cell_data.keys(include_nested=True, leaves_only=True))
-            conflicts = src_keys & dst_keys
+            conflicts = _conflicting_keys(fields, self.cell_data)
             if conflicts:
                 raise ValueError(
                     f"Keys {conflicts} already exist in cell_data. "
@@ -2293,6 +2378,7 @@ class Mesh(
         manifold_codimension : int, optional
             Codimension of extracted mesh relative to parent.
 
+            - 0: The cells themselves, deduplicated (e.g., the edges of a 1D mesh)
             - 1: Extract (n-1)-facets (default, immediate boundaries of all cells)
             - 2: Extract (n-2)-facets (e.g., edges from tets, vertices from triangles)
             - k: Extract (n-k)-facets
@@ -3472,77 +3558,3 @@ class Mesh(
             cells=self.cells,
             keep=keep,
         )
-
-
-### Override the TensorClass __repr__ with custom formatting
-# Must be done after class definition because TensorClass overrides __repr__
-# even when defined inside the class body
-def _mesh_repr(self) -> str:
-    return format_mesh_repr(self)
-
-
-Mesh.__repr__ = _mesh_repr  # type: ignore[method-assign]  # ty: ignore[invalid-assignment]
-
-
-### Override the TensorClass ``to`` so a floating/complex dtype is applied only to
-# floating/complex tensors. The generated tensorclass ``to`` casts *every* leaf --
-# including integer connectivity -- while integer coordinate requests would violate
-# the Mesh geometry contract. Device-only moves still delegate unchanged so per-leaf
-# dtypes and transfer options retain tensorclass behavior. Reassigned after the class
-# because TensorClass overrides a body-defined ``to`` (same reason as ``__repr__``).
-def _requested_dtype(
-    args: tuple[Any, ...], kwargs: dict[str, Any]
-) -> torch.dtype | None:
-    """Return the dtype requested through any supported ``Tensor.to`` overload.
-
-    Covers ``to(dtype, ...)``, ``to(device, dtype, ...)``, ``to(other, ...)`` (a
-    tensor whose dtype is copied), and ``to(..., dtype=...)``; a device-only move
-    returns ``None``. Crucially the result does not depend on the caller's current
-    dtype, so re-casting to the dtype a mesh already has (e.g. ``float64 ->
-    float64``) still routes through the cells-safe path rather than the generated
-    ``to`` that would cast the integer ``cells`` and raise.
-    """
-    dtype = kwargs.get("dtype")
-    if dtype is None:
-        for arg in args:
-            if isinstance(arg, torch.dtype):
-                return arg
-            if isinstance(arg, torch.Tensor):
-                return arg.dtype
-    return dtype if isinstance(dtype, torch.dtype) else None
-
-
-def _mesh_to(self, *args: Any, **kwargs: Any) -> "Mesh":
-    cast_dtype = _requested_dtype(args, kwargs)
-    if cast_dtype is not None and not (
-        cast_dtype.is_floating_point or cast_dtype.is_complex
-    ):
-        raise TypeError(
-            "Mesh coordinates must remain floating point or complex; "
-            f"cannot convert a Mesh to {cast_dtype}."
-        )
-    if cast_dtype is None:
-        # For a device-only move, the generated tensorclass ``to`` preserves
-        # per-leaf dtypes and forwards ``non_blocking``/etc. unchanged.
-        return _tensorclass_mesh_to(self, *args, **kwargs)
-
-    # Floating/complex dtype cast. Resolve the target device by probing a zero-length
-    # slice of the (always-floating) points -- this reuses torch's own ``.to`` overload
-    # parsing without copying data. Move every leaf to that device with the generated
-    # ``to`` (cells-safe, forwarding all transfer options except ``dtype``), then cast
-    # only the floating leaves so the integer cells (and any integer data) are never
-    # cast to a float dtype.
-    probe = self.points[:0].to(*args, **kwargs)
-    transfer_kwargs = {k: v for k, v in kwargs.items() if k != "dtype"}
-    transfer_kwargs["device"] = probe.device
-    moved = _tensorclass_mesh_to(self, **transfer_kwargs)
-
-    def _cast(t: torch.Tensor) -> torch.Tensor:
-        return t.to(cast_dtype) if (t.is_floating_point() or t.is_complex()) else t
-
-    # A no-op device move may return self. Apply functionally to preserve it.
-    return moved.apply(_cast)
-
-
-_tensorclass_mesh_to = Mesh.to  # the generated tensorclass ``to``
-Mesh.to = _mesh_to  # type: ignore[method-assign]  # ty: ignore[invalid-assignment]
