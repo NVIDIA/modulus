@@ -688,8 +688,8 @@ def test_segment_lstsq_solver_matches_batched_lstsq(
 ):
     """Systems of 0 to 9 rows, assembled from consecutive rows and solved at
     once, get the solutions of ``batched_lstsq`` of the systems of each size,
-    also when rank-deficient or zero. (Their float64 moments are summed in
-    another order, which rarely changes a float32 solution, and not here.)"""
+    also when rank-deficient or zero, up to the rounding of their float64
+    moments, which are summed in another order."""
     from physicsnemo.utils._small_linalg import _segment_lstsq_solver, batched_lstsq
 
     generator = torch.Generator().manual_seed(0)
@@ -715,4 +715,8 @@ def test_segment_lstsq_solver_matches_batched_lstsq(
             expected = batched_lstsq(
                 A[rows].view(-1, k, n_unknowns), B[rows].view(-1, k, n_rhs)
             )
-            assert torch.equal(X[systems], expected)
+            # Identical on the GPUs and CPUs tested, but another order of the
+            # float64 sums could flip a last bit
+            scale = expected.float().abs().max().item()
+            atol = (1e-7 if dtype == torch.float32 else 1e-2) * scale
+            torch.testing.assert_close(X[systems], expected, rtol=0, atol=atol)

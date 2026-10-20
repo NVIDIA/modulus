@@ -122,11 +122,6 @@ def _compute_point_gradients_lsq_intrinsic(
         shape = (n_points, n_spatial_dims) + point_values[i].shape[1:]
         return torch.zeros(shape, dtype=point_values[i].dtype, device=device)
 
-    # Several fields: each field's gradients are created before its first
-    # solve, as one field at a time would
-    several = len(point_values) > 1
-    gradients = [None if several else zero_gradients(0) for _ in point_values]
-
     ### Build per-point tangent-space bases, expressed in ambient coordinates with
     # shape (n_points, n_spatial_dims, n_manifold_dims): each column is a tangent vector.
     if mesh.codimension == 1:
@@ -168,7 +163,7 @@ def _compute_point_gradients_lsq_intrinsic(
         # Points with fewer than 2 neighbors are not solved: zero gradients
         unsolved = adjacency.counts < 2
 
-        gradients = []  # not the zeros made for the groups
+        gradients = []
         for field in point_values:
             b = field[adjacency.indices]
             b -= field[sources]
@@ -190,6 +185,11 @@ def _compute_point_gradients_lsq_intrinsic(
             )
             del grad_ambient
         return gradients
+
+    # Several fields: each field's gradients are created before its first
+    # solve, as one field at a time would
+    several = len(point_values) > 1
+    gradients = [None if several else zero_gradients(0) for _ in point_values]
 
     ### Process each neighbor-count group in parallel
     from physicsnemo.mesh.calculus._neighborhoods import iter_neighborhood_batches

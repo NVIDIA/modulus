@@ -254,6 +254,50 @@ def test_assembled_intrinsic_lsq_gradients_match_grouped(
         assert (assembled[unsolved] == 0).all()
 
 
+def _backward_of_both_paths(
+    mesh: Mesh, gradient_type: str, seed: int = 0
+) -> list[tuple[torch.Tensor, torch.Tensor]]:
+    """First and second derivatives, with respect to the points and the
+    values, of the assembled and the grouped LSQ gradients of one vector field.
+
+    Both paths differentiate one ``Mesh``, so they share its point normals and
+    tangent bases. Recomputed, those differ by rounding on CUDA, whose sums
+    use atomics. Where the face normals around a point nearly cancel, as at a
+    fold of a coarse boundary surface, that rounding turns the tangent plane
+    there, which changes the intrinsic gradient and its derivatives by far
+    more than the solves do.
+    """
+    generator = torch.Generator().manual_seed(seed)
+    values = _parity_fields(mesh.points, torch.float32)[1]
+    weights = torch.randn(
+        mesh.n_points, mesh.n_spatial_dims, values.shape[1], generator=generator
+    ).to(mesh.points.device)
+    points = mesh.points.clone().requires_grad_()
+    field = values.clone().requires_grad_()
+    shared = Mesh(points=points, cells=mesh.cells)
+
+    def derivatives(grouped: bool) -> list[torch.Tensor]:
+        if gradient_type == "extrinsic":
+            adjacency = shared.get_point_to_points_adjacency()
+            gradient = _torch_impl._mesh_lsq_gradients_torch(
+                points, [field], adjacency.offsets, adjacency.indices, grouped=grouped
+            )[0]
+        else:
+            gradient = _lsq_intrinsic._compute_point_gradients_lsq_intrinsic(
+                shared, [field], grouped=grouped
+            )[0]
+        first = torch.autograd.grad(
+            (weights * gradient).sum(), (points, field), create_graph=True
+        )
+        # The graph of the shared normals serves the other path too
+        second = torch.autograd.grad(
+            sum(d.square().sum() for d in first), (points, field), retain_graph=True
+        )
+        return [*first, *second]
+
+    return list(zip(derivatives(False), derivatives(True)))
+
+
 @pytest.mark.parametrize("mesh_name", ["unstructured_ball", "ball_surface"])
 @pytest.mark.parametrize("gradient_type", ["extrinsic", "intrinsic"])
 def test_assembled_lsq_gradients_backward_match_grouped(
@@ -262,32 +306,7 @@ def test_assembled_lsq_gradients_backward_match_grouped(
     """First and second derivatives with respect to the points and the values
     match those of the groups."""
     mesh = _PARITY_MESHES[mesh_name](device)
-    values = _parity_fields(mesh.points, torch.float32)[1]
-    weights = torch.randn(
-        mesh.n_points, mesh.n_spatial_dims, values.shape[1], device=device
-    )
-
-    def derivatives(grouped: bool) -> list[torch.Tensor]:
-        points = mesh.points.clone().requires_grad_()
-        field = values.clone().requires_grad_()
-        if gradient_type == "extrinsic":
-            adjacency = mesh.get_point_to_points_adjacency()
-            gradient = _torch_impl._mesh_lsq_gradients_torch(
-                points, [field], adjacency.offsets, adjacency.indices, grouped=grouped
-            )[0]
-        else:
-            gradient = _lsq_intrinsic._compute_point_gradients_lsq_intrinsic(
-                Mesh(points=points, cells=mesh.cells), [field], grouped=grouped
-            )[0]
-        first = torch.autograd.grad(
-            (weights * gradient).sum(), (points, field), create_graph=True
-        )
-        second = torch.autograd.grad(
-            sum(d.square().sum() for d in first), (points, field)
-        )
-        return [*first, *second]
-
-    for assembled, grouped in zip(derivatives(False), derivatives(True)):
+    for assembled, grouped in _backward_of_both_paths(mesh, gradient_type):
         assert torch.isfinite(assembled).all()
         torch.testing.assert_close(
             assembled, grouped, rtol=1e-4, atol=1e-4 * grouped.abs().max().item()
