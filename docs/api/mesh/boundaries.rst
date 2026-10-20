@@ -61,8 +61,8 @@ or new meshes that keep the point indices of the parent.
 
 A facet is a face of a cell with one dimension less than the cell. The facets
 of a triangle are its three edges, and the facets of a tetrahedron are its
-four triangles. A boundary facet belongs to exactly one cell. An interior
-facet is shared by two cells. The module has three groups of functions:
+four triangles. A boundary facet belongs to exactly one cell. Two cells share
+an interior facet. The module has three groups of functions:
 
 - Boundary detection: the points, edges, or cells on the boundary.
 - Facet extraction: a new mesh of the facets, with data aggregated from the

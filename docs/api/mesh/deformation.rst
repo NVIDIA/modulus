@@ -47,7 +47,7 @@ Choosing an Energy
 
 ``simplex_measure_energy``
     Penalizes length, area, or volume change in each simplex. This is a local
-    regularizer: one expanding element cannot cancel one contracting element.
+    regularizer, so one expanding element cannot cancel one contracting element.
     Full-dimensional ratios are signed relative to each reference simplex, so
     this term is also sensitive to reflection. Embedded-simplex ratios are
     unsigned.
@@ -79,8 +79,8 @@ Choosing an Energy
     surface in 3D. It is a geometric hinge regularizer. It is not a calibrated
     shell constitutive law unless the caller supplies the appropriate material,
     thickness, and discretization scaling outside this function. The mesh must
-    contain unique triangles, with at most two incident triangles per edge.
-    Boundary edges are omitted because they do not define a hinge.
+    contain unique triangles, with at most two incident triangles for each edge.
+    The energy omits boundary edges because they do not define a hinge.
 
 Local and Total Area Control in 2D
 ----------------------------------
@@ -152,8 +152,8 @@ orientation loss.
         energy.backward()
         optimizer.step()
 
-In a practical design problem, fixed controls or boundary conditions can be
-enforced in the parameterization, as above, or included in the objective.
+In a practical design problem, you can enforce fixed controls or boundary
+conditions in the parameterization, as above, or include them in the objective.
 
 The figure compares the same RBF target with and without geometric penalties.
 The third panel is *penalty-regularized*: finite weights reduce, but do not
@@ -196,9 +196,9 @@ Differentiability and Backends
 
 The Torch backend supports higher-order derivatives. The Warp backend is
 intended for first-order optimization on CUDA. Its backward pass scatters
-per-element contributions to shared vertices with atomic operations, so the
-last bits of a CUDA result may vary between executions. Use the Torch backend
-when deterministic higher-order derivatives are required.
+the contributions of each element to shared vertices with atomic operations,
+so the last bits of a CUDA result can vary between executions. Use the Torch
+backend when you need deterministic higher-order derivatives.
 
 Automatic dispatch selects Torch on CPU and Warp on CUDA when Warp is
 available. Both backends support gradients with respect to the current and

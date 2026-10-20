@@ -74,7 +74,7 @@ Example
 -------
 
 The following example computes derivatives of fields on a tetrahedral cube.
-Pick a method in the tabs. The rest of the example is the same for both:
+Select a method tab. The rest of the example is the same for both:
 
 .. tab-set::
    :sync-group: method
@@ -271,8 +271,8 @@ any geometric contribution and sampling correction. Two integrals use them:
   values over the same cells. Both use cell measures, which default to the
   geometric simplex measures.
 * ``mesh.integrate_samples(field)`` sums independent point samples times their
-  point measures, regardless of connectivity. Explicit point measures are
-  required. For counting measure, use an ordinary sum.
+  point measures, regardless of connectivity. It requires explicit point
+  measures. For counting measure, use an ordinary sum.
 
 Use ``set_cell_measures`` or ``set_point_measures`` to assign measures. Point
 measures require their represented ``dimension``:
