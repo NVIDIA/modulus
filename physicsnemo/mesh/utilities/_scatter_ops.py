@@ -144,7 +144,7 @@ def scatter_aggregate(
         ).expand_as(src_data)
         aggregated_data.scatter_add_(dim=0, index=expanded_indices, src=src_data)
 
-        # Real counts, as for the weighted mean, so the clamp guard is defined
+        # Real counts, as for the weighted mean's weight sums
         count_dtype = compute_dtype.to_real()
         counts = torch.zeros(n_dst, dtype=count_dtype, device=device)
         counts.scatter_add_(
@@ -154,7 +154,9 @@ def scatter_aggregate(
                 src_to_dst_mapping
             ),
         )
-        counts = counts.clamp_(min=safe_eps(count_dtype))
+        # Counts are whole numbers, so this changes only destinations without
+        # sources: their sum is 0 and stays 0, as in the weighted path
+        counts = counts.clamp_(min=1)
         return aggregated_data.div_(counts.view(-1, *([1] * len(data_shape))))
 
     ### Choose the dtype the weights are carried in. Past the fast paths every
