@@ -464,9 +464,9 @@ The continuous identities $\nabla \times \nabla f = 0$ and
 $\nabla \cdot (\nabla \times v) = 0$ hold for LSQ operators only
 approximately. They hold to rounding error for linear fields. For the
 quadratic fields below on `cube_volume.load(subdivisions=4)`, a 5 x 5 x 5
-grid of vertices, the residuals are at rounding level only at the center
-vertex. They are about 0.06 to 0.10 one layer in from the boundary, and 0.35
-to 0.36 at the boundary.
+grid of vertices, the residuals are at rounding level at the center vertex and
+at a few other vertices. They reach about 0.10 one layer in from the boundary
+and 0.35 at the boundary.
 
 ```python
 from physicsnemo.mesh.calculus import (
