@@ -120,7 +120,7 @@ def compute_divergence_points_dec(
     # v0 (smaller index): edge points outward from v0's dual cell → positive
     # v1 (larger index):  edge points inward to v1's dual cell   → negative
     divergence = torch.zeros(
-        n_points, dtype=vector_field.dtype, device=mesh.points.device
+        n_points, dtype=weighted_flux.dtype, device=mesh.points.device
     )
     divergence.scatter_add_(0, v0_indices, weighted_flux)
     divergence.scatter_add_(0, v1_indices, -weighted_flux)

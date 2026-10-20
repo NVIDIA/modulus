@@ -32,6 +32,7 @@ from physicsnemo.mesh.generate import (
     refit_mesh_to_implicit,
     sdf_box,
     sdf_difference,
+    sdf_polygon_2d,
     sdf_sphere,
     sdf_union,
 )
@@ -104,6 +105,18 @@ def test_dtype_policy_and_override():
     )
     assert mesh32.points.dtype == torch.float32
     assert_valid_volume_mesh(mesh32)
+
+
+def test_float32_polygon_square():
+    """A float32 polygon square meshes like the float64 one: projections that
+    land exactly on its axis-aligned edges must still pass the coverage guard."""
+    phi = sdf_polygon_2d([[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]])
+    mesh = mesh_implicit_domain(phi, ([-1, -1], [1, 1]), 0.1, dtype=torch.float32)
+    assert mesh.points.dtype == torch.float32
+    assert_valid_volume_mesh(mesh)
+    # Unit area, less the rounding of the four corners (no feature points)
+    vol = float(signed_volumes(mesh.points, mesh.cells).sum())
+    assert abs(vol - 1.0) < 0.03
 
 
 # ---------------------------------------------------------------------------
