@@ -24,8 +24,6 @@ mesh entities (points, cells, facets).
 import torch
 from jaxtyping import Float, Int, Shaped
 
-from physicsnemo.mesh.utilities._tolerances import safe_eps
-
 
 def scatter_aggregate(
     src_data: Shaped[torch.Tensor, "n_src ..."],
@@ -81,8 +79,7 @@ def scatter_aggregate(
         If ``aggregation`` is not ``"mean"`` or ``"sum"``.
     TypeError
         If ``weights`` is complex and ``aggregation="mean"``. A weighted mean
-        divides by per-destination weight sums that are clamped away from zero,
-        and ``torch.clamp`` rejects complex dtypes.
+        divides by per-destination weight sums, which must be real.
 
     Notes
     -----
@@ -115,8 +112,7 @@ def scatter_aggregate(
         raise ValueError(f"Invalid {aggregation=}. Must be 'mean' or 'sum'.")
 
     ### Choose the compute dtype. A "mean" of integer/bool data must be computed in a
-    ### floating dtype: integer division truncates (e.g. (1 + 2) // 2 == 1), and the
-    ### division guard ``safe_eps()`` -> ``torch.finfo`` raises on integer dtypes. A
+    ### floating dtype: integer division truncates (e.g. (1 + 2) // 2 == 1). A
     ### "sum" preserves the native (possibly integer) dtype.
     if aggregation == "mean" and not (
         src_data.is_floating_point() or src_data.is_complex()
@@ -137,9 +133,8 @@ def scatter_aggregate(
     ### Choose the dtype the weights are carried in. Past the fast path a "sum"
     ### always has explicit weights, so only a "mean" can still have none.
     if aggregation == "mean":
-        # A mean divides by per-destination weight sums that are clamped away from
-        # zero, and ``clamp`` rejects complex dtypes. Keeping the weights real
-        # leaves that guard well-defined, while complex ``src_data`` still
+        # A mean divides by per-destination weight sums. Keeping the weights real
+        # keeps that division a weighted mean, while complex ``src_data`` still
         # accumulates in its own complex ``compute_dtype``.
         if weights is not None and weights.is_complex():
             raise TypeError(
@@ -198,8 +193,10 @@ def scatter_aggregate(
             src=weights,
         )
 
-        ### Normalize by total weight (avoid division by zero)
-        weight_sums = weight_sums.clamp(min=safe_eps(weight_sums.dtype))
+        ### Normalize by total weight. Only destinations without weight (whose
+        ### weighted sum is 0) divide by 1 instead: a floor on the sums would
+        ### shrink the mean of small positive weights, such as tiny cell volumes.
+        weight_sums = torch.where(weight_sums != 0, weight_sums, 1.0)
         aggregated_data = aggregated_data / weight_sums.view(
             -1, *([1] * len(data_shape))
         )

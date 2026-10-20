@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING
 import torch
 from jaxtyping import Float
 
+from physicsnemo.mesh.utilities._gather import gather_rows
 from physicsnemo.mesh.utilities._tolerances import safe_eps
 
 if TYPE_CHECKING:
@@ -135,9 +136,8 @@ def compute_barycentric_gradients(
         return gradients
 
     ### Get cell vertices
-    cell_vertices = mesh.points[
-        mesh.cells
-    ]  # (n_cells, n_vertices_per_cell, n_spatial_dims)
+    # (n_cells, n_vertices_per_cell, n_spatial_dims)
+    cell_vertices = gather_rows(mesh.points, mesh.cells)
 
     if n_manifold_dims == 1:
         ### Segments: ∇φ₁ = e / |e|² along the edge e = v₁ - v₀, and ∇φ₀ = -∇φ₁
@@ -219,12 +219,10 @@ def compute_barycentric_gradients(
             edge_v0_v2 = v0 - v2
             edge_v1_v0 = v1 - v0
 
-            # |cross|² = (2A)²; clamp for degenerate triangles (zero area)
-            cross_norm_sq = (
-                (cross * cross)
-                .sum(dim=-1, keepdim=True)
-                .clamp(min=safe_eps(cross.dtype))
-            )
+            # |cross|² = (2A)², a length⁴ that is tiny for small triangles, so
+            # only degenerate triangles (cross = 0, zero gradients) divide by 1
+            cross_norm_sq = (cross * cross).sum(dim=-1, keepdim=True)
+            cross_norm_sq = torch.where(cross_norm_sq > 0, cross_norm_sq, 1.0)
 
             gradients[:, 0, :] = torch.linalg.cross(cross, edge_v2_v1) / cross_norm_sq
             gradients[:, 1, :] = torch.linalg.cross(cross, edge_v0_v2) / cross_norm_sq
