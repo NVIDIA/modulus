@@ -46,7 +46,7 @@ from physicsnemo.mesh.calculus import (
     integrate_samples,
 )
 from physicsnemo.mesh.geometry._cell_areas import compute_cell_areas
-from physicsnemo.mesh.geometry._cell_normals import compute_cell_normals
+from physicsnemo.mesh.geometry._cell_normals import _compute_cell_normals_from_points
 
 ### Imported at run time, not only for type checking: `Mesh.load` must find
 ### this class to rebuild the adjacencies cached in a saved mesh.
@@ -66,6 +66,7 @@ from physicsnemo.mesh.transformations.geometric import (
     transform,
     translate,
 )
+from physicsnemo.mesh.utilities._gather import gather_rows
 from physicsnemo.mesh.utilities._padding import _pad_by_tiling_last, _pad_with_value
 from physicsnemo.mesh.utilities._scatter_ops import scatter_aggregate
 from physicsnemo.mesh.utilities.mesh_repr import format_mesh_repr
@@ -147,6 +148,29 @@ def _set_subclass_fields(obj: Any, base: type, fields: dict[str, Any]) -> None:
                 f"argument {name!r}"
             )
         setattr(obj, name, value)
+
+
+def _conflicting_keys(src: TensorDict, dst: TensorDict) -> set[str | tuple[str, ...]]:
+    """Return the keys of ``src`` that would overwrite data in ``dst``.
+
+    A key conflicts if a leaf key of ``dst`` equals it or is a prefix of it (a
+    leaf or group, even an empty one, replacing a leaf), or if it is a leaf
+    that is a prefix of a leaf key of ``dst`` (a leaf replacing a group).
+    Groups of the same name with disjoint leaves merge.
+    """
+
+    def as_tuple(key: str | tuple[str, ...]) -> tuple[str, ...]:
+        return key if isinstance(key, tuple) else (key,)
+
+    dst_keys = [as_tuple(k) for k in dst.keys(include_nested=True, leaves_only=True)]
+    src_leaves = {as_tuple(k) for k in src.keys(include_nested=True, leaves_only=True)}
+    conflicts = set()
+    for key in src.keys(include_nested=True):
+        k = as_tuple(key)
+        is_leaf = k in src_leaves
+        if any(k[: len(d)] == d or (is_leaf and d[: len(k)] == k) for d in dst_keys):
+            conflicts.add(key)
+    return conflicts
 
 
 def _requested_dtype(
@@ -975,7 +999,7 @@ class Mesh(
         """
         cached = self._cache.get(("cell", "centroids"), None)
         if cached is None:
-            cached = self.points[self.cells].mean(dim=1)
+            cached = gather_rows(self.points, self.cells).mean(dim=1)
             self._cache["cell", "centroids"] = cached
         return cached
 
@@ -1004,9 +1028,9 @@ class Mesh(
         """
         cached = self._cache.get(("cell", "areas"), None)
         if cached is None:
-            relative_vectors = (
-                self.points[self.cells[:, 1:]] - self.points[self.cells[:, :1]]
-            )
+            cell_vertices = gather_rows(self.points, self.cells)
+            relative_vectors = cell_vertices[:, 1:] - cell_vertices[:, :1]
+            del cell_vertices
             cached = compute_cell_areas(relative_vectors)
             self._cache["cell", "areas"] = cached
 
@@ -1044,10 +1068,7 @@ class Mesh(
                     f"Required: n_manifold_dims = n_spatial_dims - 1 (codimension-1).\n"
                     f"Current codimension: {self.codimension}"
                 )
-            rh_index = self.cells[:, 1:]
-            lh_index = self.cells[:, 0].unsqueeze(-1)
-            relative_vectors = self.points[rh_index] - self.points[lh_index]
-            cached = compute_cell_normals(relative_vectors)
+            cached = _compute_cell_normals_from_points(self.points, self.cells)
             self._cache["cell", "normals"] = cached
 
         return cached
@@ -1199,51 +1220,32 @@ class Mesh(
         ### Get cell normals (triggers computation if not cached)
         cell_normals = self.cell_normals  # (n_cells, n_spatial_dims)
 
-        ### Initialize accumulated normals for each point
-        accumulated_normals = torch.zeros(
-            (self.n_points, self.n_spatial_dims),
-            dtype=self.points.dtype,
-            device=self.points.device,
-        )
-
         n_vertices_per_cell = self.cells.shape[1]
-        point_indices = self.cells.flatten()
 
-        # Repeat cell normals for each vertex in the cell
-        cell_normals_repeated = cell_normals.unsqueeze(1).expand(
-            -1, n_vertices_per_cell, -1
-        )
-        cell_normals_flat = cell_normals_repeated.reshape(-1, self.n_spatial_dims)
-
-        ### Compute weights based on scheme
+        ### Weight each cell normal at each of its vertices: (n_cells, V or 1, d)
+        # Broadcast products: the (n_cells * V, d) source is materialized only
+        # once, for the scatter
         if weighting == "unweighted":
-            weights = torch.ones(
-                self.n_cells * n_vertices_per_cell,
-                dtype=self.points.dtype,
-                device=self.points.device,
-            )
+            normals_to_accumulate = cell_normals.unsqueeze(1)
 
         elif weighting == "area":
-            cell_areas = self.cell_areas
-            weights = cell_areas.unsqueeze(1).expand(-1, n_vertices_per_cell).flatten()
+            normals_to_accumulate = (
+                cell_normals.unsqueeze(1) * self.cell_areas[:, None, None]
+            )
 
         elif weighting in ("angle", "angle_area"):
             # Compute interior angles at each vertex of each cell
             # For a simplex, angle at vertex k is between edges to other vertices
             from physicsnemo.mesh.geometry._angles import compute_vertex_angles
 
-            vertex_angles = compute_vertex_angles(
-                self
-            )  # (n_cells, n_vertices_per_cell)
-            weights = vertex_angles.flatten()
+            weights = compute_vertex_angles(self)  # (n_cells, n_vertices_per_cell)
 
             if weighting == "angle_area":
                 # Multiply by cell area
-                cell_areas = self.cell_areas
-                area_weights = (
-                    cell_areas.unsqueeze(1).expand(-1, n_vertices_per_cell).flatten()
-                )
-                weights = weights * area_weights
+                weights = weights * self.cell_areas.unsqueeze(1)
+
+            normals_to_accumulate = cell_normals.unsqueeze(1) * weights.unsqueeze(-1)
+            del weights
 
         else:
             raise ValueError(
@@ -1251,17 +1253,23 @@ class Mesh(
                 f"'unweighted', 'area', 'angle', 'angle_area'."
             )
 
-        ### Apply weights and accumulate
-        normals_to_accumulate = cell_normals_flat * weights.unsqueeze(-1)
-
-        point_indices_expanded = point_indices.unsqueeze(-1).expand(
+        ### Accumulate at each point
+        accumulated_normals = torch.zeros(
+            (self.n_points, self.n_spatial_dims),
+            dtype=self.points.dtype,
+            device=self.points.device,
+        )
+        point_indices_expanded = self.cells.reshape(-1, 1).expand(
             -1, self.n_spatial_dims
         )
         accumulated_normals.scatter_add_(
             dim=0,
             index=point_indices_expanded,
-            src=normals_to_accumulate,
+            src=normals_to_accumulate.expand(-1, n_vertices_per_cell, -1).reshape(
+                -1, self.n_spatial_dims
+            ),
         )
+        del normals_to_accumulate
 
         ### Normalize to get unit normals
         return safe_normalize(accumulated_normals, dim=-1)
@@ -2171,12 +2179,15 @@ class Mesh(
         def _replacement(
             value: TensorDict | dict[str, torch.Tensor] | None,
             current: TensorDict,
-        ) -> TensorDict | dict[str, torch.Tensor]:
+        ) -> TensorDict:
             if value is None:
                 return current.copy()
             if isinstance(value, TensorDict):
                 return value.copy()
-            return value
+            # dict() unwraps mappings that TensorDict rejects, such as PyVista's
+            # DataSetAttributes, as the constructor does. A dict may hold the
+            # source's nested TensorDicts, so copy them too.
+            return TensorDict(dict(value)).copy()
 
         return replace(
             self,
@@ -2231,9 +2242,7 @@ class Mesh(
         # Effective measures are not interpolated; use lumped_point_measures.
         ### Check for key conflicts
         if not overwrite_keys:
-            src_keys = set(fields.keys(include_nested=True, leaves_only=True))
-            dst_keys = set(self.point_data.keys(include_nested=True, leaves_only=True))
-            conflicts = src_keys & dst_keys
+            conflicts = _conflicting_keys(fields, self.point_data)
             if conflicts:
                 raise ValueError(
                     f"Keys {conflicts} already exist in point_data. "
@@ -2313,9 +2322,7 @@ class Mesh(
         fields = self.point_data.exclude(EFFECTIVE_MEASURE_KEY)
         ### Check for key conflicts
         if not overwrite_keys:
-            src_keys = set(fields.keys(include_nested=True, leaves_only=True))
-            dst_keys = set(self.cell_data.keys(include_nested=True, leaves_only=True))
-            conflicts = src_keys & dst_keys
+            conflicts = _conflicting_keys(fields, self.cell_data)
             if conflicts:
                 raise ValueError(
                     f"Keys {conflicts} already exist in cell_data. "

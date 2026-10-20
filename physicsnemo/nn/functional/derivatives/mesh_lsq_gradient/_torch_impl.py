@@ -58,8 +58,8 @@ def mesh_lsq_gradient_torch(
     counts = neighbor_offsets[1:] - neighbor_offsets[:-1]
 
     ### Flatten component dimensions so scalar and tensor fields share one solve path.
-    values_flat = values.reshape(n_entities, -1)
-    n_components = values_flat.shape[1]
+    n_components = value_shape.numel()
+    values_flat = values.reshape(n_entities, n_components)
     gradients_flat = torch.zeros(
         (n_entities, n_dims, n_components),
         dtype=values.dtype,
