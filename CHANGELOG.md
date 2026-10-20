@@ -182,6 +182,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   select with `torch.where`, instead of compacting boundary and interior edges
   with boolean masks. Butterfly subdivision synchronizes CUDA 3 times instead
   of 13, Loop subdivision 9 instead of 13, and both are 10-15% faster.
+- Mesh subdivision, `cell_data_to_point_data`, `point_data_to_cell_data` and
+  `Mesh.merge` need up to 2.9x less peak memory, with unchanged results.
 - Mesh integration uses a shared `_effective_measure` field for complete cell
   and point measures. Cell measures fall back to geometry; point measures are
   explicit and independent of connectivity. `Mesh.integrate_samples` evaluates
@@ -248,6 +250,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the mesh, instead of `tolerance` in mesh units. Results no longer depend on
   the mesh's length unit and are identical when the mesh and query points are
   scaled by a power of two.
+- Mesh BVH queries, and with them `validate`, `Mesh.clean()`, point
+  containment and sampling, use up to 2.7x less peak memory. Results are
+  unchanged.
 - `fix_orientation` orients cells of any dimension and is 6x faster on the
   DrivAerML surface. Cells that fill their space, such as tetrahedra in 3D,
   come out with positive volumes. Its stats add `n_cells_flipped`, with
@@ -409,6 +414,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   They now use the edges of every cell and are exact for linear fields on
   segments, triangles and tetrahedra. `to_edge_graph()` works on 1D meshes, and
   `get_facet_mesh(manifold_codimension=0)` returns the deduplicated cells.
+- Meshes from `slice_cells` and `subdivide` get their own data containers, so
+  adding or removing a field on them no longer changes the source mesh.
 - Triangle areas use direct area components and a rescaled norm, preserving
   thin faces and their quadrature measures without Gram cancellation or
   overflow/underflow in the norm.
