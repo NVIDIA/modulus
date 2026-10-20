@@ -397,6 +397,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With `expand_far_targets=True` and `leaf_size > 1`,
   `ClusterTree.find_dual_interaction_pairs` still approximated some targets by
   their leaf's centroid.
+- Unified external aero recipe: the final epoch is always checkpointed,
+  resumed runs keep the epoch-mode learning-rate schedule (older checkpoints
+  resume one epoch behind), and fp16 runs save and restore `GradScaler` state.
 - Checkpoint loading resolves model weights at the selected training checkpoint's
   filename index, preventing resumes that mix epochs. Missing required weights
   raise before any model or training state is restored. Distributed loads validate
