@@ -18,7 +18,7 @@ interpolates mesh data at query points. Both jobs are also ``Mesh`` methods,
    :width: 100%
 
    Left: a field :math:`f = 2xy + z` stored at the vertices of a coarse torus.
-   Right: 5000 points sampled uniformly by area with
+   Right: 5,000 points sampled uniformly by area with
    :func:`sample_random_points_on_cells`, colored by the values that
    :func:`sample_data_at_points` interpolates from the vertices.
 

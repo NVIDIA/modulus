@@ -104,7 +104,7 @@ transformations:
 
 .. tab-set::
 
-   .. tab-item:: Mesh method
+   .. tab-item:: Mesh Method
 
       .. code:: python
 
