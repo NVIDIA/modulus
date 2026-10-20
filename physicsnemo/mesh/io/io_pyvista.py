@@ -1345,12 +1345,13 @@ def from_pyvista(
         - ``"vertices"`` (default): Mesh vertices become points, ``point_data``
           is preserved. ``manifold_dim`` controls cell topology as usual.
         - ``"cell_centroids"``: Cell centroids become points, ``cell_data``
-          is mapped to ``point_data``. With ``manifold_dim=0`` the result is
-          a point cloud; with ``manifold_dim=1`` the result is a dual graph
-          whose edges connect cells that share a facet (an edge for surface
-          meshes, a face for volume meshes) in the original mesh. This mode
-          avoids expensive tetrahedralization and is suitable for large
-          polyhedral meshes.
+          is mapped to ``point_data``. The centroid of a linear cell is the
+          mean of its vertices, as in ``Mesh.cell_centroids``. With
+          ``manifold_dim=0`` the result is a point cloud; with
+          ``manifold_dim=1`` the result is a dual graph whose edges connect
+          cells that share a facet (an edge for surface meshes, a face for
+          volume meshes) in the original mesh. This mode avoids expensive
+          tetrahedralization and is suitable for large polyhedral meshes.
     warn_on_lost_data : bool
         If True, emit a ``UserWarning`` when the conversion discards non-empty
         data arrays. Cell-data values are lost when
@@ -1392,7 +1393,8 @@ def from_pyvista(
     ``UnstructuredGrid`` connectivity. Centroid point-cloud filtering
     additionally accepts fixed-size quadratic and cubic cells, which do not
     require tessellation, and rejects ``EMPTY_CELL`` parents because VTK omits
-    their centers.
+    their centers. The centroid of a quadratic or cubic cell is VTK's
+    parametric cell center, which lies on the curved cell.
 
     Polyhedron auxiliary-array structure is checked before any VTK topology
     filter runs. Closed-shell face complexes are checked in bounded batches
@@ -1892,6 +1894,36 @@ def to_pyvista(
     return pv_mesh
 
 
+def _vertex_means(
+    points: np.ndarray,
+    offsets: np.ndarray,
+    connectivity: np.ndarray,
+    cell_ids: np.ndarray,
+    chunk_size: int = 1 << 16,
+) -> np.ndarray:
+    """Return the mean of the points of each selected VTK cell, in float64.
+
+    Each cell's points are scaled into [-1, 1] before they are summed, so that
+    the sum cannot overflow (or wrap, for integer points) when the mean is
+    finite. Cells are averaged in chunks, to bound the temporary memory.
+    """
+    means = np.empty((len(cell_ids), points.shape[1]))
+    for start in range(0, len(cell_ids), chunk_size):
+        point_ids, _, cell_offsets = _gather_vtk_rows(
+            offsets, connectivity, cell_ids[start : start + chunk_size]
+        )
+        counts = np.diff(cell_offsets)
+        starts = cell_offsets[:-1]
+        cell_points = points[point_ids].astype(np.float64, copy=False)
+        scale = np.maximum.reduceat(np.abs(cell_points), starts, axis=0)
+        scale[(scale == 0) | ~np.isfinite(scale)] = 1.0
+        scaled_sums = np.add.reduceat(
+            cell_points / np.repeat(scale, counts, axis=0), starts, axis=0
+        )
+        means[start : start + chunk_size] = scaled_sums / counts[:, None] * scale
+    return means
+
+
 def _from_pyvista_cell_centroids(
     pyvista_mesh: "pv.PolyData | pv.UnstructuredGrid",
     manifold_dim: int | Literal["auto"],
@@ -1920,7 +1952,8 @@ def _from_pyvista_cell_centroids(
     Returns
     -------
     Mesh
-        Mesh whose points are the cell centroids (vertex means).
+        Mesh whose points are the cell centroids: vertex means for linear
+        cells, parametric centers for higher-order cells.
     """
     if manifold_dim == "auto":
         manifold_dim = 0
@@ -1939,33 +1972,38 @@ def _from_pyvista_cell_centroids(
             warning_stacklevel=5,
         )
 
-    ### Compute cell centroids with VTK's fast C++ filter. It evaluates each
-    ### cell at its parametric centre, which is the vertex mean only for
-    ### fixed-size cells: use the vertex mean (as Mesh.cell_centroids does)
-    ### for the variable-size poly-vertex, polyline, polygon and strip cells.
-    centroids_np = pyvista_mesh.cell_centers().points.copy()
+    ### Centroids are vertex means, as in Mesh.cell_centroids. VTK's fast
+    ### cell_centers() filter evaluates each cell at its parametric center,
+    ### which is the vertex mean only where all vertices weigh the same there:
+    ### in vertex, line, triangle, quad, tetrahedron and hexahedron cells.
+    ### Average the points of every other linear cell here. Higher-order cells
+    ### keep the parametric center, which lies on the curved cell.
     cell_blocks = []
     if isinstance(pyvista_mesh, pv.UnstructuredGrid):
-        is_variable_size = np.isin(
+        vtk_center_is_vertex_mean = {
+            int(pv.CellType.VERTEX),
+            int(pv.CellType.LINE),
+            int(pv.CellType.TRIANGLE),
+            int(pv.CellType.QUAD),
+            int(pv.CellType.TETRA),
+            int(pv.CellType.HEXAHEDRON),
+        }
+        needs_mean = np.isin(
             pyvista_mesh.celltypes,
-            [
-                pv.CellType.POLY_VERTEX,
-                pv.CellType.POLY_LINE,
-                pv.CellType.POLYGON,
-                pv.CellType.TRIANGLE_STRIP,
-            ],
+            [t for t in _linear_cell_specs() if t not in vtk_center_is_vertex_mean],
         )
         cell_blocks = [
             (
                 np.asarray(pyvista_mesh.cell_offsets),
                 np.asarray(pyvista_mesh.cell_connectivity),
-                is_variable_size,
+                needs_mean,
             )
         ]
     elif polydata_topology is not None:
         # PolyData cell IDs run over verts, lines, polys and strips in turn;
-        # VTK reads polys of 3 and 4 points as triangles and quads.
-        for association, min_variable_arity in (
+        # VTK reads cells of 1, 2, 3 and 4 points as vertices, lines,
+        # triangles and quads.
+        for association, min_mean_arity in (
             ("verts", 2),
             ("lines", 3),
             ("faces", 5),
@@ -1973,29 +2011,21 @@ def _from_pyvista_cell_centroids(
         ):
             offsets, connectivity = polydata_topology[association]
             cell_blocks.append(
-                (offsets, connectivity, np.diff(offsets) >= min_variable_arity)
+                (offsets, connectivity, np.diff(offsets) >= min_mean_arity)
             )
+    n_means = sum(int(needs_mean.sum()) for *_, needs_mean in cell_blocks)
+    if 0 < n_means == pyvista_mesh.n_cells:
+        # Every cell is averaged below, so skip VTK, which is slow on
+        # polyhedra. np.empty gives float64, as cell_centers() does.
+        centroids_np = np.empty((n_means, 3))
+    else:
+        centroids_np = pyvista_mesh.cell_centers().points.copy()
     first_cell_id = 0
-    for offsets, connectivity, is_variable_size in cell_blocks:
-        cell_ids = np.flatnonzero(is_variable_size)
-        if len(cell_ids) > 0:
-            point_ids, _, cell_offsets = _gather_vtk_rows(
-                offsets, connectivity, cell_ids
-            )
-            # Average in float64, with each cell's points scaled into [-1, 1],
-            # so that the sum cannot overflow (or wrap, for integer points)
-            # when the mean is finite.
-            counts = np.diff(cell_offsets)
-            starts = cell_offsets[:-1]
-            cell_points = pyvista_mesh.points[point_ids].astype(np.float64)
-            scale = np.maximum.reduceat(np.abs(cell_points), starts, axis=0)
-            scale[(scale == 0) | ~np.isfinite(scale)] = 1.0
-            scaled_sums = np.add.reduceat(
-                cell_points / np.repeat(scale, counts, axis=0), starts, axis=0
-            )
-            centroids_np[first_cell_id + cell_ids] = (
-                scaled_sums / counts[:, None] * scale
-            )
+    for offsets, connectivity, needs_mean in cell_blocks:
+        cell_ids = np.flatnonzero(needs_mean)
+        centroids_np[first_cell_id + cell_ids] = _vertex_means(
+            pyvista_mesh.points, offsets, connectivity, cell_ids
+        )
         first_cell_id += len(offsets) - 1
     points = torch.from_numpy(centroids_np)
     if not points.is_floating_point() or points.element_size() < 4:

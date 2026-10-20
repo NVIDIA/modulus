@@ -16,6 +16,7 @@
 
 """Tests for from_pyvista point_source and warn_on_lost_data parameters."""
 
+import functools
 import warnings
 
 import numpy as np
@@ -69,6 +70,49 @@ def _make_hex_pair() -> "pv.UnstructuredGrid":
     mesh.point_data["vel"] = np.arange(12, dtype=np.float32)
     mesh.cell_data["zone"] = np.array([0, 1])
     return mesh
+
+
+def _make_tapered_hex_polyhedron() -> "pv.UnstructuredGrid":
+    """A hexahedron with a smaller top face, stored as one POLYHEDRON cell.
+
+    Its volume centroid (z = 11/28) lies below its vertex mean (z = 1/2).
+    """
+    points = np.array(
+        [
+            [0, 0, 0],
+            [2, 0, 0],
+            [2, 2, 0],
+            [0, 2, 0],
+            [0.5, 0.5, 1],
+            [1.5, 0.5, 1],
+            [1.5, 1.5, 1],
+            [0.5, 1.5, 1],
+        ],
+        dtype=np.float64,
+    )
+    faces = [
+        [0, 3, 2, 1],
+        [4, 5, 6, 7],
+        [0, 1, 5, 4],
+        [1, 2, 6, 5],
+        [2, 3, 7, 6],
+        [3, 0, 4, 7],
+    ]
+    stream = [len(faces)] + [i for face in faces for i in (len(face), *face)]
+    return pv.UnstructuredGrid([len(stream), *stream], [pv.CellType.POLYHEDRON], points)
+
+
+def _make_skewed_cell(name: str, seed: int = 0) -> "pv.UnstructuredGrid":
+    """One cell of the named type, from pyvista.examples.cells, with its points
+    displaced at random."""
+    if name == "Polyhedron":
+        # The example polyhedron is a tetrahedron, whose centers all agree.
+        grid = _make_tapered_hex_polyhedron()
+    else:
+        grid = getattr(pv.examples.cells, name)()
+    rng = np.random.default_rng(seed)
+    grid.points = grid.points + 0.1 * rng.standard_normal(grid.points.shape)
+    return grid
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +406,93 @@ class TestCellCentroidsPointCloud:
 
         expected = [[float(dtype(x)), 1.0, 0.0]]
         np.testing.assert_allclose(mesh.points.numpy(), expected, rtol=1e-12)
+
+    @pytest.mark.parametrize(
+        "cell",
+        [
+            "Vertex",
+            "PolyVertex",
+            "Line",
+            "PolyLine",
+            "Triangle",
+            "TriangleStrip",
+            "Polygon",
+            "Pixel",
+            "Quadrilateral",
+            "Tetrahedron",
+            "Voxel",
+            "Hexahedron",
+            "Wedge",
+            "Pyramid",
+            "PentagonalPrism",
+            "HexagonalPrism",
+            "Polyhedron",
+        ],
+    )
+    def test_centroid_of_every_linear_cell_is_vertex_mean(self, cell):
+        """A skewed cell of each linear type is centered on its vertex mean.
+
+        VTK centers most of these elsewhere: at their parametric center, or
+        for polyhedra at their volume centroid.
+        """
+        grid = _make_skewed_cell(cell)
+        mesh = from_pyvista(
+            grid,
+            manifold_dim=0,
+            point_source="cell_centroids",
+            warn_on_lost_data=False,
+        )
+
+        vertex_mean = grid.points[grid.get_cell(0).point_ids].mean(axis=0)
+        np.testing.assert_allclose(mesh.points.numpy(), [vertex_mean], atol=1e-12)
+        assert mesh.points.numpy().dtype == grid.cell_centers().points.dtype
+
+    def test_centroids_of_mixed_cells_averaged_in_chunks(self, monkeypatch):
+        """In a mixed grid averaged two cells at a time, every cell keeps its
+        own vertex mean."""
+        from physicsnemo.mesh.io import io_pyvista
+
+        monkeypatch.setattr(
+            io_pyvista,
+            "_vertex_means",
+            functools.partial(io_pyvista._vertex_means, chunk_size=2),
+        )
+        names = ["Pyramid", "Tetrahedron", "Wedge", "Polyhedron", "Triangle"]
+        names += ["Polygon", "Hexahedron", "HexagonalPrism"]
+        grid = pv.merge(
+            [_make_skewed_cell(name, seed) for seed, name in enumerate(names)],
+            merge_points=False,
+        )
+
+        mesh = from_pyvista(
+            grid,
+            manifold_dim=0,
+            point_source="cell_centroids",
+            warn_on_lost_data=False,
+        )
+
+        expected = [
+            grid.points[grid.get_cell(i).point_ids].mean(axis=0)
+            for i in range(grid.n_cells)
+        ]
+        np.testing.assert_allclose(mesh.points.numpy(), expected, atol=1e-12)
+
+    def test_centroid_of_higher_order_cell_is_parametric_center(self):
+        """A curved quadratic edge is centered on its middle node, on the curve,
+        not at its vertex mean, off the curve."""
+        points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.25, 0.5, 0.0]])
+        grid = pv.UnstructuredGrid(
+            {pv.CellType.QUADRATIC_EDGE: np.array([[0, 1, 2]])}, points
+        )
+
+        mesh = from_pyvista(
+            grid,
+            manifold_dim=0,
+            point_source="cell_centroids",
+            warn_on_lost_data=False,
+        )
+
+        np.testing.assert_allclose(mesh.points.numpy(), [[0.25, 0.5, 0.0]])
 
 
 # ---------------------------------------------------------------------------

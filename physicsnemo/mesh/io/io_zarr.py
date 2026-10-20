@@ -125,8 +125,34 @@ def to_zarr(
 
 
 def _open_group(store) -> "zarr.Group":
-    """Open a zarr group read-only."""
-    return zarr.open_group(str(store), mode="r")
+    """Open a zarr group read-only, if :func:`to_zarr` finished writing it.
+
+    :func:`to_zarr` sets the root type attr last, so a store without it may be
+    partial. A mesh group inside a DomainMesh store (e.g.
+    ``<store>.zarr/boundaries/<name>``) has no type attr of its own; it opens
+    if the attr of an enclosing DomainMesh store is set.
+    """
+    group = zarr.open_group(str(store), mode="r")
+    if _TYPE_ATTR in group.attrs or (
+        "points" in group and _in_finished_domain_mesh_store(store)
+    ):
+        return group
+    raise ValueError(
+        f"{store} was not written by physicsnemo.mesh.io.to_zarr, or the write "
+        f"did not finish: it has no root attr {_TYPE_ATTR!r}, which to_zarr "
+        "sets last."
+    )
+
+
+def _in_finished_domain_mesh_store(store) -> bool:
+    """Whether a parent directory of ``store`` holds a finished DomainMesh store."""
+    for parent in Path(store).resolve().parents:
+        if not (parent / "zarr.json").exists():
+            return False  # Left the zarr hierarchy
+        attrs = zarr.open_group(str(parent), mode="r").attrs
+        if attrs.get(_TYPE_ATTR) == "DomainMesh":
+            return True
+    return False
 
 
 def _read_full(arr, device=None) -> torch.Tensor:
@@ -203,17 +229,22 @@ def from_zarr(
     Parameters
     ----------
     store : str or Path
-        Path of the zarr store directory.
+        Path of the zarr store directory, or of a mesh group inside a
+        DomainMesh store (e.g. ``<store>.zarr/boundaries/<name>``).
     device : torch.device, str, or None
         Device for the returned tensors (default CPU).
+
+    Raises
+    ------
+    ValueError
+        If ``store`` was not written by :func:`to_zarr`, or if the write did
+        not finish (for example, because the disk filled up), so that the
+        store may be partial.
     """
     root = _open_group(store)
-    mesh_type = root.attrs.get(_TYPE_ATTR)
-    if mesh_type is None and "points" in root:
-        # A mesh subgroup inside a DomainMesh store (e.g.
-        # <store>.zarr/boundaries/<name>) carries no type attr but is a
-        # complete Mesh group; allow loading it directly.
-        mesh_type = "Mesh"
+    # A group without the type attr is a mesh group inside a DomainMesh store
+    # (see _open_group), which loads directly as a Mesh.
+    mesh_type = root.attrs.get(_TYPE_ATTR, "Mesh")
     if mesh_type == "Mesh":
         return _mesh_from_group(root, device)
     if mesh_type == "DomainMesh":

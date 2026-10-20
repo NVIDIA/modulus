@@ -700,10 +700,6 @@ def test_draw_with_autograd_tracked_scalars_does_not_crash():
     plt.close("all")
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
-
-
 def _recording_plotter():
     """Off-screen Plotter whose add_mesh records its calls without rendering."""
     plotter = pv.Plotter(off_screen=True)
@@ -783,16 +779,32 @@ def test_draw_1d_space_fits_view_without_points():
     plt.close("all")
 
 
-def test_draw_vertex_cells_in_1d_space():
-    """Vertex cells in 1D space draw as points."""
+@pytest.mark.parametrize("n_spatial_dims", [0, 1, 2, 3])
+def test_draw_vertex_cells_with_cell_scalars(n_spatial_dims):
+    """Vertex cells draw as markers colored by their cell scalars."""
     from matplotlib.collections import PathCollection
 
-    mesh = Mesh(
-        points=torch.tensor([[0.0], [1.0], [2.0]]), cells=torch.tensor([[0], [2]])
+    points = torch.zeros(3, n_spatial_dims)
+    if n_spatial_dims > 0:
+        points[:, 0] = torch.tensor([0.0, 1.0, 2.0])
+    mesh = Mesh(points=points, cells=torch.tensor([[0], [2]]))
+
+    ax = mesh.draw(
+        show=False,
+        backend="matplotlib",
+        cell_scalars=torch.tensor([5.0, 7.0]),
+        alpha_points=0.0,
     )
-    ax = mesh.draw(show=False, backend="matplotlib")
-    (markers,) = [c for c in ax.collections if isinstance(c, PathCollection)]
-    assert len(markers.get_offsets()) == 3
+    ax.figure.canvas.draw()  # 3D collections set their colors when drawn
+    (markers,) = [
+        c
+        for c in ax.collections
+        if isinstance(c, PathCollection) and len(c.get_offsets()) == 2
+    ]
+    np.testing.assert_allclose(
+        markers.get_facecolors()[:, :3],
+        matplotlib.colormaps["viridis"]([0.0, 1.0])[:, :3],
+    )
     plt.close("all")
 
 
@@ -847,3 +859,7 @@ def test_pyvista_vertex_cells_with_cell_scalars():
     assert pv_mesh.n_cells == 2
     np.testing.assert_array_equal(pv_mesh.cell_data[kwargs["scalars"]], [5.0, 7.0])
     plotter.close()
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

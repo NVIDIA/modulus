@@ -23,6 +23,7 @@ from conftest import (
     make_domain_mesh,
     make_mesh,
     make_point_cloud,
+    write_unfinished_store,
 )
 
 from physicsnemo.mesh import DomainMesh, Mesh
@@ -73,12 +74,15 @@ def test_domain_mesh_round_trip(tmp_path):
 
 
 def test_boundary_subgroup_loads_as_mesh(tmp_path):
-    """A mesh subgroup inside a DomainMesh store is directly loadable."""
+    """A mesh subgroup inside a DomainMesh store is directly loadable, also
+    through a symlink."""
     dm = make_domain_mesh()
     to_zarr(dm, tmp_path / "dm.zarr")
     wall = from_zarr(tmp_path / "dm.zarr" / "boundaries" / "wall")
     assert isinstance(wall, Mesh)
     assert_meshes_equal(dm.boundaries["wall"], wall)
+    (tmp_path / "wall.zarr").symlink_to(tmp_path / "dm.zarr" / "boundaries" / "wall")
+    assert_meshes_equal(dm.boundaries["wall"], from_zarr(tmp_path / "wall.zarr"))
 
 
 def test_chunking_and_compression_applied(tmp_path):
@@ -126,6 +130,19 @@ def test_dtype_check_ignores_default_device(tmp_path):
     with torch.device("meta"):
         to_zarr(mesh, tmp_path / "mesh.zarr")
     assert_meshes_equal(mesh, from_zarr(tmp_path / "mesh.zarr"))
+
+
+@pytest.mark.parametrize(
+    "make,groups", [(make_mesh, [""]), (make_domain_mesh, ["", "interior"])]
+)
+def test_unfinished_store_raises(tmp_path, make, groups):
+    """A store whose write failed partway raises on load. So does a mesh group
+    inside it, even one that was written in full."""
+    store = tmp_path / "store.zarr"
+    write_unfinished_store(make(), store)
+    for group in groups:
+        with pytest.raises(ValueError, match="did not finish"):
+            from_zarr(store / group)
 
 
 def test_non_mesh_store_raises(tmp_path):
