@@ -14,15 +14,15 @@ point positions and the same connectivity.
          smoothing iterations, drawn at one scale. The mean radius falls from
          0.71 to 0.68 to 0.45, and the last surface is visibly smaller. On the
          right, a plot of mean radius against iterations for spheres of 80,
-         320, and 1280 triangles. All start at 1. By 500 iterations the
+         320, and 1,280 triangles. All start at 1. By 500 iterations the
          80-triangle sphere has collapsed to nearly zero, the 320-triangle
-         sphere is at 0.11, and the 1280-triangle sphere is at 0.57.
+         sphere is at 0.11, and the 1,280-triangle sphere is at 0.57.
    :align: center
    :width: 100%
 
    Laplacian smoothing moves each vertex toward its neighbors, so many
    iterations shrink a closed surface. With ``relaxation_factor=0.1``, 500
-   iterations take a unit ``sphere_icosahedral`` of 1280 triangles to a mean
+   iterations take a unit ``sphere_icosahedral`` of 1,280 triangles to a mean
    radius of 0.57. Coarser meshes shrink faster.
 
 .. rubric:: Most Used
@@ -110,7 +110,7 @@ The following parameters control how far the points move:
    * - ``convergence``
      - 0.0
      - Stop early when no point moves more than this fraction of the bounding
-       box diagonal. 0.0 turns early stopping off.
+       box diagonal. A value of 0.0 turns early stopping off.
    * - ``preserve_boundaries``
      - ``True``
      - Hold boundary points in place.

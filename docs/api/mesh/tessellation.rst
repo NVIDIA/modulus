@@ -12,8 +12,8 @@ closed boundary without moving it.
 :bdg-secondary:`any polygon` :bdg-warning:`fill_interior in 2D only`
 
 .. figure:: ../../img/mesh/tessellation_fan_vs_ear.png
-   :alt: Four panels. First, three outlined polygons, a square, a hexagon,
-         and an arrow with four, six, and seven vertices, under the title
+   :alt: Four panels. First, three outlined polygons (a square, a hexagon,
+         and an arrow) with four, six, and seven vertices, under the title
          "polygon soup, Adjacency offsets = [0, 4, 10, 17]". Second, the same
          polygons split into two, four, and five triangles, each polygon in its
          own color.
@@ -64,8 +64,8 @@ A *polygon soup* is a flat list of polygonal cells, each given only by its
 vertex ring, with no shared-edge connectivity between cells. A surface mesh
 read from a polygonal face list, such as a VTP or STL file, takes this form.
 Every ``k``-gon yields exactly ``k - 2`` triangles, so indexing with the
-returned ``parent_index`` broadcasts per-polygon data to the triangles. The
-following example triangulates one quad:
+returned ``parent_index`` broadcasts the data of each polygon to its
+triangles. The following example triangulates one quad:
 
 .. code:: python
 
@@ -148,8 +148,8 @@ improves the *typical* angle while preserving both bounds. The
 exact-boundary contract provides three guarantees:
 
 - Every input vertex that an edge references appears bit-identically in
-  the output, in the leading rows and in input order. Vertices that no edge
-  references are dropped.
+  the output, in the leading rows and in input order. The output drops
+  vertices that no edge references.
 - The pipeline only ever *subdivides* boundary facets and never moves
   them.
 - The entire process is deterministic.

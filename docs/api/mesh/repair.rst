@@ -94,8 +94,8 @@ The single repairs are the following functions:
      - Duplicates and unused points, as tensor-level steps that take
        ``points``, ``cells``, and data, not a ``Mesh``
 
-:func:`repair_mesh` runs remove degenerate cells, merge duplicate points, and
-remove isolated points by default. Pass ``fix_orientation=True`` or
+By default, :func:`repair_mesh` removes degenerate cells, merges duplicate
+points, and removes isolated points. Pass ``fix_orientation=True`` or
 ``fill_holes=True`` to add the other two.
 
 Example

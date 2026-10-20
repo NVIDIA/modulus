@@ -107,7 +107,7 @@ Use the following guidelines to choose a structure:
 
 - The :class:`BVH` is a tree of axis-aligned
   bounding boxes over the cells of a mesh. It speeds up point containment,
-  the cell, if any, that contains each query point.
+  which finds the cell, if any, that contains each query point.
   The sampling module uses it in
   :func:`~physicsnemo.mesh.sampling.sample_data_at_points` and
   :func:`~physicsnemo.mesh.sampling.find_containing_cells`, to avoid a

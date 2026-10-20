@@ -75,8 +75,8 @@ Transfer Point Data
 -------------------
 
 Set ``transfer_point_data`` to a key, a nested key path, or a list of keys and
-paths. ``True`` selects every point-data leaf. Fields that you do not select
-are dropped. Selected fields must contain real floating-point tensors:
+paths. ``True`` selects every point-data leaf. Remeshing drops the fields that
+you do not select. Selected fields must contain real floating-point tensors:
 
 .. code:: python
 
@@ -173,7 +173,7 @@ Warp Tuning
 Most callers never change the backend defaults. The tuning knobs are in the
 following dropdown:
 
-.. dropdown:: Backend search and initialization controls
+.. dropdown:: Backend Search and Initialization Controls
 
    For advanced tuning, you can adjust the backend search and initialization
    policy through the tensor functional. These backend-specific parameters can
@@ -230,12 +230,12 @@ Performance
 The checked-in airspeed velocity (ASV) benchmark measures warmed, end-to-end
 GPU execution:
 
-- clustering
-- surface projection
-- topology reconstruction
-- cleanup
-- optional scalar-field interpolation
-- optional linear-resolution-field conversion
+- Clustering
+- Surface projection
+- Topology reconstruction
+- Cleanup
+- Optional scalar-field interpolation
+- Optional linear-resolution-field conversion
 
 Timing includes an explicit CUDA synchronization. To run the benchmark, use
 the following command:
@@ -261,7 +261,7 @@ Behavior and Limitations
 Remeshing is non-differentiable, and it is not bitwise reproducible. The
 full list of behavior and limitations is in the following dropdown:
 
-.. dropdown:: Behavior and limitations
+.. dropdown:: Behavior and Limitations
 
    Keep the following behavior and limitations in mind:
 

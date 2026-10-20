@@ -67,7 +67,7 @@ give the same result:
 
 .. tab-set::
 
-   .. tab-item:: Mesh method
+   .. tab-item:: Mesh Method
 
       .. code:: python
 
@@ -235,7 +235,7 @@ Helmholtz filter. ``length_scale`` sets how far the smoothing reaches, in the
 same units as ``mesh.points``. A zero length scale applies the raw displacement
 exactly at unfixed vertices.
 
-.. dropdown:: The filter equation
+.. dropdown:: The Filter Equation
 
    The filter solves
 
@@ -296,7 +296,7 @@ following behavior in mind:
 - CUDA Graph capture is not supported because P1 operator assembly and solver
   diagnostics are not capture-safe.
 - Both backends support ``torch.compile``.
-- Warp CUDA results and point gradients may vary at roundoff between runs.
+- Warp CUDA results and point gradients can vary at roundoff between runs.
 
 .. rubric:: Before and After
 
@@ -437,10 +437,9 @@ controls must affinely span the coordinate space. In 3D, for example, they must
 not all lie in one plane. The augmented system must also be nonsingular. This formulation follows the thin-plate-spline interpolant
 described by Bookstein [1].
 
-[1] F. L. Bookstein, "Principal warps: thin-plate splines and the decomposition
-of deformations," IEEE Transactions on Pattern Analysis and Machine
-Intelligence, vol. 11, no. 6, pp. 567-585, 1989.
-https://doi.org/10.1109/34.24792
+[1] F. L. Bookstein, `"Principal warps: thin-plate splines and the decomposition
+of deformations" <https://doi.org/10.1109/34.24792>`_, IEEE Transactions on
+Pattern Analysis and Machine Intelligence, vol. 11, no. 6, pp. 567–585, 1989.
 
 .. rubric:: Two-Dimensional Example
 
@@ -565,8 +564,8 @@ The ``basis`` argument accepts the following options:
 
 - ``basis="bernstein"`` provides classic global-support free-form deformation
   for coarse lattices.
-- ``basis="bspline"`` provides local four-node-per-axis support and scales to
-  fine lattices for local sculpting. Its first and last coefficient planes lie
+- ``basis="bspline"`` provides local support of four nodes along each axis and
+  scales to fine lattices for local sculpting. Its first and last coefficient planes lie
   one knot spacing outside the evaluation box.
 - ``basis="linear"``, ``"cubic_hermite"``, and ``"quintic_hermite"`` instead
   use the two neighboring nodes for each axis and reproduce every control
@@ -732,16 +731,16 @@ Domain Meshes
 world-coordinate control field on the interior and every named boundary. With
 ``point_weights=None``, coincident component points receive identical motion.
 Domain point weights must instead be a point-data key, or a nested tuple key,
-present in every component. Raw weight tensors are rejected because component
-point counts can differ. Every resolved field must use one common dtype across
+present in every component. The method rejects raw weight tensors because
+component point counts can differ. Every resolved field must use one common dtype across
 the domain: ``bool`` for a hard mask, or the same floating dtype as the mesh
 points. Coincident points remain coincident under a point-weight key only when
 their resolved values also match.
 
 :meth:`~physicsnemo.mesh.domain_mesh.DomainMesh.radial_basis_function_deform`
 follows the same component and point-weight rules while fitting one global RBF
-field. The coefficient system is solved once, and the combined interior and
-boundary points are evaluated together before the component meshes are rebuilt.
+field. It solves the coefficient system once and evaluates the combined
+interior and boundary points together before it rebuilds the component meshes.
 The following example morphs a domain with a point-weight key:
 
 .. code:: python
@@ -785,7 +784,7 @@ same pattern for lattice free-form deformation:
 - The default box spans the combined component bounds.
 
 The combined bounds must have positive range on every coordinate axis unless
-an explicit extent is supplied.
+you supply an explicit extent.
 
 For optimization-time geometric penalties on a fixed topology, refer to
 :doc:`deformation`.

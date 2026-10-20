@@ -5,7 +5,7 @@ Primitives
 
 ``physicsnemo.mesh.primitives`` is a catalog of ready-made meshes for
 tutorials, tests, and experiments. The library builds each mesh when you ask
-for it, except the PyVista datasets, which are downloaded. Each primitive is a
+for it, except the PyVista datasets, which it downloads. Each primitive is a
 module with one ``load`` function. Its keyword arguments set the size and the
 resolution, and ``device`` sets where the tensors go. The ``text`` module is
 the exception, with one function for each kind of text mesh.
@@ -86,7 +86,7 @@ function, which lists the arguments and defaults.
 
    .. tab-item:: Curves
 
-      ``physicsnemo.mesh.primitives.curves``: One-dimensional meshes (edges) in 1D, 2D, or 3D space: lines, arcs, closed curves, a helix, and a knot. The following table lists its primitives:
+      ``physicsnemo.mesh.primitives.curves``: One-dimensional meshes (edges) in 1D, 2D, or 3D space, including lines, arcs, closed curves, a helix, and a knot. The following table lists its primitives:
 
       .. list-table::
          :header-rows: 1
@@ -137,7 +137,7 @@ function, which lists the arguments and defaults.
 
    .. tab-item:: Planar
 
-      ``physicsnemo.mesh.primitives.planar``: Triangle meshes that fill a region of the plane: squares, rectangles, disks, an annulus, polygons, and a non-convex L shape. The following table lists its primitives:
+      ``physicsnemo.mesh.primitives.planar``: Triangle meshes that fill a region of the plane, including squares, rectangles, disks, an annulus, polygons, and a non-convex L shape. The following table lists its primitives:
 
       .. list-table::
          :header-rows: 1

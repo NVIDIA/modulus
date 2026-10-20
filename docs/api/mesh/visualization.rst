@@ -94,8 +94,8 @@ Choosing a Backend
      - Draws
      - Selected by ``backend="auto"`` for
    * - Matplotlib
-     - Static 2D plots, and 3D plots through ``mplot3d``. A volume mesh is
-       drawn as its boundary surface.
+     - Static 2D plots, and 3D plots through ``mplot3d``. It draws a volume
+       mesh as its boundary surface.
      - Meshes with two or fewer spatial dimensions
    * - PyVista
      - Interactive 3D scenes with the Visualization Toolkit (VTK)
