@@ -367,25 +367,39 @@ class TestButterflySubdivision:
             # Acceptable to not support non-2D manifolds
             assert "manifold" in str(e).lower() or "dimension" in str(e).lower()
 
-    def test_butterfly_int32_cells_match_int64(self, device):
-        """Regression: int32 connectivity gives the same result as int64.
-
-        With 100000 points, edges (0, 1) and (42949, 67297) have edge hashes
-        1 and 2**32 + 1, which collide if the hash is computed in int32.
-        """
-        n_points = 100_000
-        points = torch.rand(
-            n_points, 3, generator=torch.Generator().manual_seed(0), dtype=torch.float64
-        ).to(device)
-        cells = torch.tensor(
+    @pytest.mark.parametrize(
+        "cells",
+        [
+            # The colliding edges are both interior edges
             [
                 [0, 1, 2],
                 [1, 0, 3],
                 [42949, 67297, 4],
                 [67297, 42949, 5],
             ],
-            device=device,
-        )
+            # (42949, 67297) is also a wing edge of the interior edge (6, 42949)
+            [
+                [42949, 6, 67297],
+                [6, 42949, 7],
+                [67297, 42949, 8],
+                [0, 1, 2],
+                [1, 0, 3],
+            ],
+        ],
+        ids=["interior_edges", "wing_edge"],
+    )
+    def test_butterfly_int32_cells_match_int64(self, device, cells):
+        """Regression: int32 connectivity gives the same result as int64.
+
+        With 100000 points, edges (0, 1) and (42949, 67297) have edge hashes
+        1 and 2**32 + 1, which collide if the hash is computed in int32. The
+        second case also checks the hashes of the stencil's wing edges.
+        """
+        n_points = 100_000
+        points = torch.rand(
+            n_points, 3, generator=torch.Generator().manual_seed(0), dtype=torch.float64
+        ).to(device)
+        cells = torch.tensor(cells, device=device)
         expected = Mesh(points=points, cells=cells).subdivide(1, "butterfly")
         actual = Mesh(points=points, cells=cells.int()).subdivide(1, "butterfly")
         torch.testing.assert_close(actual.points, expected.points)
