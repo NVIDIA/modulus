@@ -111,9 +111,12 @@ def _sample_weighted_with_replacement(
             generator=generator,
         )
 
-    # Float64 keeps every category's share of the CDF resolvable. Scanning a
-    # copy in place needs one float64 buffer instead of two.
-    cdf = weights.to(torch.float64, copy=True).cumsum_(0)
+    # Float64 keeps every category's share of the CDF resolvable. Dividing by
+    # the largest weight puts the total in [1, n], so it cannot overflow, and
+    # draws in [0, 1) scaled by it stay below it. Scanning a copy in place
+    # needs one float64 buffer instead of two.
+    cdf = weights.to(torch.float64, copy=True)
+    cdf.div_(cdf.amax()).cumsum_(0)
     draws = torch.rand(
         num_samples,
         dtype=torch.float64,

@@ -113,6 +113,9 @@ __all__ = [
     "radius_search",
     "real",
     "ray_mesh_intersect",
+    # Deprecated aliases, resolved by __getattr__ so that `import *` keeps them.
+    "WeightedMultinomial",
+    "weighted_multinomial",
     "remeshing",
     "rectilinear_grid_curl",
     "rectilinear_grid_divergence",

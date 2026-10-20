@@ -191,6 +191,22 @@ def test_weighted_sampling_with_replacement_above_category_limit(monkeypatch, dt
     )
 
 
+@pytest.mark.parametrize("scale", [1e308, 5e-324])
+def test_inverse_cdf_handles_extreme_weight_scales(monkeypatch, scale):
+    """Huge totals do not overflow, and subnormal ones do not round draws up."""
+    monkeypatch.setattr(sampling_module, "_MULTINOMIAL_CATEGORY_LIMIT", 2)
+    weights = torch.tensor([0.0, scale, scale, 0.0], dtype=torch.float64)
+
+    indices = weighted_multinomial(
+        weights,
+        10_000,
+        replacement=True,
+        generator=torch.Generator().manual_seed(0),
+    )
+
+    assert set(indices.unique().tolist()) == {1, 2}
+
+
 @pytest.mark.parametrize("device", ["cpu:0", "cpu:1"])
 def test_accepts_equivalent_cpu_device_aliases(device):
     indices = weighted_multinomial(

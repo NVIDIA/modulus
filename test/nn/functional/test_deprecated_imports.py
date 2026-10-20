@@ -49,6 +49,16 @@ def test_from_import_of_moved_name_warns():
     assert weighted_multinomial is physicsnemo.utils.weighted_multinomial
 
 
+def test_wildcard_import_keeps_moved_names():
+    """``import *`` still provides the moved names, with the warning."""
+    namespace = {}
+    with pytest.warns(LegacyFeatureWarning):
+        exec("from physicsnemo.nn.functional import *", namespace)  # noqa: S102
+
+    for name in MOVED_TO_UTILS:
+        assert namespace[name] is getattr(physicsnemo.utils, name)
+
+
 def test_unknown_name_raises_attribute_error():
     """Other names raise AttributeError; safe_normalize never shipped here."""
     with pytest.raises(AttributeError, match="no attribute 'safe_normalize'"):
