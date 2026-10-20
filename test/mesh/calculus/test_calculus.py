@@ -1507,6 +1507,64 @@ class TestDECOperators:
         assert grad.shape == (mesh.n_points, mesh.n_spatial_dims)
         assert torch.isfinite(grad).all()
 
+    @pytest.mark.parametrize("n_cells", [1, 3])
+    def test_flat_operator_matches_per_component(self, n_cells):
+        """flat on a field with several trailing dims applies the vector flat
+        to each component (one triangle has as many edges as spatial dims)."""
+        from physicsnemo.mesh.calculus._exterior_derivative import exterior_derivative_0
+        from physicsnemo.mesh.calculus._sharp_flat import flat
+
+        torch.manual_seed(0)
+        points = torch.tensor(
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.2], [0.0, 1.0, 0.5], [1.0, 1.0, 0.9]]
+        )
+        cells = torch.tensor([[0, 1, 2], [1, 3, 2], [0, 1, 3]])[:n_cells]
+        mesh = Mesh(points=points, cells=cells)
+        _, edges = exterior_derivative_0(mesh, torch.zeros(mesh.n_points))
+        tensor_field = torch.randn(mesh.n_points, 3, 2, 4)
+
+        edge_form = flat(mesh, tensor_field, edges)
+
+        expected = torch.stack(
+            [
+                torch.stack(
+                    [flat(mesh, tensor_field[:, :, i, j], edges) for j in range(4)],
+                    dim=-1,
+                )
+                for i in range(2)
+            ],
+            dim=-2,
+        )
+        assert edge_form.shape == (len(edges), 2, 4)
+        torch.testing.assert_close(edge_form, expected)
+
+    @pytest.mark.parametrize("field_shape", [(), (2,)])
+    def test_dec_operators_float32_field_on_float64_mesh(self, field_shape):
+        """DEC gradient, divergence and Laplacian accept a float32 field on a
+        float64 mesh and match the all-float64 result."""
+        from physicsnemo.mesh.calculus.divergence import compute_divergence_points_dec
+        from physicsnemo.mesh.calculus.gradient import compute_gradient_points_dec
+        from physicsnemo.mesh.calculus.laplacian import compute_laplacian_points_dec
+
+        points = torch.tensor(
+            [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [0.4, 0.6]],
+            dtype=torch.float64,
+        )
+        cells = torch.tensor([[0, 1, 4], [0, 4, 2], [1, 3, 4], [4, 3, 2]])
+        mesh = Mesh(points=points, cells=cells)
+        torch.manual_seed(0)
+        f32 = torch.randn(mesh.n_points, *field_shape)
+        v32 = torch.randn(mesh.n_points, 2)
+
+        for operator, field in [
+            (compute_gradient_points_dec, f32),
+            (compute_laplacian_points_dec, f32),
+            (compute_divergence_points_dec, v32),
+        ]:
+            result = operator(mesh, field)
+            assert result.dtype == torch.float64
+            torch.testing.assert_close(result, operator(mesh, field.double()))
+
 
 class TestExteriorDerivative:
     """Test d₁ exterior derivative."""
@@ -1732,6 +1790,29 @@ class TestEdgeCases:
 
         laplacian = compute_laplacian_points_dec(mesh, phi)
         assert torch.allclose(laplacian, torch.zeros_like(laplacian), atol=1e-5)
+
+    @pytest.mark.parametrize("field_shape", [(), (2,), (2, 3)])
+    def test_derivatives_on_mesh_without_cells(self, field_shape):
+        """On a mesh without cells, LSQ cell gradients are empty and DEC
+        gradients and Laplacians are zero, for fields of any rank."""
+        from physicsnemo.mesh.calculus import (
+            compute_gradient_cells_lsq,
+            compute_gradient_points_dec,
+            compute_laplacian_points_dec,
+        )
+
+        mesh = Mesh(
+            points=torch.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]),
+            cells=torch.empty(0, 3, dtype=torch.long),
+        )
+        point_values = torch.ones(mesh.n_points, *field_shape)
+
+        cell_grad = compute_gradient_cells_lsq(mesh, torch.empty(0, *field_shape))
+        assert torch.equal(cell_grad, torch.zeros(0, 2, *field_shape))
+        point_grad = compute_gradient_points_dec(mesh, point_values)
+        assert torch.equal(point_grad, torch.zeros(3, 2, *field_shape))
+        laplacian = compute_laplacian_points_dec(mesh, point_values)
+        assert torch.equal(laplacian, torch.zeros(3, *field_shape))
 
     def test_curl_on_2d_raises(self):
         """Test that curl on 2D data raises ValueError."""
@@ -2016,6 +2097,43 @@ class TestProjectionEdgeCases:
         original_norms = torch.norm(gradients, dim=-1)
         # Most should be smaller (allowing some numerical tolerance)
         assert (projected_norms <= original_norms + 1e-5).float().mean() > 0.7
+
+    @pytest.mark.parametrize("closed", [False, True])
+    @pytest.mark.parametrize("field_shape", [(), (2,)])
+    def test_projection_higher_codimension_cells(self, closed, field_shape):
+        """On a curve in 3D, an intrinsic cell gradient is the extrinsic one
+        projected onto that cell's own direction, on open curves and on closed
+        curves (where n_cells == n_points)."""
+        from physicsnemo.mesh.calculus.gradient import project_to_tangent_space
+
+        torch.manual_seed(0)
+        points = torch.tensor(
+            [
+                [1.0, 0.0, 0.0],
+                [0.5, 0.9, 0.3],
+                [-0.5, 0.9, -0.2],
+                [-1.0, 0.0, 0.4],
+                [-0.5, -0.9, -0.1],
+                [0.5, -0.9, 0.6],
+            ]
+        )
+        cells = torch.stack([torch.arange(6), torch.arange(1, 7) % 6], dim=-1)
+        mesh = Mesh(points=points, cells=cells if closed else cells[:-1])
+        gradients = torch.randn(mesh.n_cells, 3, *field_shape)
+
+        projected = project_to_tangent_space(mesh, gradients, "cells")
+
+        directions = points[mesh.cells[:, 1]] - points[mesh.cells[:, 0]]
+        directions = directions / directions.norm(dim=-1, keepdim=True)
+        t = directions.view(mesh.n_cells, 3, *([1] * len(field_shape)))
+        expected = (gradients * t).sum(dim=1, keepdim=True) * t
+        torch.testing.assert_close(projected, expected)
+
+        # The same path through the Mesh API
+        f = torch.randn(mesh.n_cells)
+        extrinsic = mesh.gradient(f, gradient_type="extrinsic", data_source="cells")
+        expected = (extrinsic * directions).sum(dim=-1, keepdim=True) * directions
+        torch.testing.assert_close(mesh.gradient(f, data_source="cells"), expected)
 
 
 class TestTangentSpaceProjection:
