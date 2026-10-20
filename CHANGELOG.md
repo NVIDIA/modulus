@@ -127,9 +127,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   point normals use up to 3.4x less peak memory, and gradients through cell
   centroids and normals are faster on GPU. Results are unchanged up to
   rounding.
-- LSQ derivatives of several mesh fields (`compute_point_derivatives`,
-  `compute_cell_derivatives`) share their least-squares systems, up to 3.4x
-  faster on GPU and with no more peak memory. Results are unchanged.
+- Mesh LSQ gradients (`Mesh.gradient`, `curl`, `divergence`,
+  `compute_point_derivatives`, `compute_cell_derivatives`) solve the float32
+  systems of all points or cells at once rather than one neighbor count at a
+  time, and the derivatives of several fields share their least-squares
+  systems. On a GB200, the gradient of a 5.1M-tet mesh is 2.4x faster and
+  that of meshes up to 1.3M tets 3.4-3.7x faster; the derivatives of eight
+  scalar fields on a 1M-tet mesh are 13x faster. Results are unchanged up to
+  rounding.
 - GLOBE's field declarations are renamed after the schemas they hold:
   `output_field_ranks`, `boundary_source_data_ranks` and `global_data_ranks`
   become `output_schema`, `boundary_source_schemas` and `global_schema`
