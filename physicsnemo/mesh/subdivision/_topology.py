@@ -65,9 +65,9 @@ def get_subdivision_pattern(
         For a triangle (n=2):
 
         - 3 original vertices: v0, v1, v2
-        - 3 edge midpoints: e01, e12, e20
-        - Indexing: [v0=0, v1=1, v2=2, e01=3, e12=4, e20=5]
-        - 4 children: [v0, e01, e20], [v1, e12, e01], [v2, e20, e12], [e01, e12, e20]
+        - 3 edge midpoints: e01, e02, e12
+        - Indexing: [v0=0, v1=1, v2=2, e01=3, e02=4, e12=5]
+        - 4 children: [v0, e01, e02], [v1, e12, e01], [v2, e02, e12], [e01, e12, e02]
     """
     if n_manifold_dims == 1:
         ### 1-simplex (edge) splits into 2 edges
@@ -83,7 +83,7 @@ def get_subdivision_pattern(
 
     elif n_manifold_dims == 2:
         ### 2-simplex (triangle) splits into 4 triangles
-        # Vertices: [v0, v1, v2, e01, e12, e20]
+        # Vertices: [v0, v1, v2, e01, e02, e12]
         # Edge ordering from _generate_combination_indices(3, 2):
         # (0,1), (0,2), (1,2) -> indices 3, 4, 5
         return torch.tensor(
@@ -104,13 +104,13 @@ def get_subdivision_pattern(
         return torch.tensor(
             [
                 [0, 4, 5, 6],  # Corner at v0
-                [1, 4, 7, 8],  # Corner at v1
+                [1, 4, 8, 7],  # Corner at v1
                 [2, 5, 7, 9],  # Corner at v2
-                [3, 6, 8, 9],  # Corner at v3
-                [4, 5, 7, 8],  # Inner tet 1
+                [3, 6, 9, 8],  # Corner at v3
+                [4, 5, 8, 7],  # Inner tet 1
                 [5, 6, 8, 9],  # Inner tet 2
                 [4, 5, 6, 8],  # Inner tet 3
-                [5, 7, 8, 9],  # Inner tet 4
+                [5, 7, 9, 8],  # Inner tet 4
             ],
             dtype=torch.int64,
         )
