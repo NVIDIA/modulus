@@ -15,7 +15,7 @@ for each point or cell, and the same values are cached ``Mesh`` properties.
          gaussian_curvature_vertices, K from -4.39 to 2.12. Middle, the same
          torus colored red everywhere, labeled mean_curvature_vertices, H from
          0.66 to 1.80. Right, five triangles laid flat around a vertex, with a
-         shaded gap of sixty degrees labeled 2 pi minus the sum of the angles
+         shaded gap of 60 degrees labeled 2 pi minus the sum of the angles
          equals 60 degrees.
    :align: center
    :width: 100%

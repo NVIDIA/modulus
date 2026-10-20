@@ -96,7 +96,7 @@ Declare a schema, attach matching data to a mesh, and check it:
     schema.check(mesh.point_data, label="point data")  # no error
 
 :meth:`FieldSchema.check` reports every missing field and every rank
-mismatch in one ``ValueError``. Extra fields in the data are allowed:
+mismatch in one ``ValueError``. It allows extra fields in the data:
 
 .. code:: python
 

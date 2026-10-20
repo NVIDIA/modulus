@@ -166,7 +166,7 @@ what changes:
      - Remove cached values without changing the mesh
      - Clear every cache
 
-.. dropdown:: Retaining caches with ``keep``
+.. dropdown:: Retaining Caches with ``keep``
 
    The ``keep`` override accepts any of the following:
 

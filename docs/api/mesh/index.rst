@@ -121,7 +121,7 @@ task:
 
    .. grid-item-card:: Primitives
       :img-top: ../../img/mesh/thumbnails/primitives.png
-      :img-alt: A shaded Mobius strip mesh
+      :img-alt: A shaded Möbius strip mesh
       :link: primitives
       :link-type: doc
       :shadow: md

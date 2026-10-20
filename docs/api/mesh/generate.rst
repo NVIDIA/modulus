@@ -143,10 +143,10 @@ domains work directly.
 
 .. tip::
 
-   Without ``feature_points``, sharp convex corners are rounded off at the
-   ``h`` scale. Pass the corners as ``feature_points`` to keep them exactly.
+   Without ``feature_points``, the mesher rounds off sharp convex corners at
+   the ``h`` scale. Pass the corners as ``feature_points`` to keep them exactly.
 
-.. dropdown:: Validity and coverage guarantees
+.. dropdown:: Validity and Coverage Guarantees
 
    Every optimization step is validity-gated, so when the function returns,
    the mesh is positively oriented and has a closed-manifold boundary.
