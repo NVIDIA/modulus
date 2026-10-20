@@ -1821,8 +1821,10 @@ def to_pyvista(
             pv_mesh = pv.PointSet(points_np)
         else:
             # Explicit VERTEX cells, so that cell_data has cells to attach to.
+            # Like lines, they share storage with mesh.cells unless force_copy.
             cells_np = mesh.cells.cpu().numpy()
-            pv_mesh = pv.PolyData(points_np, verts=_to_vtk_cell_array(cells_np))
+            verts = pv.CellArray.from_regular_cells(cells_np, deep=force_copy)
+            pv_mesh = pv.PolyData(points_np, verts=verts)
 
     elif mesh.n_manifold_dims == 1:
         cells_np = mesh.cells.cpu().numpy()
