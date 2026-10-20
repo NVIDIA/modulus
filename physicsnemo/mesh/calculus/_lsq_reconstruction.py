@@ -95,9 +95,11 @@ def compute_point_gradient_lsq(
             \quad (k \times k).
 
     Here ``k`` is the number of neighbors of the point and ``d`` equals
-    ``n_spatial_dims``. Fully vectorized using batched operations. Points are
-    grouped by neighbor count and processed in parallel to handle the ragged
-    neighbor structure.
+    ``n_spatial_dims``. Fully vectorized using batched operations. The
+    systems of all points are assembled and solved at once where the normal
+    equations solve them (float32 and 16-bit); otherwise points are grouped by
+    neighbor count and processed in parallel to handle the ragged neighbor
+    structure.
     """
     return _compute_point_gradients_lsq(
         mesh, [point_values], weight_power, min_neighbors
@@ -157,8 +159,10 @@ def compute_cell_gradient_lsq(
 
     Notes
     -----
-    Fully vectorized using batched operations. Cells are grouped by neighbor
-    count and processed in parallel.
+    Fully vectorized using batched operations. The systems of all cells are
+    assembled and solved at once where the normal equations solve them
+    (float32 and 16-bit); otherwise cells are grouped by neighbor count and
+    processed in parallel.
     """
     return _compute_cell_gradients_lsq(mesh, [cell_values], weight_power)[0]
 

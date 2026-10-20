@@ -22,7 +22,12 @@ from collections.abc import Sequence
 
 import torch
 
-from physicsnemo.utils._small_linalg import _lstsq_solver, batched_lstsq
+from physicsnemo.utils._small_linalg import (
+    _lstsq_solver,
+    _segment_lstsq_solver,
+    _uses_normal_equations,
+    batched_lstsq,
+)
 
 from .utils import resolve_safe_epsilon, validate_inputs
 
@@ -56,13 +61,22 @@ def _mesh_lsq_gradients_torch(
     weight_power: float = 2.0,
     min_neighbors: int = 0,
     safe_epsilon: float | None = None,
+    *,
+    grouped: bool = False,
 ) -> list[torch.Tensor]:
     """Weighted LSQ mesh gradients of several fields of one dtype.
 
     Each gradient is that of :func:`mesh_lsq_gradient_torch` for its field, bit
     for bit. The fields share the work that does not depend on them: the
-    neighbor-count groups, the weighted systems and their factorization. Each
-    field is then solved on its own, so the peak memory is that of one field.
+    weighted systems and their factorization. Each field is then solved on its
+    own, so the peak memory is that of one field.
+
+    Where the normal equations solve the systems (float32 and 16-bit, see
+    :func:`~physicsnemo.utils._small_linalg.batched_lstsq`), every entity's
+    system is ``n_dims x n_dims``: they are assembled and solved at once, by
+    :func:`~physicsnemo.utils._small_linalg._segment_lstsq_solver`. Otherwise,
+    or with ``grouped``, the entities are solved in groups of one neighbor
+    count each.
     """
     ### Validate inputs before building LSQ systems.
     for field in values:
@@ -115,6 +129,39 @@ def _mesh_lsq_gradients_torch(
 
     points_cast = points.to(dtype=dtype)
     dist_eps = resolve_safe_epsilon(safe_epsilon=safe_epsilon, dtype=points_cast.dtype)
+
+    if not grouped and _uses_normal_equations(dtype, n_dims):
+        ### Assemble every entity's system at once, from one weighted row per edge
+        # The rows are those of the groups below, by the same operations.
+        n_edges = neighbor_indices.shape[0]
+        sources = torch.repeat_interleave(counts, output_size=n_edges)
+        relative = points_cast[neighbor_indices]
+        relative -= points_cast[sources]
+        dist2 = (relative * relative).sum(dim=-1).clamp_min(dist_eps)
+        sqrt_w = dist2.pow(-0.25 * weight_power).unsqueeze(-1)
+        del dist2
+        solve = _segment_lstsq_solver(sqrt_w * relative, neighbor_offsets)
+        del relative
+        # Entities with too few neighbors are not solved: zero gradients
+        unsolved = counts < min_neighbors if min_neighbors > 1 else None
+
+        gradients = []
+        for field, n_field_components in zip(values, n_components):
+            delta_values = field[neighbor_indices].reshape(n_edges, n_field_components)
+            delta_values -= field[sources].reshape(n_edges, n_field_components)
+            b_weighted = sqrt_w * delta_values
+            del delta_values
+            field_gradients = solve(b_weighted)
+            del b_weighted
+            if unsolved is not None:
+                field_gradients = field_gradients.masked_fill(
+                    unsolved[:, None, None], 0.0
+                )
+            gradients.append(
+                field_gradients.reshape(n_entities, n_dims, *field.shape[1:])
+            )
+            del field_gradients
+        return gradients
 
     ### Process one dense batch per neighbor-count group (mesh-module strategy).
     # A stable sort lists each group's entities contiguously, in ascending index

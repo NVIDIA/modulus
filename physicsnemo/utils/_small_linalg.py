@@ -482,6 +482,88 @@ def _lstsq_solver(
     return lambda B: small_lstsq(A, B)
 
 
+def _uses_normal_equations(dtype: torch.dtype, d: int) -> bool:
+    """Whether :func:`batched_lstsq` solves systems of ``d`` unknowns of
+    ``dtype`` by the normal equations, which :func:`_segment_lstsq_solver` can."""
+    return dtype in (torch.float32, *_HALF_DTYPES) and d <= 3
+
+
+def _segment_lstsq_solver(
+    A: Float[torch.Tensor, "n_rows d"],
+    offsets: Int[torch.Tensor, " n_systems_plus_1"],
+) -> Callable[[Float[torch.Tensor, "n_rows n_rhs"]], Float[torch.Tensor, "..."]]:
+    """Solver of the systems whose rows are consecutive segments of ``A``.
+
+    System ``s`` has rows ``offsets[s]:offsets[s + 1]`` of ``A`` and ``B``,
+    any number of them (none gives zero). The solver returns the solutions,
+    ``(n_systems, d, n_rhs)``, of ``batched_lstsq`` of each system, for the
+    ``A`` for which :func:`_uses_normal_equations`: those of
+    :func:`_normal_equations_solver`, but for all sizes of systems at once.
+    Its moments are summed in float64 over each segment of rows, in their
+    order, so they may differ from the batched sums in the last bits of
+    float64, rarely enough to change a float32 solution.
+    """
+    if A.dtype in _HALF_DTYPES:  # the rank tests need float32 precision
+        solve = _segment_lstsq_solver(A.float(), offsets)
+        return lambda B: solve(B.float()).to(A.dtype)
+    d = A.shape[-1]
+    # The tolerance of each system for its own number of rows
+    eps = torch.finfo(A.dtype).eps
+    counts = offsets[1:] - offsets[:-1]
+    eigenvalue_tolerance = (eps * counts.clamp_min(d).double()) ** 2
+
+    def segment_sums(x: torch.Tensor) -> torch.Tensor:
+        return _SegmentSum.apply(x, offsets)
+
+    # Products of float32 entries are exact in float64: one float64 column of A
+    # at a time is cast, and the other promoted in the product
+    moments = {}
+    for i in range(d):
+        a_i = A[:, i].double()
+        for j in range(i, d):
+            moments[i, j] = segment_sums(a_i * A[:, j])
+    del a_i
+    solve_moments = _moments_solver(moments, eigenvalue_tolerance)
+
+    # Plain annotations: jaxtyping ones would be built again on every call
+    def solve(B: torch.Tensor) -> torch.Tensor:
+        """Solutions ``(n_systems, d, n_rhs)`` for ``B`` of shape ``(n_rows, n_rhs)``."""
+        # B is promoted to float64 in the products, as A^T B.double()
+        rhs = [segment_sums(A[:, i, None].double() * B) for i in range(d)]
+        return solve_moments(rhs).to(A.dtype)
+
+    return solve
+
+
+class _SegmentSum(torch.autograd.Function):
+    """Sums of the rows of ``x`` over the segments given by ``offsets``.
+
+    ``torch.segment_reduce``, which sums each segment in order (unlike the
+    atomics of ``index_add_``, so the same on every run), with a backward that
+    is itself differentiable, for second derivatives.
+    """
+
+    @staticmethod
+    def forward(x: torch.Tensor, offsets: torch.Tensor) -> torch.Tensor:
+        # Rows of one entry would go to CUB's segmented reduction, one thread
+        # block per segment: 15 times slower for segments of 10 to 20 rows
+        rows = x.reshape(x.shape[0], x.shape[1:].numel())
+        sums = torch.segment_reduce(rows, "sum", offsets=offsets, unsafe=True)
+        return sums.view(offsets.shape[0] - 1, *x.shape[1:])
+
+    @staticmethod
+    def setup_context(ctx, inputs, output) -> None:
+        x, offsets = inputs
+        ctx.save_for_backward(offsets)
+        ctx.n_rows = x.shape[0]
+
+    @staticmethod
+    def backward(ctx, grad: torch.Tensor) -> tuple[torch.Tensor, None]:
+        (offsets,) = ctx.saved_tensors
+        counts = offsets[1:] - offsets[:-1]
+        return grad.repeat_interleave(counts, dim=0, output_size=ctx.n_rows), None
+
+
 def _normal_equations_lstsq(
     A: Float[torch.Tensor, "... k d"],
     B: Float[torch.Tensor, "... k n_rhs"],
@@ -539,10 +621,44 @@ def _normal_equations_solver(
         rhs = [(a[i].unsqueeze(-1) * B).sum(-2) for i in range(d)]  # each (..., n_rhs)
     del a, B  # the float64 copies
 
+    solve_moments = _moments_solver(m, eigenvalue_tolerance)
+
+    # Plain annotations: jaxtyping ones would be built again on every call
+    def solve(B: torch.Tensor) -> torch.Tensor:
+        """Solution ``(..., d, n_rhs)`` for ``B`` of shape ``(..., k, n_rhs)``."""
+        B = B.double()
+        # One float64 column of A at a time: at most one copy is alive
+        rhs = [(A[..., i].double().unsqueeze(-1) * B).sum(-2) for i in range(d)]
+        del B  # the float64 copy
+        return solve_moments(rhs).to(A.dtype)
+
+    if rhs is None:
+        return None, solve
+    return solve_moments(rhs).to(A.dtype), solve
+
+
+def _moments_solver(
+    moments: dict[tuple[int, int], torch.Tensor],
+    eigenvalue_tolerance: float | torch.Tensor,
+) -> Callable[[list[torch.Tensor]], torch.Tensor]:
+    """Closed-form solver of the normal equations ``M X = A^T B`` of
+    :func:`_normal_equations_solver`, from their float64 moments.
+
+    ``moments`` holds the upper entries ``(i, j)``, ``i <= j < d``, of ``M``,
+    each of shape ``(...)``; ``eigenvalue_tolerance`` is a float or a tensor
+    that broadcasts against them. The solver takes the ``d`` rows of ``A^T B``,
+    each ``(..., n_rhs)``, and returns ``X``, ``(..., d, n_rhs)``, in float64.
+    Both empty the containers they are given, so that their entries are freed
+    as soon as they are used.
+    """
+    d = max(j for _, j in moments) + 1
+    m = moments
+
     ### Divide M by its trace, the sum of its eigenvalues
     trace = sum(m[i, i] for i in range(d))  # (...)
     trace = torch.where(trace == 0, 1.0, trace)  # A = 0; keeps NaN and inf
     m = {key: value / trace for key, value in m.items()}
+    moments.clear()  # the caller's dict: frees the unnormalized entries
 
     def times(
         symmetric: dict[tuple[int, int], torch.Tensor], v: list[torch.Tensor]
@@ -608,6 +724,7 @@ def _normal_equations_solver(
             Sg_qq = torch.where(full_rank, S_rr / det_S, S_qq / trace_S2)
             Sg_rr = torch.where(full_rank, S_qq / det_S, S_rr / trace_S2)
             Sg_qr = torch.where(full_rank, -S_qr / det_S, S_qr / trace_S2)
+            del trace_S, det_S, trace_S2  # each intermediate is freed once used
             # A generalized inverse G of M by block elimination: M G M = M
             h_q = (Sg_qq * b_q + Sg_qr * b_r) / pivot
             h_r = (Sg_qr * b_q + Sg_rr * b_r) / pivot
@@ -619,6 +736,7 @@ def _normal_equations_solver(
                 (1, 2): Sg_qr,
                 (2, 2): Sg_rr,
             }
+            del h_q, h_r
 
             # At rank 2 the pseudo-inverse is P G P, with P = I - n n^T the
             # projector onto the range of M. Its null vector n solves S (s_q, s_r)
@@ -627,11 +745,13 @@ def _normal_equations_solver(
             s_q = torch.where(larger_rr, S_rr, -S_qr)
             s_r = torch.where(larger_rr, -S_qr, S_qq)
             s_p = -(b_q * s_q + b_r * s_r) / pivot
+            del pivot, b_q, b_r, S_qq, S_rr, S_qr
             # Guarded before the square root, whose gradient at 0 is infinite
             null_norm2 = s_p.square() + s_q.square() + s_r.square()
             null_norm = torch.where(null_norm2 > 0, null_norm2, 1.0).sqrt()
             # n = 0 at full rank, where P G P = G
             n = [torch.where(full_rank, 0.0, x / null_norm) for x in (s_p, s_q, s_r)]
+            del s_p, s_q, s_r, null_norm2, null_norm
             Gn = times(G, n)
             nGn = sum(n_i * g_i for n_i, g_i in zip(n, Gn))
             PGP = {
@@ -639,6 +759,7 @@ def _normal_equations_solver(
                 for i in range(3)
                 for j in range(i, 3)
             }
+            del G, n, Gn, nGn
 
             # Back to the original order (p, q, r = 0, 1, 2 / 1, 2, 0 / 2, 0, 1),
             # and M itself at rank 1
@@ -650,9 +771,10 @@ def _normal_equations_solver(
                 (1, 2): pick(PGP[1, 2], PGP[0, 1], PGP[0, 2]),
                 (2, 2): pick(PGP[2, 2], PGP[1, 1], PGP[0, 0]),
             }
+            del PGP
             pseudo_inverse = {
-                key: torch.where(rank_2, value, m[key])
-                for key, value in unpermuted.items()
+                key: torch.where(rank_2, unpermuted.pop(key), m[key])
+                for key in list(unpermuted)
             }
         return pseudo_inverse
 
@@ -660,22 +782,14 @@ def _normal_equations_solver(
     del m
 
     # Plain annotations: jaxtyping ones would be built again on every call
-    def solve(B: torch.Tensor) -> torch.Tensor:
-        """Solution ``(..., d, n_rhs)`` for ``B`` of shape ``(..., k, n_rhs)``."""
-        B = B.double()
-        # One float64 column of A at a time: at most one copy is alive
-        rhs = [(A[..., i].double().unsqueeze(-1) * B).sum(-2) for i in range(d)]
-        del B  # the float64 copy
+    def solve(rhs: list[torch.Tensor]) -> torch.Tensor:
+        """Solution ``(..., d, n_rhs)`` for the rows ``rhs`` of ``A^T B``."""
         X = times(pseudo_inverse, rhs)
-        del rhs
+        rhs.clear()  # the caller's list: frees its entries
         X = torch.stack(X, dim=-2)  # frees its rows
-        return (X / trace[..., None, None]).to(A.dtype)
+        return X / trace[..., None, None]
 
-    if rhs is None:
-        return None, solve
-    X = times(pseudo_inverse, rhs)
-    del rhs
-    return (torch.stack(X, dim=-2) / trace[..., None, None]).to(A.dtype), solve
+    return solve
 
 
 def _solve_upper_triangular(

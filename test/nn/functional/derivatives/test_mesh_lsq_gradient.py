@@ -599,6 +599,7 @@ def test_mesh_lsq_gradient_torch_rank_deficient_stencils(
     )
     output = _torch_impl.mesh_lsq_gradient_torch(points, values, offsets, indices)
     with monkeypatch.context() as patch:
+        patch.setattr(_torch_impl, "_uses_normal_equations", lambda *_: False)
         patch.setattr(_torch_impl, "batched_lstsq", _lstsq_reference)
         reference = _torch_impl.mesh_lsq_gradient_torch(
             points, values, offsets, indices
@@ -676,3 +677,42 @@ def test_lstsq_solver_matches_batched_lstsq(
     for n_rhs in (1, 3, 1, 4):
         B = torch.randn(300, 8, n_rhs, generator=generator).to(device, dtype)
         assert torch.equal(solve(B), batched_lstsq(A, B))
+
+
+@pytest.mark.parametrize(
+    "dtype, n_unknowns",
+    [(torch.float32, 1), (torch.float32, 2), (torch.float32, 3), (torch.bfloat16, 3)],
+)
+def test_segment_lstsq_solver_matches_batched_lstsq(
+    device: str, dtype: torch.dtype, n_unknowns: int
+):
+    """Systems of 0 to 9 rows, assembled from consecutive rows and solved at
+    once, get the solutions of ``batched_lstsq`` of the systems of each size,
+    also when rank-deficient or zero. (Their float64 moments are summed in
+    another order, which rarely changes a float32 solution, and not here.)"""
+    from physicsnemo.utils._small_linalg import _segment_lstsq_solver, batched_lstsq
+
+    generator = torch.Generator().manual_seed(0)
+    counts = torch.arange(10).repeat_interleave(30)
+    counts = counts[torch.randperm(len(counts), generator=generator)]
+    offsets = torch.cat([torch.zeros(1, dtype=torch.int64), counts.cumsum(0)])
+    A = torch.randn(int(offsets[-1]), n_unknowns, generator=generator)
+    if n_unknowns > 1:
+        A[: len(A) // 3, -1] = A[: len(A) // 3, 0]  # rank-deficient
+    A[len(A) // 3 : len(A) // 2] = 0.0
+    A = A.to(device=device, dtype=dtype)
+    counts, offsets = counts.to(device), offsets.to(device)
+    solve = _segment_lstsq_solver(A, offsets)
+
+    for n_rhs in (1, 3):
+        B = torch.randn(len(A), n_rhs, generator=generator).to(device, dtype)
+        X = solve(B)
+        assert X.shape == (len(counts), n_unknowns, n_rhs)
+        assert (X[counts == 0] == 0).all()
+        for k in range(1, 10):
+            systems = (counts == k).nonzero()[:, 0]
+            rows = (offsets[systems, None] + torch.arange(k, device=device)).flatten()
+            expected = batched_lstsq(
+                A[rows].view(-1, k, n_unknowns), B[rows].view(-1, k, n_rhs)
+            )
+            assert torch.equal(X[systems], expected)
