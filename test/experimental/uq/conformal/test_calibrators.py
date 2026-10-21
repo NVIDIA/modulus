@@ -85,13 +85,8 @@ def test_cellwise_retains_contiguous_scores_without_changing_bits(dtype):
     assert torch.equal(calibrator.finalize().thresholds, expected_thresholds)
 
 
-def test_cellwise_requires_and_fingerprints_points_transactionally():
+def test_cellwise_fingerprints_points_transactionally():
     calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
-    with pytest.raises(TypeError, match="points"):
-        calibrator.update(torch.zeros(3), torch.zeros(3))
-    assert calibrator.n_cal == 0
-    assert calibrator._mesh_fingerprint is None
-
     points = torch.arange(3.0).reshape(3, 1)
     with pytest.raises(ValueError, match="leading entry per point"):
         calibrator.update(torch.zeros(2), torch.zeros(2), points=points)
@@ -108,6 +103,40 @@ def test_cellwise_requires_and_fingerprints_points_transactionally():
         with pytest.raises(ValueError, match="same mesh"):
             calibrator.update(torch.zeros(3), torch.zeros(3), points=changed)
     assert calibrator.n_cal == 2
+    with pytest.raises(TypeError, match="first calibration sample had points="):
+        calibrator.update(torch.zeros(3), torch.zeros(3))
+    assert calibrator.n_cal == 2
+
+
+def test_cellwise_without_points_calibrates_scalar_observables(tmp_path, device):
+    """Three scalar outputs (say drag, lift, moment) need no mesh."""
+    generator = torch.Generator(device=device).manual_seed(0)
+    calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.2)
+    for _ in range(20):
+        prediction = torch.randn(3, generator=generator, device=device)
+        noise = torch.tensor([0.1, 1.0, 10.0], device=device)
+        target = prediction + noise * torch.randn(3, generator=generator, device=device)
+        calibrator.update(prediction, target)
+    predictor = calibrator.finalize()
+    lo, hi = predictor.predict_interval(torch.zeros(3, device=device))
+    width = (hi - lo).cpu()
+    assert bool((width[1:] > width[:-1]).all())  # one width per observable
+
+    predictor.save(tmp_path / "scalars.pt")
+    loaded = ConformalPredictor.load(tmp_path / "scalars.pt", map_location=device)
+    torch.testing.assert_close(
+        loaded.predict_interval(torch.zeros(3, device=device))[0], lo
+    )
+
+    with pytest.raises(TypeError, match="calibrated without points="):
+        predictor.predict_interval(
+            torch.zeros(3, device=device), points=torch.zeros(3, 1)
+        )
+    with pytest.raises(ValueError, match="shape"):
+        predictor.predict_interval(torch.zeros(4, device=device))
+    with pytest.raises(TypeError, match="did not have points="):
+        calibrator.update(torch.zeros(3), torch.zeros(3), points=torch.zeros(3, 1))
+    assert calibrator.n_cal == 20
 
 
 def test_cellwise_rejects_output_layout_drift_on_the_same_mesh():

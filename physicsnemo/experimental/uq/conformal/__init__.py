@@ -26,8 +26,10 @@ Pick the calibrator by the guarantee you need:
 
 - :class:`~physicsnemo.experimental.uq.conformal.CellwiseCalibrator`: each
   output element is covered with probability at least :math:`1 - \alpha`.
-  Every sample must use the same mesh, with the same points in the same
-  order, and you pass the coordinates as ``points=`` on every call.
+  Every sample must have the same output layout: the same mesh, with the
+  same points in the same order, or a fixed set of outputs such as scalar
+  observables. For a mesh, pass the coordinates as ``points=`` on every
+  call to check it.
 - :class:`~physicsnemo.experimental.uq.conformal.FunctionalBandCalibrator`:
   a functional band contains every point of a field at once with
   probability at least :math:`1 - \alpha`. Point sets may differ between
