@@ -46,7 +46,7 @@ from physicsnemo.mesh.calculus import (
     integrate_samples,
 )
 from physicsnemo.mesh.geometry._cell_areas import compute_cell_areas
-from physicsnemo.mesh.geometry._cell_normals import compute_cell_normals
+from physicsnemo.mesh.geometry._cell_normals import _compute_cell_normals_from_points
 
 ### Imported at run time, not only for type checking: `Mesh.load` must find
 ### this class to rebuild the adjacencies cached in a saved mesh.
@@ -66,6 +66,7 @@ from physicsnemo.mesh.transformations.geometric import (
     transform,
     translate,
 )
+from physicsnemo.mesh.utilities._gather import gather_rows
 from physicsnemo.mesh.utilities._padding import _pad_by_tiling_last, _pad_with_value
 from physicsnemo.mesh.utilities._scatter_ops import scatter_aggregate
 from physicsnemo.mesh.utilities.mesh_repr import format_mesh_repr
@@ -147,6 +148,29 @@ def _set_subclass_fields(obj: Any, base: type, fields: dict[str, Any]) -> None:
                 f"argument {name!r}"
             )
         setattr(obj, name, value)
+
+
+def _conflicting_keys(src: TensorDict, dst: TensorDict) -> set[str | tuple[str, ...]]:
+    """Return the keys of ``src`` that would overwrite data in ``dst``.
+
+    A key conflicts if a leaf key of ``dst`` equals it or is a prefix of it (a
+    leaf or group, even an empty one, replacing a leaf), or if it is a leaf
+    that is a prefix of a leaf key of ``dst`` (a leaf replacing a group).
+    Groups of the same name with disjoint leaves merge.
+    """
+
+    def as_tuple(key: str | tuple[str, ...]) -> tuple[str, ...]:
+        return key if isinstance(key, tuple) else (key,)
+
+    dst_keys = [as_tuple(k) for k in dst.keys(include_nested=True, leaves_only=True)]
+    src_leaves = {as_tuple(k) for k in src.keys(include_nested=True, leaves_only=True)}
+    conflicts = set()
+    for key in src.keys(include_nested=True):
+        k = as_tuple(key)
+        is_leaf = k in src_leaves
+        if any(k[: len(d)] == d or (is_leaf and d[: len(k)] == k) for d in dst_keys):
+            conflicts.add(key)
+    return conflicts
 
 
 def _requested_dtype(
@@ -508,6 +532,17 @@ class Mesh(
                 if value.batch_size != batch_size:
                     value.batch_size = batch_size
                 continue
+            if value is None:
+                # An empty container needs no validation; the checked constructor
+                # dominates the construction time of small meshes
+                setattr(
+                    self,
+                    field_name,
+                    TensorDict._new_unsafe(
+                        batch_size=batch_size, device=self.points.device
+                    ),
+                )
+                continue
             setattr(
                 self,
                 field_name,
@@ -521,12 +556,16 @@ class Mesh(
         ### _cache: default empty cache structure
         if self._cache is None:
             device = self.points.device
-            self._cache = TensorDict(
+            empty = TensorDict._new_unsafe  # as for the empty data containers above
+            self._cache = empty(
                 {
-                    "cell": TensorDict({}, batch_size=[self.n_cells], device=device),
-                    "point": TensorDict({}, batch_size=[self.n_points], device=device),
-                    "topology": TensorDict({}, device=device),
+                    "cell": empty(batch_size=torch.Size([self.n_cells]), device=device),
+                    "point": empty(
+                        batch_size=torch.Size([self.n_points]), device=device
+                    ),
+                    "topology": empty(batch_size=torch.Size([]), device=device),
                 },
+                batch_size=torch.Size([]),
                 device=device,
             )
 
@@ -975,7 +1014,7 @@ class Mesh(
         """
         cached = self._cache.get(("cell", "centroids"), None)
         if cached is None:
-            cached = self.points[self.cells].mean(dim=1)
+            cached = gather_rows(self.points, self.cells).mean(dim=1)
             self._cache["cell", "centroids"] = cached
         return cached
 
@@ -1004,9 +1043,9 @@ class Mesh(
         """
         cached = self._cache.get(("cell", "areas"), None)
         if cached is None:
-            relative_vectors = (
-                self.points[self.cells[:, 1:]] - self.points[self.cells[:, :1]]
-            )
+            cell_vertices = gather_rows(self.points, self.cells)
+            relative_vectors = cell_vertices[:, 1:] - cell_vertices[:, :1]
+            del cell_vertices
             cached = compute_cell_areas(relative_vectors)
             self._cache["cell", "areas"] = cached
 
@@ -1044,10 +1083,7 @@ class Mesh(
                     f"Required: n_manifold_dims = n_spatial_dims - 1 (codimension-1).\n"
                     f"Current codimension: {self.codimension}"
                 )
-            rh_index = self.cells[:, 1:]
-            lh_index = self.cells[:, 0].unsqueeze(-1)
-            relative_vectors = self.points[rh_index] - self.points[lh_index]
-            cached = compute_cell_normals(relative_vectors)
+            cached = _compute_cell_normals_from_points(self.points, self.cells)
             self._cache["cell", "normals"] = cached
 
         return cached
@@ -1199,51 +1235,32 @@ class Mesh(
         ### Get cell normals (triggers computation if not cached)
         cell_normals = self.cell_normals  # (n_cells, n_spatial_dims)
 
-        ### Initialize accumulated normals for each point
-        accumulated_normals = torch.zeros(
-            (self.n_points, self.n_spatial_dims),
-            dtype=self.points.dtype,
-            device=self.points.device,
-        )
-
         n_vertices_per_cell = self.cells.shape[1]
-        point_indices = self.cells.flatten()
 
-        # Repeat cell normals for each vertex in the cell
-        cell_normals_repeated = cell_normals.unsqueeze(1).expand(
-            -1, n_vertices_per_cell, -1
-        )
-        cell_normals_flat = cell_normals_repeated.reshape(-1, self.n_spatial_dims)
-
-        ### Compute weights based on scheme
+        ### Weight each cell normal at each of its vertices: (n_cells, V or 1, d)
+        # Broadcast products: the (n_cells * V, d) source is materialized only
+        # once, for the scatter
         if weighting == "unweighted":
-            weights = torch.ones(
-                self.n_cells * n_vertices_per_cell,
-                dtype=self.points.dtype,
-                device=self.points.device,
-            )
+            normals_to_accumulate = cell_normals.unsqueeze(1)
 
         elif weighting == "area":
-            cell_areas = self.cell_areas
-            weights = cell_areas.unsqueeze(1).expand(-1, n_vertices_per_cell).flatten()
+            normals_to_accumulate = (
+                cell_normals.unsqueeze(1) * self.cell_areas[:, None, None]
+            )
 
         elif weighting in ("angle", "angle_area"):
             # Compute interior angles at each vertex of each cell
             # For a simplex, angle at vertex k is between edges to other vertices
             from physicsnemo.mesh.geometry._angles import compute_vertex_angles
 
-            vertex_angles = compute_vertex_angles(
-                self
-            )  # (n_cells, n_vertices_per_cell)
-            weights = vertex_angles.flatten()
+            weights = compute_vertex_angles(self)  # (n_cells, n_vertices_per_cell)
 
             if weighting == "angle_area":
                 # Multiply by cell area
-                cell_areas = self.cell_areas
-                area_weights = (
-                    cell_areas.unsqueeze(1).expand(-1, n_vertices_per_cell).flatten()
-                )
-                weights = weights * area_weights
+                weights = weights * self.cell_areas.unsqueeze(1)
+
+            normals_to_accumulate = cell_normals.unsqueeze(1) * weights.unsqueeze(-1)
+            del weights
 
         else:
             raise ValueError(
@@ -1251,17 +1268,23 @@ class Mesh(
                 f"'unweighted', 'area', 'angle', 'angle_area'."
             )
 
-        ### Apply weights and accumulate
-        normals_to_accumulate = cell_normals_flat * weights.unsqueeze(-1)
-
-        point_indices_expanded = point_indices.unsqueeze(-1).expand(
+        ### Accumulate at each point
+        accumulated_normals = torch.zeros(
+            (self.n_points, self.n_spatial_dims),
+            dtype=self.points.dtype,
+            device=self.points.device,
+        )
+        point_indices_expanded = self.cells.reshape(-1, 1).expand(
             -1, self.n_spatial_dims
         )
         accumulated_normals.scatter_add_(
             dim=0,
             index=point_indices_expanded,
-            src=normals_to_accumulate,
+            src=normals_to_accumulate.expand(-1, n_vertices_per_cell, -1).reshape(
+                -1, self.n_spatial_dims
+            ),
         )
+        del normals_to_accumulate
 
         ### Normalize to get unit normals
         return safe_normalize(accumulated_normals, dim=-1)
@@ -1516,7 +1539,11 @@ class Mesh(
         return cls(
             points=torch.cat([m.points for m in meshes], dim=0),
             cells=torch.cat(
-                [m.cells + offset for m, offset in zip(meshes, cell_index_offsets)],
+                [
+                    # The first mesh's offset is 0: cat its cells without a copy
+                    m.cells if i == 0 else m.cells + offset
+                    for i, (m, offset) in enumerate(zip(meshes, cell_index_offsets))
+                ],
                 dim=0,
             ),
             point_data=TensorDict.cat([m.point_data for m in meshes], dim=0),
@@ -1719,11 +1746,12 @@ class Mesh(
         Notes
         -----
         Slicing shares unsliced data with the source by reference rather than
-        copying: the returned mesh shares ``points``, ``point_data``, and
-        ``global_data`` with this mesh, and the no-op selections ``None`` /
-        ``Ellipsis`` return this mesh itself. Mutating any shared field on the
-        result therefore also mutates the source; clone first if you need an
-        independent copy.
+        copying: the returned mesh shares ``points`` and the field tensors of
+        ``point_data`` and ``global_data`` with this mesh (in new containers,
+        so adding or removing a field does not affect the source), and the
+        no-op selections ``None`` / ``Ellipsis`` return this mesh itself.
+        Mutating a shared tensor in place on the result therefore also mutates
+        the source; clone first if you need an independent copy.
 
         A one-dimensional CUDA boolean mask requires one host-device
         synchronization to determine the output cell count. Integer index
@@ -1773,9 +1801,10 @@ class Mesh(
         return Mesh(
             points=self.points,
             cells=self.cells[indices],
-            point_data=self.point_data,
+            # Shallow copies: shared field tensors, independent containers
+            point_data=self.point_data.copy(),
             cell_data=new_cell_data,
-            global_data=self.global_data,
+            global_data=self.global_data.copy(),
             _cache=new_cache,
         )
 
@@ -2171,12 +2200,15 @@ class Mesh(
         def _replacement(
             value: TensorDict | dict[str, torch.Tensor] | None,
             current: TensorDict,
-        ) -> TensorDict | dict[str, torch.Tensor]:
+        ) -> TensorDict:
             if value is None:
                 return current.copy()
             if isinstance(value, TensorDict):
                 return value.copy()
-            return value
+            # dict() unwraps mappings that TensorDict rejects, such as PyVista's
+            # DataSetAttributes, as the constructor does. A dict may hold the
+            # source's nested TensorDicts, so copy them too.
+            return TensorDict(dict(value)).copy()
 
         return replace(
             self,
@@ -2231,9 +2263,7 @@ class Mesh(
         # Effective measures are not interpolated; use lumped_point_measures.
         ### Check for key conflicts
         if not overwrite_keys:
-            src_keys = set(fields.keys(include_nested=True, leaves_only=True))
-            dst_keys = set(self.point_data.keys(include_nested=True, leaves_only=True))
-            conflicts = src_keys & dst_keys
+            conflicts = _conflicting_keys(fields, self.point_data)
             if conflicts:
                 raise ValueError(
                     f"Keys {conflicts} already exist in point_data. "
@@ -2241,9 +2271,10 @@ class Mesh(
                 )
 
         ### Convert each cell data field to point data via scatter aggregation
-        new_point_data = self.point_data.clone()
+        # A shallow copy: with_data shares the unchanged leaves anyway
+        new_point_data = self.point_data.copy()
 
-        # Get flat list of point indices and corresponding cell indices
+        # Get flat list of point indices
         # self.cells shape: (n_cells, n_vertices_per_cell)
         n_vertices_per_cell = self.cells.shape[1]
 
@@ -2251,20 +2282,35 @@ class Mesh(
         # Shape: (n_cells * n_vertices_per_cell,)
         point_indices = self.cells.flatten()
 
-        # Corresponding cell index for each point
-        # Shape: (n_cells * n_vertices_per_cell,)
-        cell_indices = torch.arange(
-            self.n_cells, device=self.points.device
-        ).repeat_interleave(n_vertices_per_cell)
+        # Number of cells using each point, counted once for every field
+        device = self.points.device
+        vertex_degree = torch.zeros(self.n_points, dtype=torch.int64, device=device)
+        vertex_degree.scatter_add_(
+            0,
+            point_indices,
+            torch.ones((), dtype=torch.int64, device=device).expand_as(point_indices),
+        )
+        # Points in no cell have zero sums, which divided by 1 stay the same zero
+        # that scatter_aggregate's epsilon-clamped count gives
+        vertex_degree = vertex_degree.clamp_(min=1)
 
-        converted = fields.apply(
-            lambda cell_values: scatter_aggregate(
-                src_data=cell_values[cell_indices],
+        def _mean_over_point_cells(cell_values: torch.Tensor) -> torch.Tensor:
+            """Average a single cell field over the cells around each point."""
+            # Same arithmetic as scatter_aggregate's unweighted mean, which would
+            # recount the vertex degree for every field
+            if not cell_values.is_floating_point() and not cell_values.is_complex():
+                cell_values = cell_values.to(torch.float64)
+            sums = scatter_aggregate(
+                # Each cell's value once per vertex, lined up with point_indices
+                src_data=cell_values.repeat_interleave(n_vertices_per_cell, dim=0),
                 src_to_dst_mapping=point_indices,
                 n_dst=self.n_points,
-                weights=None,
-                aggregation="mean",
-            ),
+                aggregation="sum",
+            )
+            return sums.div_(vertex_degree.view(-1, *([1] * (sums.ndim - 1))))
+
+        converted = fields.apply(
+            _mean_over_point_cells,
             batch_size=torch.Size([self.n_points]),
         )
         new_point_data.update(converted)
@@ -2313,9 +2359,7 @@ class Mesh(
         fields = self.point_data.exclude(EFFECTIVE_MEASURE_KEY)
         ### Check for key conflicts
         if not overwrite_keys:
-            src_keys = set(fields.keys(include_nested=True, leaves_only=True))
-            dst_keys = set(self.cell_data.keys(include_nested=True, leaves_only=True))
-            conflicts = src_keys & dst_keys
+            conflicts = _conflicting_keys(fields, self.cell_data)
             if conflicts:
                 raise ValueError(
                     f"Keys {conflicts} already exist in cell_data. "
@@ -2323,19 +2367,34 @@ class Mesh(
                 )
 
         ### Convert each point data field to cell data by averaging over cell vertices
-        new_cell_data = self.cell_data.clone()
+        # A shallow copy: with_data shares the unchanged leaves anyway
+        new_cell_data = self.cell_data.copy()
+        n_vertices_per_cell = self.cells.shape[1]
 
         def _mean_over_cell_vertices(point_values: torch.Tensor) -> torch.Tensor:
             """Average a single point field over the vertices of each cell."""
-            # Shape: (n_cells, n_vertices_per_cell, *data_shape)
-            cell_values = point_values[self.cells]
-            # Promote integer/bool fields to float first: torch.mean rejects
-            # integer dtypes, and a mean of integers is real-valued anyway.
-            # Casting after the gather rather than the point field before it
-            # keeps the gather on the narrow source dtype, which measures faster.
-            if not cell_values.is_floating_point() and not cell_values.is_complex():
-                cell_values = cell_values.to(torch.float64)
-            return cell_values.mean(dim=1)
+            # Promote integer/bool fields to float first: a mean of integers is
+            # real-valued, and an integer sum could overflow.
+            if not point_values.is_floating_point() and not point_values.is_complex():
+                point_values = point_values.to(torch.float64)
+            # Accumulate one vertex at a time over the static vertex count rather
+            # than gathering an (n_cells, n_vertices_per_cell, *data_shape)
+            # tensor. The sum runs in the order of mean(dim=1), which it matches
+            # bitwise on CPU. Like mean(dim=1), floats narrower than float32
+            # accumulate in float32 and round once at the end.
+            field_dtype = point_values.dtype
+            accumulate_dtype = (
+                torch.float32
+                if point_values.is_floating_point() and point_values.element_size() < 4
+                else field_dtype
+            )
+            # index_select rather than indexing: same values, but its backward is
+            # an index_add_ instead of CUDA's sort-based index_put_
+            cell_values = point_values.index_select(0, self.cells[:, 0])
+            cell_values = cell_values.to(accumulate_dtype)
+            for j in range(1, n_vertices_per_cell):
+                cell_values += point_values.index_select(0, self.cells[:, j])
+            return cell_values.div_(n_vertices_per_cell).to(field_dtype)
 
         converted = fields.apply(
             _mean_over_cell_vertices,

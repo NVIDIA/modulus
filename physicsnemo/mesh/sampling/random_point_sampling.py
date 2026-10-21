@@ -20,7 +20,6 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F
 from jaxtyping import Float, Int
 
 if TYPE_CHECKING:
@@ -137,7 +136,15 @@ def sample_random_points_on_cells(
     raw_barycentric_coords = distribution.sample((n_samples, mesh.n_manifold_dims + 1))
 
     ### Normalize so they sum to 1
-    barycentric_coords = F.normalize(raw_barycentric_coords, p=1, dim=-1)
+    # By the actual sums: small alpha gives rows with tiny sums, which an eps
+    # floor (as in F.normalize) would leave summing to less than 1, outside
+    # the cell. A row that is all zero falls back to the cell's centroid.
+    sums = raw_barycentric_coords.sum(dim=-1, keepdim=True)
+    barycentric_coords = torch.where(
+        sums > 0,
+        raw_barycentric_coords / torch.where(sums > 0, sums, 1.0),
+        1.0 / raw_barycentric_coords.shape[-1],
+    )
 
     ### Compute weighted combination of cell vertices
     # Get the vertices for the selected cells: (n_samples, n_manifold_dims + 1, n_spatial_dims)

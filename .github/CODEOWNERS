@@ -331,6 +331,7 @@ physicsnemo/experimental/
 physicsnemo/experimental/datapipes/healda/ @pzharrington
 physicsnemo/experimental/models/aerojepa/ @mnabian
 physicsnemo/experimental/models/globe/ @peterdsharpe
+physicsnemo/experimental/models/smart/ @mnabian
 physicsnemo/experimental/peft/ @mnabian
 
 # ==============================================================================
@@ -507,6 +508,7 @@ test/diffusion/ @CharlelieLrt
 test/utils/
 test/experimental/
 test/experimental/models/aerojepa/ @mnabian
+test/experimental/models/smart/ @mnabian
 test/experimental/peft/ @mnabian
 
 # ==============================================================================
