@@ -75,7 +75,8 @@ def load(
 
         if axis_norm > 1e-6:
             axis = axis / axis_norm
-            angle = torch.acos(torch.dot(z_axis, normal_t))
+            # atan2 stays accurate near +-z, where acos of a float32 cosine does not
+            angle = torch.atan2(axis_norm, torch.dot(z_axis, normal_t))
 
             # Rodrigues' rotation formula
             K = torch.tensor(
