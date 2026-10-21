@@ -80,7 +80,7 @@ your application needs and by whether every sample uses the same mesh.
    * - :class:`CellwiseCalibrator`
      - Each output element is covered with probability at least
        :math:`1 - \alpha`, one element at a time.
-     - Same mesh, same point order
+     - Same mesh and point order, or no mesh
      - A separate width per element
    * - :class:`FunctionalBandCalibrator`
      - A new field lies inside the band at *every* point with probability
@@ -97,9 +97,11 @@ For fields on meshes that change between samples, such as CFD results on
 different geometries, start with :class:`RiskControlCalibrator`. Use
 :class:`FunctionalBandCalibrator` when a single miss anywhere on the field
 matters, for example to bound the worst-case error over a surface. Use
-:class:`CellwiseCalibrator` when every sample shares one grid or mesh and
-you need an interval for each output element. It takes the mesh
-coordinates as ``points=`` on every call and rejects any other mesh.
+:class:`CellwiseCalibrator` when every sample has the same output layout
+and you need an interval for each output element. The layout can be one
+grid or mesh, or a fixed set of outputs such as drag, lift, and moment
+coefficients. For a mesh, pass the coordinates as ``points=`` on every call,
+and the calibrator and predictor reject any other mesh.
 
 
 Choosing a Score
