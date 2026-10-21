@@ -369,8 +369,8 @@ class _CustomDifficulty(AuxDifficulty):
     pass
 
 
-def test_only_shipped_exact_strategy_types_are_accepted():
-    with pytest.raises(TypeError, match="Subclasses are not supported"):
+def test_unregistered_strategy_subclasses_are_rejected():
+    with pytest.raises(TypeError, match="a subclass needs its own registration"):
         RiskControlCalibrator(_CustomScore(), alpha=0.5)
     with pytest.raises(TypeError, match="Subclasses are not supported"):
         RiskControlCalibrator(

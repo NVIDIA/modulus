@@ -38,7 +38,7 @@ band and risk-control calibrators.
 """
 
 import copy
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 import torch
 from jaxtyping import Float
@@ -49,30 +49,17 @@ from ._utils import cast_directed, check_real, clamp_min_floor, positive_finite_
 __all__ = [
     "AbsoluteErrorScore",
     "AuxDifficulty",
+    "NonconformityScore",
     "NormalizedErrorScore",
     "QuantileRegressionScore",
+    "check_score",
+    "register_score",
 ]
 
 
 def _coarsest_finfo(*tensors: Tensor) -> torch.finfo:
     """``finfo`` of the least precise floating dtype among the inputs."""
     return max((torch.finfo(t.dtype) for t in tensors), key=lambda fi: fi.eps)
-
-
-def _slack_threshold(
-    threshold: Tensor, *dtype_sources: Tensor, scale: Tensor | None = None
-) -> Tensor:
-    """Float64 threshold, inflated so rounding cannot exclude an admitted target.
-
-    ``scale`` multiplies the relative part only; the absolute ``tiny`` floor is
-    in output units and must not grow with it.
-    """
-    t = threshold.to(torch.float64)
-    fi = _coarsest_finfo(*dtype_sources)
-    grown = t + t.abs() * (4.0 * fi.eps)
-    if scale is not None:
-        grown = grown * scale
-    return grown + 4.0 * fi.tiny
 
 
 def _outward_interval(
@@ -98,20 +85,92 @@ def _require_aux(
         )
 
 
-class _NonconformityScore:
-    """Base class for the built-in scores.
+_CONFIG_TYPES = (bool, int, float, str)
+"""Types a score's ``config_fields`` may hold, so saved files load with ``weights_only``."""
 
-    ``aux_keys`` lists the aux entries a score reads; ``_scale_aux_keys`` lists
-    the ones it divides by. ``_kind`` is the saved name, ``_saved_kwargs`` maps
-    each saved constructor argument to its exact type, and ``_signed_threshold``
-    allows negative thresholds.
+_SCORE_REGISTRY: dict[str, type["NonconformityScore"]] = {}
+"""Registered score classes by saved name."""
+
+
+def _check_config_value(owner: str, name: str, value: object) -> None:
+    """Require a ``config_fields`` value to be a ``bool``, ``int``, ``float``, or ``str``."""
+    if type(value) not in _CONFIG_TYPES:
+        raise TypeError(
+            f"{owner}.{name} must be a bool, int, float, or str so a saved "
+            f"predictor can store it; got {type(value).__name__}."
+        )
+
+
+class NonconformityScore:
+    r"""Base class for nonconformity scores, built-in and custom.
+
+    A score measures how far each target falls from the prediction, and
+    turns a calibrated threshold back into an interval. To define your own,
+    subclass it, implement :meth:`score` and :meth:`bounds`, and register the
+    class with :func:`register_score` so calibrators accept it and saved
+    predictors can restore it.
+
+    The two methods must agree element by element: the targets with
+    ``score(prediction, target) <= t`` are exactly the values in
+    ``bounds(prediction, t)``, and that interval grows with ``t``. Do not
+    override :meth:`interval`; it calls :meth:`bounds` in float64 and rounds
+    the result outward so the guarantee holds in low precision.
+    :func:`check_score` tests the agreement on sample data, and calibrators
+    run the same test on their first sample.
+
+    Attributes
+    ----------
+    aux_keys : tuple[str, ...]
+        ``aux`` entries the score reads. Calibrators and predictors require
+        them and check that each is finite and has the prediction's shape.
+    config_fields : tuple[str, ...]
+        Attributes that configure the score, each also a constructor
+        argument of the same name. A saved predictor stores their values,
+        which must be ``bool``, ``int``, ``float``, or ``str``, and passes
+        them back to the constructor on load.
+    signed_threshold : bool
+        Whether scores can be negative, as for
+        :class:`~physicsnemo.experimental.uq.conformal.QuantileRegressionScore`.
+        Otherwise predictors reject negative thresholds.
+    scale_aux_keys : tuple[str, ...]
+        ``aux`` entries the score divides by, as ``NormalizedErrorScore``
+        divides by ``"sigma"``. Calibrators reject an
+        :class:`~physicsnemo.experimental.uq.conformal.AuxDifficulty` that
+        reads one of them, since the interval would scale by it twice.
+
+    Examples
+    --------
+    A band proportional to the prediction, :math:`|y - \hat y| / |\hat y|`:
+
+    >>> import torch
+    >>> from physicsnemo.experimental.uq.conformal import (
+    ...     NonconformityScore, check_score, register_score,
+    ... )
+    >>> @register_score("relative_error")
+    ... class RelativeErrorScore(NonconformityScore):
+    ...     config_fields = ("floor",)
+    ...
+    ...     def __init__(self, floor=1e-6):
+    ...         self.floor = floor
+    ...
+    ...     def score(self, prediction, target, *, aux=None):
+    ...         scale = prediction.abs().clamp_min(self.floor)
+    ...         return (target - prediction).abs() / scale
+    ...
+    ...     def bounds(self, prediction, threshold, *, aux=None):
+    ...         half = threshold * prediction.abs().clamp_min(self.floor)
+    ...         return prediction - half, prediction + half
+    >>> _ = torch.manual_seed(0)
+    >>> prediction = torch.rand(50, 2) + 1.0
+    >>> target = prediction * (1.0 + 0.1 * torch.randn(50, 2))
+    >>> check_score(RelativeErrorScore(), prediction, target)
     """
 
     aux_keys: tuple[str, ...] = ()
-    _scale_aux_keys: tuple[str, ...] = ()
+    config_fields: tuple[str, ...] = ()
+    signed_threshold: bool = False
+    scale_aux_keys: tuple[str, ...] = ()
     _kind: str
-    _saved_kwargs: dict[str, type] = {}
-    _signed_threshold: bool = False
 
     def score(
         self,
@@ -129,7 +188,7 @@ class _NonconformityScore:
         target : torch.Tensor
             Observed values, same shape as ``prediction``.
         aux : Mapping[str, torch.Tensor], optional
-            Extra model outputs the score needs, each a finite real
+            The entries named in ``aux_keys``, each a finite real
             floating-point tensor of the same shape as ``prediction``:
             ``{"sigma": ...}`` for ``NormalizedErrorScore`` and
             ``{"lo": ..., "hi": ...}`` for ``QuantileRegressionScore``.
@@ -145,6 +204,37 @@ class _NonconformityScore:
         ValueError
             If a required ``aux`` entry is missing.
         """
+        raise NotImplementedError(f"{type(self).__name__} must implement score().")
+
+    def bounds(
+        self,
+        prediction: Float[Tensor, "*dims"],
+        threshold: Float[Tensor, "*dims"] | Float[Tensor, ""],
+        *,
+        aux: Mapping[str, Tensor] | None = None,
+    ) -> tuple[Float[Tensor, "*dims"], Float[Tensor, "*dims"]]:
+        r"""Return the targets whose score is at most ``threshold``, as ``(lo, hi)``.
+
+        Implement this in a subclass; call :meth:`interval` to use it.
+
+        Parameters
+        ----------
+        prediction : torch.Tensor
+            Model output of shape :math:`(*\text{dims})`, in float64.
+        threshold : torch.Tensor
+            Threshold in float64, broadcastable against ``prediction``.
+        aux : Mapping[str, torch.Tensor], optional
+            The ``aux`` entries, in their original dtype. Repeat any
+            dtype-dependent step of :meth:`score`, such as a clamp, before
+            converting them to float64.
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor]
+            Lower and upper bounds, broadcastable to the shape of
+            ``prediction``.
+        """
+        raise NotImplementedError(f"{type(self).__name__} must implement bounds().")
 
     def interval(
         self,
@@ -181,9 +271,157 @@ class _NonconformityScore:
         ValueError
             If a required ``aux`` entry is missing.
         """
+        _require_aux(aux, self.aux_keys, type(self).__name__)
+        fi = _coarsest_finfo(*self._precision_inputs(prediction, aux))
+        # Grow the threshold so a score rounded down in a low-precision dtype
+        # still admits its own target.
+        t = threshold.to(torch.float64)
+        t = t + t.abs() * (4.0 * fi.eps)
+        lo, hi = self.bounds(prediction.to(torch.float64), t, aux=aux)
+        # The absolute floor is in output units, so bounds() must not scale it.
+        floor = 4.0 * fi.tiny
+        lo = (lo.to(torch.float64) - floor).expand(prediction.shape)
+        hi = (hi.to(torch.float64) + floor).expand(prediction.shape)
+        return _outward_interval(prediction, lo, hi)
+
+    def _precision_inputs(
+        self, prediction: Tensor, aux: Mapping[str, Tensor] | None
+    ) -> tuple[Tensor, ...]:
+        """Tensors whose dtypes limit how precisely :meth:`score` is computed."""
+        return (prediction, *(aux[key] for key in self.aux_keys))
 
 
-class AbsoluteErrorScore(_NonconformityScore):
+def register_score(name: str) -> Callable[[type], type]:
+    r"""Register a :class:`NonconformityScore` subclass under ``name``.
+
+    Calibrators and predictors accept only registered score classes, and a
+    saved predictor records the score by ``name``. To load that file in
+    another process, import the module that registers the class first.
+
+    Parameters
+    ----------
+    name : str
+        Name stored in saved predictors. It must be unique.
+
+    Returns
+    -------
+    Callable[[type], type]
+        A class decorator that registers the class and returns it unchanged.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is already registered to a different class.
+    TypeError
+        If ``name`` is not a non-empty string, the decorated object is not a
+        :class:`NonconformityScore` subclass, or its ``config_fields`` is not
+        a tuple of strings.
+
+    Examples
+    --------
+    See :class:`NonconformityScore`.
+    """
+    if not isinstance(name, str) or not name:
+        raise TypeError(f"Score name must be a non-empty string, got {name!r}.")
+
+    def decorator(cls: type) -> type:
+        if not (isinstance(cls, type) and issubclass(cls, NonconformityScore)):
+            raise TypeError(
+                f"@register_score({name!r}) needs a NonconformityScore subclass, "
+                f"got {cls!r}."
+            )
+        fields = cls.config_fields
+        if not isinstance(fields, tuple) or not all(isinstance(f, str) for f in fields):
+            raise TypeError(
+                f"{cls.__name__}.config_fields must be a tuple of attribute names."
+            )
+        existing = _SCORE_REGISTRY.get(name)
+        # Re-running a module (for example in a notebook) re-registers the
+        # same class under the same name.
+        if existing is not None and (existing.__module__, existing.__qualname__) != (
+            cls.__module__,
+            cls.__qualname__,
+        ):
+            raise ValueError(
+                f"Score name {name!r} is already registered to "
+                f"{existing.__module__}.{existing.__qualname__}."
+            )
+        cls._kind = name
+        _SCORE_REGISTRY[name] = cls
+        return cls
+
+    return decorator
+
+
+def _uncovered_count(
+    score: NonconformityScore,
+    prediction: Tensor,
+    target: Tensor,
+    aux: Mapping[str, Tensor] | None,
+) -> Tensor:
+    """Number of targets outside the interval built from their own scores."""
+    with torch.no_grad():
+        own = score.score(prediction, target, aux=aux)
+        lo, hi = score.interval(prediction, own, aux=aux)
+        return (~((lo <= target) & (target <= hi))).sum()
+
+
+def check_score(
+    score: NonconformityScore,
+    prediction: Float[Tensor, "*dims"],
+    target: Float[Tensor, "*dims"],
+    *,
+    aux: Mapping[str, Tensor] | None = None,
+) -> None:
+    r"""Check that a score's interval contains each target at its own score.
+
+    Uses each element's own score as its threshold, so every target must lie
+    inside the resulting interval. A failure means :meth:`~NonconformityScore.bounds`
+    does not invert :meth:`~NonconformityScore.score`, and intervals from
+    that score would not keep the coverage guarantee. Calibrators run this
+    check on their first sample; call it in your tests on representative
+    data, in each dtype you use.
+
+    Parameters
+    ----------
+    score : NonconformityScore
+        The score to check.
+    prediction : torch.Tensor
+        Model output of shape :math:`(*\text{dims})`.
+    target : torch.Tensor
+        Observed values, same shape as ``prediction``.
+    aux : Mapping[str, torch.Tensor], optional
+        The ``aux`` entries the score reads.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    ValueError
+        If any target lies outside the interval built from its own score.
+
+    Examples
+    --------
+    See :class:`NonconformityScore`.
+    """
+    uncovered = int(_uncovered_count(score, prediction, target, aux))
+    if uncovered:
+        raise ValueError(_inversion_message(score, uncovered, target.numel()))
+
+
+def _inversion_message(score: NonconformityScore, uncovered: int, total: int) -> str:
+    return (
+        f"{type(score).__name__}.bounds() does not invert score(): {uncovered} "
+        f"of {total} targets fall outside the interval built from their own "
+        "score. bounds() must return exactly the targets whose score is at most "
+        "the threshold."
+    )
+
+
+@register_score("absolute_error")
+class AbsoluteErrorScore(NonconformityScore):
     r"""Absolute error :math:`|y - \hat y|`, for models that output a point prediction.
 
     The simplest choice: it needs no ``aux`` inputs and no change to the
@@ -207,8 +445,6 @@ class AbsoluteErrorScore(_NonconformityScore):
     (torch.Size([50, 2]), True)
     """
 
-    _kind = "absolute_error"
-
     def score(
         self,
         prediction: Float[Tensor, "*dims"],
@@ -218,19 +454,18 @@ class AbsoluteErrorScore(_NonconformityScore):
     ) -> Float[Tensor, "*dims"]:
         return (target - prediction).abs()
 
-    def interval(
+    def bounds(
         self,
         prediction: Float[Tensor, "*dims"],
         threshold: Float[Tensor, "*dims"] | Float[Tensor, ""],
         *,
         aux: Mapping[str, Tensor] | None = None,
     ) -> tuple[Float[Tensor, "*dims"], Float[Tensor, "*dims"]]:
-        p = prediction.to(torch.float64)
-        t = _slack_threshold(threshold, prediction)
-        return _outward_interval(prediction, p - t, p + t)
+        return prediction - threshold, prediction + threshold
 
 
-class NormalizedErrorScore(_NonconformityScore):
+@register_score("normalized_error")
+class NormalizedErrorScore(NonconformityScore):
     r"""Error scaled by predicted spread, :math:`|y - \mu| / \max(\sigma, \epsilon)`.
 
     Use it when the model outputs a mean :math:`\mu` (passed as
@@ -276,9 +511,8 @@ class NormalizedErrorScore(_NonconformityScore):
     """
 
     aux_keys = ("sigma",)
-    _scale_aux_keys = ("sigma",)  # the residual is divided by sigma
-    _kind = "normalized_error"
-    _saved_kwargs = {"eps": float}
+    scale_aux_keys = ("sigma",)  # the residual is divided by sigma
+    config_fields = ("eps",)
 
     def __init__(self, eps: float = 1e-8) -> None:
         self.eps = positive_finite_float(eps, "eps")
@@ -298,23 +532,28 @@ class NormalizedErrorScore(_NonconformityScore):
         out_dtype = torch.result_type(prediction, target)
         return cast_directed(s64, out_dtype, up=True)
 
-    def interval(
+    def bounds(
         self,
         prediction: Float[Tensor, "*dims"],
         threshold: Float[Tensor, "*dims"] | Float[Tensor, ""],
         *,
         aux: Mapping[str, Tensor] | None = None,
     ) -> tuple[Float[Tensor, "*dims"], Float[Tensor, "*dims"]]:
-        _require_aux(aux, self.aux_keys, type(self).__name__)
         # Same clamp as score(), so the interval inverts the score.
         sigma = clamp_min_floor(aux["sigma"], self.eps).to(torch.float64)
-        p = prediction.to(torch.float64)
-        # Sigma converts to float64 without rounding, so it needs no slack.
-        half = _slack_threshold(threshold, prediction, scale=sigma)
-        return _outward_interval(prediction, p - half, p + half)
+        half = threshold * sigma
+        return prediction - half, prediction + half
+
+    def _precision_inputs(
+        self, prediction: Tensor, aux: Mapping[str, Tensor] | None
+    ) -> tuple[Tensor, ...]:
+        # score() divides in float64 and rounds up, and sigma converts to
+        # float64 exactly, so only the prediction dtype limits precision.
+        return (prediction,)
 
 
-class QuantileRegressionScore(_NonconformityScore):
+@register_score("quantile_regression")
+class QuantileRegressionScore(NonconformityScore):
     r"""Conformalized quantile regression (CQR) score, for models with quantile heads.
 
     Use it when the model outputs lower and upper quantile estimates
@@ -351,8 +590,7 @@ class QuantileRegressionScore(_NonconformityScore):
     """
 
     aux_keys = ("lo", "hi")
-    _kind = "quantile_regression"
-    _signed_threshold = True
+    signed_threshold = True
 
     def score(
         self,
@@ -364,28 +602,16 @@ class QuantileRegressionScore(_NonconformityScore):
         _require_aux(aux, self.aux_keys, type(self).__name__)
         return torch.maximum(aux["lo"] - target, target - aux["hi"])
 
-    def interval(
+    def bounds(
         self,
         prediction: Float[Tensor, "*dims"],
         threshold: Float[Tensor, "*dims"] | Float[Tensor, ""],
         *,
         aux: Mapping[str, Tensor] | None = None,
     ) -> tuple[Float[Tensor, "*dims"], Float[Tensor, "*dims"]]:
-        _require_aux(aux, self.aux_keys, type(self).__name__)
-        t = _slack_threshold(threshold, prediction, aux["lo"], aux["hi"])
-        lo64 = aux["lo"].to(torch.float64) - t
-        hi64 = aux["hi"].to(torch.float64) + t
-        return _outward_interval(prediction, lo64, hi64)
-
-
-_Score = AbsoluteErrorScore | NormalizedErrorScore | QuantileRegressionScore
-"""Built-in score types accepted by calibrators and predictors."""
-
-_SCORE_REGISTRY: dict[str, type[_NonconformityScore]] = {
-    cls._kind: cls
-    for cls in (AbsoluteErrorScore, NormalizedErrorScore, QuantileRegressionScore)
-}
-"""Serialization names of the built-in score types."""
+        lo = aux["lo"].to(torch.float64) - threshold
+        hi = aux["hi"].to(torch.float64) + threshold
+        return lo, hi
 
 
 class AuxDifficulty:
@@ -441,7 +667,7 @@ class AuxDifficulty:
     """
 
     _kind = "aux"
-    _saved_kwargs = {"key": str, "eps": float}
+    config_fields = ("key", "eps")
 
     def __init__(self, key: str = "sigma", eps: float = 1e-8) -> None:
         if not isinstance(key, str):
@@ -502,10 +728,10 @@ class AuxDifficulty:
 
 
 def _check_no_double_scale(
-    score: _NonconformityScore, difficulty: AuxDifficulty | None
+    score: NonconformityScore, difficulty: AuxDifficulty | None
 ) -> None:
     """Raise ``ValueError`` if ``difficulty`` reads a key the score divides by."""
-    if difficulty is not None and difficulty.key in score._scale_aux_keys:
+    if difficulty is not None and difficulty.key in score.scale_aux_keys:
         raise ValueError(
             f"{type(score).__name__} already divides by aux "
             f"'{difficulty.key}', so AuxDifficulty('{difficulty.key}') would "
@@ -521,17 +747,25 @@ _DIFFICULTY_REGISTRY: dict[str, type[AuxDifficulty]] = {
 
 
 def _strategy_kind(strategy: object, registry: Mapping[str, type]) -> str | None:
-    """Serialization name of a built-in strategy, or ``None`` for any other type."""
+    """Registered name of a strategy, or ``None`` if its exact type is not registered."""
     kind = getattr(type(strategy), "_kind", None)
     return kind if registry.get(kind) is type(strategy) else None
 
 
 def _snapshot_strategy(strategy: object, registry: Mapping[str, type], what: str):
-    """Deep-copy a built-in strategy; raise ``TypeError`` for any other type."""
+    """Deep-copy a registered strategy; raise ``TypeError`` for any other type."""
     if _strategy_kind(strategy, registry) is None:
         names = ", ".join(sorted(cls.__name__ for cls in registry.values()))
-        raise TypeError(
-            f"{what} must be one of: {names}; got {type(strategy).__name__}. "
-            "Subclasses are not supported."
+        hint = (
+            "Register a custom class with @register_score(name); a subclass "
+            "needs its own registration."
+            if registry is _SCORE_REGISTRY
+            else "Subclasses are not supported."
         )
+        raise TypeError(
+            f"{what} must be an instance of a registered class ({names}); got "
+            f"{type(strategy).__name__}. {hint}"
+        )
+    for name in type(strategy).config_fields:
+        _check_config_value(type(strategy).__name__, name, getattr(strategy, name))
     return copy.deepcopy(strategy)

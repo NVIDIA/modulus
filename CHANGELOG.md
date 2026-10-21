@@ -18,7 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for spatio-temporal fields with `CellwiseCalibrator`,
   `FunctionalBandCalibrator`, `RiskControlCalibrator`, `ConformalPredictor`,
   `CoverageAccumulator`, `AbsoluteErrorScore`, `NormalizedErrorScore`,
-  `QuantileRegressionScore`, and `AuxDifficulty`.
+  `QuantileRegressionScore`, and `AuxDifficulty`. Custom scores subclass
+  `NonconformityScore` and register with `register_score`; `check_score`
+  tests them.
 
 - Adds standalone FLARE++ attention and model APIs, with input-conditioned
   dynamic routing, plus a ``GALE_FPP`` backend for using the same mixer inside
