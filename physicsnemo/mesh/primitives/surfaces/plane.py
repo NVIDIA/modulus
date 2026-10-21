@@ -93,9 +93,12 @@ def load(
                 + (1 - torch.cos(angle)) * torch.mm(K, K)
             )
             points = torch.mm(points_flat, R.T)
-        else:
+        elif normal_t[2] < 0:
             # normal is -z: rotate 180 degrees about the x-axis
             points = points_flat * torch.tensor([1.0, -1.0, -1.0], device=device)
+        else:
+            # normal is +z to within rounding: no rotation
+            points = points_flat
     else:
         points = points_flat
 

@@ -108,7 +108,15 @@ class TestSurfacePrimitives:
         torch.testing.assert_close(mesh.cell_normals, expected)
 
     @pytest.mark.parametrize(
-        "normal", [(0.0, 0.0, 1.0), (0.0, 0.0, -1.0), (1.0, 0.0, 0.0), (0.0, 1.0, 1.0)]
+        "normal",
+        [
+            (0.0, 0.0, 1.0),
+            (0.0, 0.0, -1.0),
+            (1e-7, 0.0, 1.0),
+            (1e-7, 0.0, -1.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 1.0),
+        ],
     )
     def test_plane_normal(self, normal):
         """The cell normals of a plane match the requested normal."""
