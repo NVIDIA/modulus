@@ -33,7 +33,10 @@ point prediction,
 :class:`~physicsnemo.experimental.uq.conformal.NormalizedErrorScore` for a
 mean plus a standard deviation in ``aux["sigma"]``, and
 :class:`~physicsnemo.experimental.uq.conformal.QuantileRegressionScore` for
-quantile heads in ``aux["lo"]`` and ``aux["hi"]``.
+quantile heads in ``aux["lo"]`` and ``aux["hi"]``. For any other score,
+subclass :class:`~physicsnemo.experimental.uq.conformal.NonconformityScore`
+and register it with
+:func:`~physicsnemo.experimental.uq.conformal.register_score`.
 
 The calibrator accepts plain tensors or ``TensorDict`` containers of fields.
 
@@ -70,8 +73,11 @@ from .diagnostics import CoverageAccumulator
 from .predictors import ConformalPredictor
 from .scores import (
     AbsoluteErrorScore,
+    NonconformityScore,
     NormalizedErrorScore,
     QuantileRegressionScore,
+    check_score,
+    register_score,
 )
 
 __all__ = [
@@ -79,6 +85,9 @@ __all__ = [
     "CellwiseCalibrator",
     "ConformalPredictor",
     "CoverageAccumulator",
+    "NonconformityScore",
     "NormalizedErrorScore",
     "QuantileRegressionScore",
+    "check_score",
+    "register_score",
 ]

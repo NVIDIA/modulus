@@ -223,13 +223,14 @@ CORRUPTIONS = {
     "non_string_threshold_key": (_set_in("thresholds", 7, torch.tensor(1.0)), "keys must be strings"),
     "missing_difficulty": (_delete("difficulty"), "schema is invalid: missing"),
     "extra_top_level_key": (_set("duplicate_state", {}), "schema is invalid: unexpected"),
-    "unknown_score_kind": (_set_in("score", "kind", "bogus"), "Unknown built-in score kind"),
+    "unknown_score_kind": (_set_in("score", "kind", "bogus"), "Unknown score kind"),
     "extra_score_key": (_set_in("score", "class", "AbsoluteErrorScore"), "score spec schema is invalid"),
     "non_none_difficulty": (_set("difficulty", {"kind": "aux", "kwargs": {"key": "s", "eps": 1e-8}}), "difficulty must be None"),
     "non_json_provenance": (_set("provenance", {"tags": ("x",)}), "strict-JSON"),
-    # Strategy kwargs: exact key sets and exact wire types.
+    # Strategy kwargs: exact key sets, primitive wire types, and exact round trips.
     "normalized_missing_key": (_set_in("score", "kwargs", {}), "kwargs schema is invalid", "normalized"),
-    "normalized_string_eps": (_set_in("score", "kwargs", {"eps": "0.1"}), "exact type", "normalized"),
+    "normalized_list_eps": (_set_in("score", "kwargs", {"eps": [0.1]}), "must be a bool, int, float, or str", "normalized"),
+    "normalized_string_eps": (_set_in("score", "kwargs", {"eps": "0.1"}), "constructor stores", "normalized"),
     # Wire-valid (exact float) but semantically invalid eps is still rejected at load.
     "normalized_negative_eps": (_set_in("score", "kwargs", {"eps": -1.0}), _CTOR, "normalized"),
     # Cellwise artifacts need a well-formed mesh fingerprint.

@@ -259,8 +259,8 @@ class _CustomScore(AbsoluteErrorScore):
     pass
 
 
-def test_only_shipped_exact_strategy_types_are_accepted():
-    with pytest.raises(TypeError, match="Subclasses are not supported"):
+def test_unregistered_score_subclass_is_rejected():
+    with pytest.raises(TypeError, match="a subclass needs its own registration"):
         CellwiseCalibrator(_CustomScore(), alpha=0.5)
     # Every shipped score remains constructible.
     CellwiseCalibrator(NormalizedErrorScore(), alpha=0.5)

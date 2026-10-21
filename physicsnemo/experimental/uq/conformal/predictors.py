@@ -47,7 +47,7 @@ from ._utils import (
 )
 from .artifacts import _parse_artifact, _save_artifact
 from .diagnostics import CoverageAccumulator
-from .scores import _SCORE_REGISTRY, _NonconformityScore, _Score, _snapshot_strategy
+from .scores import _SCORE_REGISTRY, NonconformityScore, _snapshot_strategy
 
 __all__ = ["ConformalPredictor"]
 
@@ -66,17 +66,17 @@ def _validate_mesh_fingerprint(value: object) -> str:
 
 def _validate_thresholds(
     thresholds: Tensor | TensorDict,
-    score_type: type[_NonconformityScore],
+    score_type: type[NonconformityScore],
 ) -> dict[str, Tensor]:
     """Check thresholds against the score, and return detached copies."""
     out: dict[str, Tensor] = {}
     for key, value in field_items(thresholds):
         check_real(key, "threshold", value)
-        if not score_type._signed_threshold and bool((value < 0).any()):
+        if not score_type.signed_threshold and bool((value < 0).any()):
             raise ValueError(
                 f"{_field_label(key)}: negative threshold, but "
-                f"{score_type.__name__} scores are never "
-                "negative. Only QuantileRegressionScore allows negative thresholds."
+                f"{score_type.__name__} scores are never negative "
+                "(signed_threshold is False)."
             )
         out[key] = value.detach().clone()
     return out
@@ -100,8 +100,9 @@ class ConformalPredictor:
     tier : {"cellwise"}
         Calibrator that produced ``thresholds``: ``"cellwise"`` for
         :class:`~physicsnemo.experimental.uq.conformal.CellwiseCalibrator`.
-    score : AbsoluteErrorScore | NormalizedErrorScore | QuantileRegressionScore
-        Score used during calibration. The predictor keeps its own copy, so
+    score : NonconformityScore
+        Score used during calibration: a built-in score or a registered
+        custom one. The predictor keeps its own copy, so
         later changes to ``score`` have no effect.
     alpha : float
         Target miscoverage level in :math:`(0, 1)`.
@@ -156,7 +157,7 @@ class ConformalPredictor:
         self,
         *,
         tier: Tier,
-        score: _Score,
+        score: NonconformityScore,
         alpha: float,
         n_cal: int,
         thresholds: Float[Tensor, "*dims"] | TensorDict,
@@ -182,7 +183,7 @@ class ConformalPredictor:
         self,
         *,
         tier: Tier,
-        score: _Score,
+        score: NonconformityScore,
         alpha: float,
         n_cal: int,
         thresholds: Tensor | TensorDict,
@@ -233,7 +234,7 @@ class ConformalPredictor:
         return self._n_cal
 
     @property
-    def score(self) -> _NonconformityScore:
+    def score(self) -> NonconformityScore:
         r"""A copy of the calibration score; editing it has no effect here."""
         return copy.deepcopy(self._score)
 

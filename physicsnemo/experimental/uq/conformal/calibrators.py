@@ -64,7 +64,13 @@ from ._utils import (
     validate_alpha,
 )
 from .predictors import ConformalPredictor
-from .scores import _SCORE_REGISTRY, _NonconformityScore, _Score, _snapshot_strategy
+from .scores import (
+    _SCORE_REGISTRY,
+    NonconformityScore,
+    _inversion_message,
+    _snapshot_strategy,
+    _uncovered_count,
+)
 
 __all__ = ["CellwiseCalibrator"]
 
@@ -77,7 +83,7 @@ class _SplitCalibratorBase:
 
     def __init__(
         self,
-        score: _Score,
+        score: NonconformityScore,
         alpha: float,
         *,
         keys: Sequence[str] | None = None,
@@ -91,7 +97,7 @@ class _SplitCalibratorBase:
         self._scores: dict[str, list[Tensor]] = {}
 
     @property
-    def score(self) -> _NonconformityScore:
+    def score(self) -> NonconformityScore:
         r"""Copy of the score set at construction; editing it has no effect."""
         return copy.deepcopy(self._score)
 
@@ -173,11 +179,30 @@ class _SplitCalibratorBase:
             staged: dict[str, object] = {}
             for key, prediction_field, target_field, aux_field in fields:
                 check_point_alignment(key, prediction_field, points, "prediction")
+                if self._n == 0:
+                    self._check_score_inverts(
+                        key, prediction_field, target_field, aux_field
+                    )
                 staged[key] = stage(key, prediction_field, target_field, aux_field)
             self._tensor_mode, self._schema = _tensor_mode, schema
             for key, record in staged.items():
                 self._scores.setdefault(key, []).append(record)
             self._n += 1
+
+    def _check_score_inverts(
+        self,
+        key: str,
+        prediction: Tensor,
+        target: Tensor,
+        aux: Mapping[str, Tensor] | None,
+    ) -> None:
+        """Reject a score whose ``bounds()`` does not invert ``score()`` on this sample."""
+        uncovered = int(_uncovered_count(self._score, prediction, target, aux))
+        if uncovered:
+            raise ValueError(
+                f"{_field_label(key)}: "
+                + _inversion_message(self._score, uncovered, target.numel())
+            )
 
     def _require_finalizable(self) -> None:
         if self._n == 0:
@@ -223,11 +248,13 @@ class CellwiseCalibrator(_SplitCalibratorBase):
 
     Parameters
     ----------
-    score : AbsoluteErrorScore | NormalizedErrorScore | QuantileRegressionScore
+    score : NonconformityScore
         Defines the interval: ``AbsoluteErrorScore`` for a fixed-width band
         around the prediction, ``NormalizedErrorScore`` for a band scaled by
         ``aux["sigma"]``, ``QuantileRegressionScore`` to adjust the model's
-        own ``aux["lo"]`` and ``aux["hi"]`` bounds. The calibrator keeps a
+        own ``aux["lo"]`` and ``aux["hi"]`` bounds, or a custom score
+        registered with
+        :func:`~physicsnemo.experimental.uq.conformal.register_score`. The calibrator keeps a
         copy, so later edits to ``score`` have no effect.
     alpha : float
         Target miscoverage level in :math:`(0, 1)`; ``alpha=0.1`` means
@@ -268,7 +295,7 @@ class CellwiseCalibrator(_SplitCalibratorBase):
 
     def __init__(
         self,
-        score: _Score,
+        score: NonconformityScore,
         alpha: float,
         *,
         keys: Sequence[str] | None = None,
