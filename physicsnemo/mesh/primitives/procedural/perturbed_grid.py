@@ -41,7 +41,9 @@ def load(
     n_y : int
         Number of points in y-direction.
     perturbation_scale : float
-        Amount of random perturbation.
+        Standard deviation of the random perturbation of interior points, as a
+        fraction of the grid spacing. Values above about 0.1 can fold (invert)
+        cells.
     seed : int
         Random seed for reproducibility.
     device : str
@@ -76,7 +78,10 @@ def load(
         | (torch.abs(y_coords - 1.0) < 1e-6)
     )
 
-    # Generate perturbation
+    # Generate perturbation, relative to the grid spacing in each direction
+    spacing = torch.tensor(
+        [1.0 / (n_x - 1), 1.0 / (n_y - 1)], dtype=mesh.points.dtype, device=device
+    )
     perturbation = (
         torch.randn(
             mesh.points.shape,
@@ -85,6 +90,7 @@ def load(
             generator=generator,
         )
         * perturbation_scale
+        * spacing
     )
 
     # Zero out perturbation for boundary points
