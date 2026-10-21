@@ -39,8 +39,11 @@ point prediction,
 :class:`~physicsnemo.experimental.uq.conformal.NormalizedErrorScore` for a
 mean plus a standard deviation in ``aux["sigma"]``, and
 :class:`~physicsnemo.experimental.uq.conformal.QuantileRegressionScore` for
-quantile heads in ``aux["lo"]`` and ``aux["hi"]``. The functional band
-calibrator also accepts an
+quantile heads in ``aux["lo"]`` and ``aux["hi"]``. For any other score,
+subclass :class:`~physicsnemo.experimental.uq.conformal.NonconformityScore`
+and register it with
+:func:`~physicsnemo.experimental.uq.conformal.register_score`. The
+functional band calibrator also accepts an
 :class:`~physicsnemo.experimental.uq.conformal.AuxDifficulty` to widen the
 band where a per-point uncertainty estimate is large.
 
@@ -83,8 +86,11 @@ from .predictors import ConformalPredictor
 from .scores import (
     AbsoluteErrorScore,
     AuxDifficulty,
+    NonconformityScore,
     NormalizedErrorScore,
     QuantileRegressionScore,
+    check_score,
+    register_score,
 )
 
 __all__ = [
@@ -94,6 +100,9 @@ __all__ = [
     "ConformalPredictor",
     "CoverageAccumulator",
     "FunctionalBandCalibrator",
+    "NonconformityScore",
     "NormalizedErrorScore",
     "QuantileRegressionScore",
+    "check_score",
+    "register_score",
 ]

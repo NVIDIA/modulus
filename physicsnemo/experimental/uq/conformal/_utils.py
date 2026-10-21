@@ -39,7 +39,7 @@ from tensordict import TensorDict
 from torch import Tensor
 
 if TYPE_CHECKING:
-    from .scores import _NonconformityScore
+    from .scores import NonconformityScore
 
 TENSOR_KEY = "__tensor__"
 """Reserved field key used when the inputs are plain tensors."""
@@ -468,7 +468,7 @@ def check_exact_shape(
 
 def check_aux(
     key: str,
-    score: "_NonconformityScore",
+    score: "NonconformityScore",
     prediction: Tensor,
     aux: Mapping[str, Tensor] | None,
     pending: list[Tensor] | None = None,
@@ -478,9 +478,14 @@ def check_aux(
     An infinite sigma would otherwise make the score zero. ``pending`` works
     as in :func:`check_finite`.
     """
-    if aux is None:
-        return
-    for aux_key in [k for k in score.aux_keys if k in aux]:
+    missing = [k for k in score.aux_keys if not isinstance(aux, Mapping) or k not in aux]
+    if missing:
+        raise ValueError(
+            f"{_field_label(key)}: {type(score).__name__} requires aux entries "
+            f"{list(score.aux_keys)}; missing {missing}. Pass aux={{key: tensor}} "
+            "(or, for TensorDict inputs, aux={field: {key: tensor}})."
+        )
+    for aux_key in score.aux_keys:
         value = aux[aux_key]
         if not isinstance(value, Tensor):
             raise TypeError(

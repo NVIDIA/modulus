@@ -26,7 +26,12 @@ from tensordict import TensorDict
 from torch import Tensor
 
 from ._utils import pack_fields, validate_provenance
-from .scores import _DIFFICULTY_REGISTRY, _SCORE_REGISTRY, _strategy_kind
+from .scores import (
+    _DIFFICULTY_REGISTRY,
+    _SCORE_REGISTRY,
+    _check_config_value,
+    _strategy_kind,
+)
 
 _ARTIFACT_FORMAT = "physicsnemo.uq.conformal"
 _ARTIFACT_VERSION = 1
@@ -60,39 +65,47 @@ def _check_exact_keys(value: object, expected: set[str], where: str) -> Mapping:
 
 
 def _strategy_spec(strategy: object, registry: Mapping) -> dict:
-    """Encode a built-in score or difficulty as ``{"kind", "kwargs"}``."""
+    """Encode a registered score or difficulty as ``{"kind", "kwargs"}``."""
     return {
         "kind": _strategy_kind(strategy, registry),
-        "kwargs": {name: getattr(strategy, name) for name in strategy._saved_kwargs},
+        "kwargs": {
+            name: getattr(strategy, name) for name in type(strategy).config_fields
+        },
     }
 
 
 def _resolve_strategy(spec: object, registry: Mapping, what: str):
-    """Rebuild a built-in score or difficulty from its saved spec."""
+    """Rebuild a registered score or difficulty from its saved spec."""
     spec = _check_exact_keys(spec, {"kind", "kwargs"}, f"Artifact {what} spec")
     kind = spec["kind"]
     if type(kind) is not str or kind not in registry:
         raise ValueError(
-            f"Unknown built-in {what} kind {kind!r}; expected one of "
-            f"{sorted(registry)!r}."
+            f"Unknown {what} kind {kind!r}; registered kinds are "
+            f"{sorted(registry)!r}. If it is a custom {what}, import the module "
+            "that registers it before loading."
         )
-    expected_types = registry[kind]._saved_kwargs
+    cls = registry[kind]
     kwargs = _check_exact_keys(
-        spec["kwargs"], set(expected_types), f"Artifact {what} {kind!r} kwargs"
+        spec["kwargs"], set(cls.config_fields), f"Artifact {what} {kind!r} kwargs"
     )
-    for name, expected_type in expected_types.items():
-        value = kwargs[name]
-        if type(value) is not expected_type:
-            raise TypeError(
-                f"Artifact {what} {kind!r} kwarg {name!r} must have exact type "
-                f"{expected_type.__name__}, got {type(value).__name__}."
-            )
+    for name, value in kwargs.items():
+        _check_config_value(f"Artifact {what} {kind!r}", name, value)
     try:
-        return registry[kind](**dict(kwargs))
+        strategy = cls(**dict(kwargs))
     except (TypeError, ValueError) as exc:
         raise ValueError(
-            f"Invalid constructor arguments for built-in {what} {kind!r}: {exc}"
+            f"Invalid constructor arguments for {what} {kind!r}: {exc}"
         ) from exc
+    # The rebuilt object must hold exactly the saved values, so a corrupted
+    # file cannot load as a differently configured strategy.
+    for name, value in kwargs.items():
+        rebuilt = getattr(strategy, name)
+        if type(rebuilt) is not type(value) or rebuilt != value:
+            raise ValueError(
+                f"Artifact {what} {kind!r} kwarg {name!r} is {value!r}, but the "
+                f"constructor stores {rebuilt!r}."
+            )
+    return strategy
 
 
 def _wire_thresholds(value: object) -> Tensor | TensorDict:

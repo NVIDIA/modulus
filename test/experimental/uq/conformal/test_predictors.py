@@ -146,7 +146,7 @@ class _CustomDifficulty(AuxDifficulty):
 _CELL = {"tier": "cellwise", "thresholds": torch.ones(2), "points": torch.ones(2, 1)}
 # fmt: off
 CONSTRUCTOR_REJECTIONS = [  # (id, make_predictor overrides, error, match)
-    ("custom-score", {**_CELL, "score": _CustomScore()}, TypeError, "Subclasses are not supported"),
+    ("custom-score", {**_CELL, "score": _CustomScore()}, TypeError, "a subclass needs its own registration"),
     ("cellwise-with-difficulty", {**_CELL, "difficulty": AuxDifficulty()}, ValueError, "does not take difficulty="),
     ("cellwise-without-mesh", {"tier": "cellwise", "thresholds": torch.ones(2)}, ValueError, "requires points="),
     ("cellwise-scalar-threshold", {**_CELL, "thresholds": torch.tensor(1.0)}, ValueError, "one leading entry per mesh point"),
@@ -182,8 +182,11 @@ def test_public_api_exports():
         "ConformalPredictor",
         "CoverageAccumulator",
         "FunctionalBandCalibrator",
+        "NonconformityScore",
         "NormalizedErrorScore",
         "QuantileRegressionScore",
+        "check_score",
+        "register_score",
     }
     assert set(conformal.__all__) == expected
     assert all(hasattr(conformal, name) for name in expected)
