@@ -229,15 +229,16 @@ CORRUPTIONS = {
     "non_string_threshold_key": (_set_in("thresholds", 7, torch.tensor(1.0)), "keys must be strings"),
     "missing_difficulty": (_delete("difficulty"), "schema is invalid: missing"),
     "extra_top_level_key": (_set("duplicate_state", {}), "schema is invalid: unexpected"),
-    "unknown_score_kind": (_set_in("score", "kind", "bogus"), "Unknown built-in score kind"),
+    "unknown_score_kind": (_set_in("score", "kind", "bogus"), "Unknown score kind"),
     "extra_score_key": (_set_in("score", "class", "AbsoluteErrorScore"), "score spec schema is invalid"),
-    "unknown_difficulty_kind": (_set("difficulty", {"kind": "bogus", "kwargs": {}}), "Unknown built-in difficulty kind"),
+    "unknown_difficulty_kind": (_set("difficulty", {"kind": "bogus", "kwargs": {}}), "Unknown difficulty kind"),
     "extra_difficulty_key": (_set("difficulty", {"kind": "aux", "kwargs": {"key": "s", "eps": 1e-8}, "class": "X"}), "difficulty spec schema is invalid"),
     "non_mapping_difficulty": (_set("difficulty", "aux"), "difficulty spec schema is invalid"),
     "non_json_provenance": (_set("provenance", {"tags": ("x",)}), "strict-JSON"),
-    # Strategy kwargs: exact key sets and exact wire types.
+    # Strategy kwargs: exact key sets, primitive wire types, and exact round trips.
     "aux_missing_key": (_set_in("difficulty", "kwargs", {"eps": 1e-4}), "kwargs schema is invalid", "aux"),
-    "aux_string_eps": (_set_in("difficulty", "kwargs", {"key": "spread", "eps": "0.1"}), "exact type", "aux"),
+    "aux_string_eps": (_set_in("difficulty", "kwargs", {"key": "spread", "eps": "0.1"}), "constructor stores", "aux"),
+    "aux_list_key": (_set_in("difficulty", "kwargs", {"key": ["spread"], "eps": 1e-4}), "must be a bool, int, float, or str", "aux"),
     # Wire-valid (exact float) but semantically invalid eps is still rejected at load.
     "normalized_negative_eps": (_set_in("score", "kwargs", {"eps": -1.0}), _CTOR, "normalized"),
     "aux_negative_eps": (_set_in("difficulty", "kwargs", {"key": "spread", "eps": -1.0}), _CTOR, "aux"),
