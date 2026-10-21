@@ -236,17 +236,24 @@ class AirFRANSDataSet(CachedPreprocessingDataset):
             if not path.exists():
                 raise FileNotFoundError(f"Missing required file: {path}")
 
+        def _read(path: Path) -> pv.DataSet:
+            # The VTU/VTP points are float64 but the fields are float32, and
+            # from_pyvista keeps both dtypes; project() needs them to match.
+            mesh = pv.read(path)
+            mesh.points = mesh.points.astype("float32")
+            return mesh
+
         freestream = project(
-            from_pyvista(pv.read(mesh_paths["freestream"]), manifold_dim=1),
+            from_pyvista(_read(mesh_paths["freestream"]), manifold_dim=1),
             keep_dims=[0, 1],
             transform_cell_data=True,
         )
         airfoil = project(
-            from_pyvista(pv.read(mesh_paths["airfoil"]), manifold_dim=1),
+            from_pyvista(_read(mesh_paths["airfoil"]), manifold_dim=1),
             keep_dims=[0, 1],
         )
         internal = project(
-            from_pyvista(pv.read(mesh_paths["internal"])),
+            from_pyvista(_read(mesh_paths["internal"])),
             keep_dims=[0, 1],
             transform_point_data=True,
         )
