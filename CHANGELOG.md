@@ -343,6 +343,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subclass declares, and still raises `TypeError` for any other keyword.
 - Linear subdivision of tetrahedral meshes keeps the orientation of every
   child cell. Before, half of the children came out inverted.
+- The `unit_square`, `rectangle`, `structured_grid`, `l_shape`, `cube_volume`,
+  `torus`, `hemisphere`, `disk`, `plane` and `tetbeam` primitives have
+  positively oriented cells and outward or +z normals. Before, their cells were
+  inverted or their normals pointed the wrong way. `perturbed_grid` now takes
+  `perturbation_scale` as a fraction of the grid spacing, so its default no
+  longer folds cells.
 - Meshes with `int32` connectivity give the same results as `int64` ones in
   Butterfly and Loop subdivision, edge lookups and `refit_mesh_to_implicit`.
   Before, large meshes could get wrong Butterfly midpoints and edge matches,
