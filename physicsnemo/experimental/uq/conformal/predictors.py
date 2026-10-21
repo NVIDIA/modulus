@@ -112,9 +112,11 @@ class ConformalPredictor:
     only to restore thresholds you computed elsewhere.
 
     The predictor has the guarantee of the calibrator that produced it. A
-    cellwise predictor works only on the calibration mesh (same coordinates,
-    dtype, and point order). Functional and risk-control predictors accept
-    any mesh and may widen intervals per point with an ``AuxDifficulty``.
+    cellwise predictor works only on the calibration output shape and, if
+    calibration used ``points``, only on the calibration mesh (same
+    coordinates, dtype, and point order). Functional and risk-control
+    predictors accept any mesh and may widen intervals per point with an
+    ``AuxDifficulty``.
 
     Parameters
     ----------
@@ -144,10 +146,10 @@ class ConformalPredictor:
         (functional and risk-control tiers only).
     points : torch.Tensor, optional
         Calibration mesh coordinates of shape
-        :math:`(n_{\text{points}}, n_{\text{spatial\_dims}})`, required for
-        the cellwise tier and rejected otherwise. The predictor keeps only a
-        checksum of them, and :meth:`predict_interval` accepts only the same
-        coordinates, dtype, and point order.
+        :math:`(n_{\text{points}}, n_{\text{spatial\_dims}})`, for the
+        cellwise tier only. The predictor keeps only a checksum of them, and
+        :meth:`predict_interval` then requires the same coordinates, dtype,
+        and point order. Omit them for cellwise outputs without a mesh.
 
     Raises
     ------
@@ -157,12 +159,12 @@ class ConformalPredictor:
         - ``tier`` is not one of the three names above.
         - :math:`n_{cal} < (1 - \alpha) / \alpha`: collect more samples or
           raise ``alpha``.
-        - ``tier="cellwise"`` without ``points`` or with ``difficulty``.
+        - ``tier="cellwise"`` with ``difficulty``.
         - Another tier with ``points``.
         - ``points`` is empty, not 2-D, or not finite.
-        - A threshold is not finite; a cellwise threshold's leading size is
-          not the number of mesh points; another tier's threshold is not a
-          scalar.
+        - A threshold is not finite; with ``points``, a cellwise threshold's
+          leading size is not the number of mesh points; another tier's
+          threshold is not a scalar.
         - A threshold is negative and ``score`` is not
           ``QuantileRegressionScore``.
         - ``difficulty`` reads the aux key that ``score`` divides by.
@@ -238,13 +240,12 @@ class ConformalPredictor:
                     "A cellwise predictor does not take difficulty=; only "
                     "functional and risk_control predictors use AuxDifficulty."
                 )
-            if mesh_fingerprint is None:
-                raise ValueError(
-                    "A cellwise predictor requires points=, the calibration "
-                    "mesh coordinates."
-                )
             difficulty_snapshot = None
-            mesh_snapshot = _validate_mesh_fingerprint(mesh_fingerprint)
+            mesh_snapshot = (
+                None
+                if mesh_fingerprint is None
+                else _validate_mesh_fingerprint(mesh_fingerprint)
+            )
         else:
             if mesh_fingerprint is not None:
                 raise ValueError(
@@ -396,7 +397,7 @@ class ConformalPredictor:
         pending: list[Tensor] | None,
     ) -> tuple[dict[str, Tensor], dict[str, Tensor]]:
         """Validate the inputs and compute bounds; ``pending`` as in ``check_finite``."""
-        if self._tier == "cellwise":
+        if self._mesh_fingerprint is not None:
             require_mesh(
                 points,
                 self._mesh_fingerprint,
@@ -405,6 +406,11 @@ class ConformalPredictor:
                 pending,
             )
         elif points is not None:
+            if self._tier == "cellwise":
+                raise TypeError(
+                    "This predictor was calibrated without points=, so it has no "
+                    "mesh to compare against; omit points=."
+                )
             check_points(points, pending)
 
         lo_out: dict[str, Tensor] = {}
@@ -457,9 +463,10 @@ class ConformalPredictor:
         points : torch.Tensor, optional
             Mesh coordinates of shape
             :math:`(n_{\text{points}}, n_{\text{spatial\_dims}})`. Required
-            for the cellwise tier, where they must match the calibration
-            coordinates, dtype, and point order. Other tiers use them only to
-            check that each field has one leading entry per point.
+            for a cellwise predictor calibrated with ``points``, where they
+            must match the calibration coordinates, dtype, and point order,
+            and rejected by one calibrated without them. Other tiers use them
+            only to check that each field has one leading entry per point.
 
         Returns
         -------
@@ -472,7 +479,8 @@ class ConformalPredictor:
         TypeError
             If ``prediction`` is a plain tensor for a predictor calibrated on
             ``TensorDict`` fields, or the reverse, or a cellwise predictor
-            gets no ``points``.
+            gets no ``points`` when calibration used them, or gets ``points``
+            when calibration did not.
         ValueError
             If a shape differs from calibration, values are not finite, or
             (cellwise) ``points`` describes a different mesh.
@@ -492,10 +500,10 @@ class ConformalPredictor:
         rescale the model outputs and recalibrate. Do not clip bounds
         inward: that can remove coverage.
 
-        Each call checks every input value, and for the cellwise tier the
-        ``points`` checksum, on the inputs' device, then synchronizes with the
-        GPU once to read the results. This method is not intended for use
-        inside ``torch.compile`` regions.
+        Each call checks every input value, and any cellwise ``points``
+        checksum, on the inputs' device, then synchronizes with the GPU once
+        to read the results. This method is not intended for use inside
+        ``torch.compile`` regions.
         """
         selection = self.keys
         require_container_kind(prediction, selection, "This predictor", "prediction")

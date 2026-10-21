@@ -148,7 +148,6 @@ _CELL = {"tier": "cellwise", "thresholds": torch.ones(2), "points": torch.ones(2
 CONSTRUCTOR_REJECTIONS = [  # (id, make_predictor overrides, error, match)
     ("custom-score", {**_CELL, "score": _CustomScore()}, TypeError, "a subclass needs its own registration"),
     ("cellwise-with-difficulty", {**_CELL, "difficulty": AuxDifficulty()}, ValueError, "does not take difficulty="),
-    ("cellwise-without-mesh", {"tier": "cellwise", "thresholds": torch.ones(2)}, ValueError, "requires points="),
     ("cellwise-scalar-threshold", {**_CELL, "thresholds": torch.tensor(1.0)}, ValueError, "one leading entry per mesh point"),
     ("custom-difficulty", {"tier": "functional", "difficulty": _CustomDifficulty()}, TypeError, "Subclasses are not supported"),
     ("risk-with-points", {"points": torch.ones(2, 1)}, ValueError, "does not take points="),
@@ -263,3 +262,11 @@ def test_scaled_threshold_overflow_raises_instead_of_nan_bounds():
     }
     with pytest.raises(ValueError, match="overflows float64"):
         predictor.predict_interval(torch.zeros(3, dtype=f64), aux=aux)
+
+
+def test_cellwise_predictor_without_points_checks_only_the_shape():
+    predictor = make_predictor(tier="cellwise", thresholds=torch.full((3,), 0.5))
+    lo, hi = predictor.predict_interval(torch.zeros(3))
+    torch.testing.assert_close(hi - lo, torch.ones(3))
+    with pytest.raises(ValueError, match="shape"):
+        predictor.predict_interval(torch.zeros(2))

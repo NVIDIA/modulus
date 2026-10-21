@@ -272,20 +272,23 @@ class _SplitCalibratorBase:
 
 
 class CellwiseCalibrator(_SplitCalibratorBase):
-    r"""Calibrate a separate interval width for every output element on a fixed mesh.
+    r"""Calibrate a separate interval width for every output element of a fixed layout.
 
-    Use this calibrator when every calibration and deployment sample uses
-    the same mesh or grid, with the points in the same order, and you want
-    an interval for each output element, as in the field-level conformal
-    prediction of `Gopakumar et al., 2024
-    <https://arxiv.org/abs/2408.09881>`_. If the mesh changes between
-    samples, use
+    Use this calibrator when every calibration and deployment sample has the
+    same output layout and you want an interval for each output element, as
+    in the field-level conformal prediction of `Gopakumar et al., 2024
+    <https://arxiv.org/abs/2408.09881>`_. The layout can be a mesh or grid
+    with the points in the same order, or a fixed set of outputs such as
+    scalar observables. The calibrator requires the same output shape on
+    every call. If the mesh changes between samples, use
     :class:`~physicsnemo.experimental.uq.conformal.FunctionalBandCalibrator`
     or :class:`~physicsnemo.experimental.uq.conformal.RiskControlCalibrator`.
 
-    Pass the mesh coordinates as ``points=`` on every call. Two meshes count
-    as the same only when their coordinate values, order, shape, and dtype
-    all match; the same point count is not enough.
+    For outputs on a mesh, pass the coordinates as ``points=`` on every call
+    to also check that every sample, and later every prediction, uses the
+    same mesh. Two meshes count as the same only when their coordinate
+    values, order, shape, and dtype all match; the same point count is not
+    enough.
 
     Guarantee: each output element is covered with probability at least
     :math:`1 - \alpha`, one element at a time, not the whole field at once.
@@ -353,7 +356,7 @@ class CellwiseCalibrator(_SplitCalibratorBase):
         target: Float[Tensor, "*dims"] | TensorDict,
         *,
         aux: Mapping[str, Float[Tensor, "*dims"]] | Mapping[str, Mapping] | None = None,
-        points: Float[Tensor, "n_points n_spatial_dims"],
+        points: Float[Tensor, "n_points n_spatial_dims"] | None = None,
     ) -> None:
         r"""Add one calibration sample.
 
@@ -370,10 +373,10 @@ class CellwiseCalibrator(_SplitCalibratorBase):
             ``{"lo": ..., "hi": ...}`` for ``QuantileRegressionScore``. For
             ``TensorDict`` inputs, nest by field name, as in
             ``{"pressure": {"sigma": ...}}``.
-        points : torch.Tensor
+        points : torch.Tensor, optional
             Mesh coordinates of shape
             :math:`(n_{\text{points}}, n_{\text{spatial\_dims}})`, identical
-            on every call.
+            on every call. Pass them on every call or on none.
 
         Returns
         -------
@@ -382,12 +385,12 @@ class CellwiseCalibrator(_SplitCalibratorBase):
         Raises
         ------
         ValueError
-            If ``points`` differs from the first sample's mesh, if
-            ``prediction`` and ``target`` shapes differ, or if any value is
-            non-finite.
+            If ``points`` differs from the first sample's mesh, if the
+            output shape differs from the first sample's, if ``prediction``
+            and ``target`` shapes differ, or if any value is non-finite.
         TypeError
-            If ``points`` is not passed, or if plain tensors and
-            ``TensorDict`` inputs are mixed.
+            If ``points`` is passed on some calls but not others, or if
+            plain tensors and ``TensorDict`` inputs are mixed.
         KeyError
             If the set of fields differs from the first sample.
 
@@ -395,7 +398,15 @@ class CellwiseCalibrator(_SplitCalibratorBase):
         -----
         A sample that raises is not stored.
         """
-        fingerprint = require_mesh(points, self._mesh_fingerprint)
+        if self._n and (points is None) != (self._mesh_fingerprint is None):
+            first = "had" if self._mesh_fingerprint is not None else "did not have"
+            raise TypeError(
+                f"The first calibration sample {first} points=; pass points= "
+                "on every call or on none."
+            )
+        fingerprint = (
+            None if points is None else require_mesh(points, self._mesh_fingerprint)
+        )
 
         def stage(key, prediction_field, target_field, aux_field):
             score = check_finite(
@@ -422,8 +433,8 @@ class CellwiseCalibrator(_SplitCalibratorBase):
         ConformalPredictor
             A cellwise
             :class:`~physicsnemo.experimental.uq.conformal.ConformalPredictor`
-            with one threshold per output element. Its ``predict_interval``
-            requires the same ``points`` used in calibration.
+            with one threshold per output element. If calibration used
+            ``points``, its ``predict_interval`` requires the same ``points``.
 
         Raises
         ------
