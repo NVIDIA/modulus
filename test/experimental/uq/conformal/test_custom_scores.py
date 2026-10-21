@@ -31,6 +31,8 @@ from physicsnemo.experimental.uq.conformal import (
 )
 from physicsnemo.experimental.uq.conformal.scores import _SCORE_REGISTRY
 from test.experimental.uq.conformal._helpers import (
+    CALIBRATORS,
+    TIERS,
     assert_predictor_covers_admitted,
     fit,
 )
@@ -75,10 +77,11 @@ def _weight(prediction, generator):
     return {"weight": (0.5 + draw).to(prediction.dtype)}
 
 
-def test_custom_score_calibrates_predicts_and_round_trips(tmp_path, device):
+@pytest.mark.parametrize("tier", TIERS)
+def test_custom_score_calibrates_predicts_and_round_trips(tmp_path, tier, device):
     register_score("test_relative_error")(_RelativeErrorScore)
     predictor, points = fit(
-        "cellwise",
+        tier,
         score=_RelativeErrorScore(floor=0.25),
         aux_factory=_weight,
         device=device,
@@ -103,18 +106,22 @@ def test_custom_score_calibrates_predicts_and_round_trips(tmp_path, device):
         ConformalPredictor.load(tmp_path / "relative.pt")
 
 
-def test_custom_score_requires_its_aux_entries():
+@pytest.mark.parametrize("tier", TIERS)
+def test_custom_score_requires_its_aux_entries(tier):
     register_score("test_relative_error")(_RelativeErrorScore)
-    calibrator = CellwiseCalibrator(_RelativeErrorScore(), alpha=0.5)
+    calibrator = CALIBRATORS[tier](_RelativeErrorScore(), alpha=0.5)
+    points = torch.zeros(3, 1) if tier == "cellwise" else None
     with pytest.raises(ValueError, match=r"requires aux entries \['weight'\]"):
-        calibrator.update(torch.ones(3), torch.ones(3), points=torch.zeros(3, 1))
+        calibrator.update(torch.ones(3), torch.ones(3), points=points)
 
 
-def test_first_sample_rejects_a_score_whose_bounds_do_not_invert_it():
+@pytest.mark.parametrize("tier", TIERS)
+def test_first_sample_rejects_a_score_whose_bounds_do_not_invert_it(tier):
     register_score("test_half_width")(_HalfWidthScore)
-    calibrator = CellwiseCalibrator(_HalfWidthScore(), alpha=0.5)
+    calibrator = CALIBRATORS[tier](_HalfWidthScore(), alpha=0.5)
+    points = torch.zeros(4, 1) if tier == "cellwise" else None
     with pytest.raises(ValueError, match="does not invert score"):
-        calibrator.update(torch.zeros(4), torch.ones(4), points=torch.zeros(4, 1))
+        calibrator.update(torch.zeros(4), torch.ones(4), points=points)
     assert calibrator.n_cal == 0
     with pytest.raises(ValueError, match="4 of 4 targets"):
         check_score(_HalfWidthScore(), torch.zeros(4), torch.ones(4))
