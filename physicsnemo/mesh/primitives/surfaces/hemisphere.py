@@ -82,4 +82,5 @@ def load(
     tri2 = torch.stack([p01, p11, p10], dim=1)
     cells = torch.cat([tri1, tri2], dim=0)
 
-    return Mesh(points=points, cells=cells)
+    # Reverse the winding so that normals point outward
+    return Mesh(points=points, cells=cells.flip(-1))

@@ -69,8 +69,8 @@ def load(
         for j in range(n_y - 1):
             idx = i * n_y + j
             # Two triangles per quad
-            cells.append([idx, idx + 1, idx + n_y])
-            cells.append([idx + 1, idx + n_y + 1, idx + n_y])
+            cells.append([idx, idx + n_y, idx + 1])
+            cells.append([idx + 1, idx + n_y, idx + n_y + 1])
 
     cells = torch.tensor(cells, dtype=torch.int64, device=device)
     return Mesh(points=points, cells=cells)

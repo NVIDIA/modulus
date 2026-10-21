@@ -84,8 +84,8 @@ def load(
 
     # Fill the two triangles of each quad in place (no stack temporaries).
     cells = torch.empty((v00.shape[0], 2, 3), dtype=v00.dtype, device=device)
-    cells[:, 0, 0], cells[:, 0, 1], cells[:, 0, 2] = v00, v01, v10
-    cells[:, 1, 0], cells[:, 1, 1], cells[:, 1, 2] = v01, v11, v10
+    cells[:, 0, 0], cells[:, 0, 1], cells[:, 0, 2] = v00, v10, v01
+    cells[:, 1, 0], cells[:, 1, 1], cells[:, 1, 2] = v01, v10, v11
     cells = cells.reshape(-1, 3)
 
     return Mesh(points=points, cells=cells)

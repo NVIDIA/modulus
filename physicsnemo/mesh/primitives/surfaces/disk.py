@@ -78,8 +78,8 @@ def load(
     inner_cells = torch.stack(
         [
             torch.zeros(n_angular, dtype=torch.int64, device=device),
-            1 + next_j,
             1 + j_idx,
+            1 + next_j,
         ],
         dim=1,
     )
@@ -99,8 +99,8 @@ def load(
         idx_outer = 1 + (ii_flat + 1) * n_angular + jj_flat
         next_j_outer = 1 + (ii_flat + 1) * n_angular + (jj_flat + 1) % n_angular
 
-        tri1 = torch.stack([idx, next_j_o, idx_outer], dim=1)
-        tri2 = torch.stack([next_j_o, next_j_outer, idx_outer], dim=1)
+        tri1 = torch.stack([idx, idx_outer, next_j_o], dim=1)
+        tri2 = torch.stack([next_j_o, idx_outer, next_j_outer], dim=1)
         cells_parts.extend([tri1, tri2])
 
     cells = torch.cat(cells_parts, dim=0)

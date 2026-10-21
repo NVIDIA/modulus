@@ -85,8 +85,8 @@ def load(
     for i in range(n_cols_bottom - 1):
         for j in range(n_rows - 1):
             idx = i * n_rows + j
-            cells.append([idx, idx + 1, idx + n_rows])
-            cells.append([idx + 1, idx + n_rows + 1, idx + n_rows])
+            cells.append([idx, idx + n_rows, idx + 1])
+            cells.append([idx + 1, idx + n_rows, idx + n_rows + 1])
 
     ### Triangulate top rectangle
     # The bottom row of cells connects to shared vertices from the bottom part
@@ -110,8 +110,8 @@ def load(
                 tl = offset + i * n_top_rows + j
                 tr = offset + (i + 1) * n_top_rows + j
 
-            cells.append([bl, tl, br])
-            cells.append([tl, tr, br])
+            cells.append([bl, br, tl])
+            cells.append([tl, br, tr])
 
     cells = torch.tensor(cells, dtype=torch.int64, device=device)
     return Mesh(points=points, cells=cells)

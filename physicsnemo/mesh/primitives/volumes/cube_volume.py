@@ -85,14 +85,16 @@ def load(
     ### Kuhn triangulation: 6 tetrahedra per cube
     # Each tet corresponds to one of the 6 permutations of incrementing (x,y,z).
     # All tets share the body diagonal v0-v7, ensuring consistent face diagonals.
+    # The tets of odd permutations list their middle vertices in reverse path
+    # order, so that every tet has positive signed volume.
     tet_pattern = torch.tensor(
         [
             [0, 1, 3, 7],  # perm (x, y, z): v0 -> v1 -> v3 -> v7
-            [0, 1, 5, 7],  # perm (x, z, y): v0 -> v1 -> v5 -> v7
-            [0, 2, 3, 7],  # perm (y, x, z): v0 -> v2 -> v3 -> v7
+            [0, 5, 1, 7],  # perm (x, z, y): v0 -> v1 -> v5 -> v7
+            [0, 3, 2, 7],  # perm (y, x, z): v0 -> v2 -> v3 -> v7
             [0, 2, 6, 7],  # perm (y, z, x): v0 -> v2 -> v6 -> v7
             [0, 4, 5, 7],  # perm (z, x, y): v0 -> v4 -> v5 -> v7
-            [0, 4, 6, 7],  # perm (z, y, x): v0 -> v4 -> v6 -> v7
+            [0, 6, 4, 7],  # perm (z, y, x): v0 -> v4 -> v6 -> v7
         ],
         dtype=torch.int64,
         device=device,

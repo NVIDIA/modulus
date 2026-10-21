@@ -58,8 +58,8 @@ def load(subdivisions: int = 1, device: torch.device | str = "cpu") -> Mesh[2, 2
         for j in range(n - 1):
             idx = i * n + j
             # Two triangles per quad
-            cells.append([idx, idx + 1, idx + n])
-            cells.append([idx + 1, idx + n + 1, idx + n])
+            cells.append([idx, idx + n, idx + 1])
+            cells.append([idx + 1, idx + n, idx + n + 1])
 
     cells = torch.tensor(cells, dtype=torch.int64, device=device)
     return Mesh(points=points, cells=cells)

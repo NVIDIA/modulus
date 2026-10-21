@@ -53,7 +53,10 @@ def load(device: torch.device | str = "cpu") -> Mesh[3, 3]:
     Mesh[3, 3]
         Mesh with n_manifold_dims=3, n_spatial_dims=3.
     """
+    from physicsnemo.mesh.generate._simplex_ops import orient_positive
     from physicsnemo.mesh.io.io_pyvista import from_pyvista
 
-    pv_mesh = pv.examples.load_tetbeam()
-    return from_pyvista(pv_mesh).to(device=device)
+    ### The PyVista tetrahedra are all inverted
+    mesh = from_pyvista(pv.examples.load_tetbeam())
+    mesh = mesh.with_cells(orient_positive(mesh.points, mesh.cells))
+    return mesh.to(device=device)

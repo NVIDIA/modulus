@@ -94,7 +94,8 @@ def load(
             )
             points = torch.mm(points_flat, R.T)
         else:
-            points = points_flat
+            # normal is -z: rotate 180 degrees about the x-axis
+            points = points_flat * torch.tensor([1.0, -1.0, -1.0], device=device)
     else:
         points = points_flat
 
@@ -104,8 +105,8 @@ def load(
         for j in range(subdivisions):
             idx = i * n + j
             # Two triangles per quad
-            cells.append([idx, idx + 1, idx + n])
-            cells.append([idx + 1, idx + n + 1, idx + n])
+            cells.append([idx, idx + n, idx + 1])
+            cells.append([idx + 1, idx + n, idx + n + 1])
 
     cells = torch.tensor(cells, dtype=torch.int64, device=device)
     return Mesh(points=points, cells=cells)
