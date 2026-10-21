@@ -158,6 +158,62 @@ Pairing ``AuxDifficulty("sigma")`` with :class:`NormalizedErrorScore` would
 scale by :math:`\sigma` twice, so the calibrators reject that pair.
 
 
+Custom Scores
+-------------
+
+When none of the built-in scores fits the model, define your own. Subclass
+:class:`NonconformityScore`, implement two methods, and register the class
+with :func:`register_score`:
+
+- ``score(prediction, target, *, aux=None)`` returns the per-element score;
+  larger is worse.
+- ``bounds(prediction, threshold, *, aux=None)`` returns ``(lo, hi)``, the
+  targets whose score is at most ``threshold``.
+
+For example, a band proportional to the prediction:
+
+.. code:: python
+
+    from physicsnemo.experimental.uq.conformal import (
+        NonconformityScore,
+        RiskControlCalibrator,
+        check_score,
+        register_score,
+    )
+
+    @register_score("relative_error")
+    class RelativeErrorScore(NonconformityScore):
+        config_fields = ("floor",)  # saved with the predictor
+
+        def __init__(self, floor=1e-6):
+            self.floor = floor
+
+        def score(self, prediction, target, *, aux=None):
+            scale = prediction.abs().clamp_min(self.floor)
+            return (target - prediction).abs() / scale
+
+        def bounds(self, prediction, threshold, *, aux=None):
+            half = threshold * prediction.abs().clamp_min(self.floor)
+            return prediction - half, prediction + half
+
+    check_score(RelativeErrorScore(), prediction, target)
+    calibrator = RiskControlCalibrator(RelativeErrorScore(floor=1e-3), alpha=0.1)
+
+The coverage guarantee holds only if the two methods agree: for every
+element, the targets with ``score <= t`` are exactly the values in
+``bounds(t)``, and that interval grows with ``t``. :func:`check_score` tests
+this on sample data, and every calibrator runs the same test on its first
+sample. You do not handle low precision yourself: ``bounds`` receives the
+prediction and threshold in float64, and the base class rounds the
+interval outward to the prediction's dtype.
+
+Set ``aux_keys`` to the ``aux`` entries the score reads, so calibrators
+require and check them. Set ``config_fields`` to the constructor arguments
+a saved predictor should store; their values must be ``bool``, ``int``,
+``float``, or ``str``. To load a predictor saved with a custom score,
+import the module that registers the score first.
+
+
 Multiple Fields
 ---------------
 
@@ -306,6 +362,16 @@ Scores
 
 .. autoclass:: physicsnemo.experimental.uq.conformal.AuxDifficulty
     :members: __call__
+
+Custom Score API
+^^^^^^^^^^^^^^^^
+
+.. autoclass:: physicsnemo.experimental.uq.conformal.NonconformityScore
+    :members: score, bounds, interval
+
+.. autofunction:: physicsnemo.experimental.uq.conformal.register_score
+
+.. autofunction:: physicsnemo.experimental.uq.conformal.check_score
 
 Predictor
 ^^^^^^^^^
