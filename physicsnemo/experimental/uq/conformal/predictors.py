@@ -473,8 +473,9 @@ class ConformalPredictor:
         ------
         TypeError
             If ``prediction`` is a plain tensor for a predictor calibrated on
-            ``TensorDict`` fields, or the reverse, or ``points`` is missing
-            when calibration used it or passed when calibration did not.
+            ``TensorDict`` fields, or the reverse, or a cellwise predictor
+            gets no ``points`` when calibration used them, or gets ``points``
+            when calibration did not.
         ValueError
             If a shape differs from calibration, values are not finite, or
             (cellwise) ``points`` describes a different mesh.
