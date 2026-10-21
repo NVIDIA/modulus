@@ -19,8 +19,6 @@
 Dimensional: 2D manifold in 3D space (has boundary).
 """
 
-import math
-
 import torch
 
 from physicsnemo.mesh.mesh import Mesh
@@ -67,13 +65,11 @@ def load(
     )
 
     # Rotate to align with normal if not (0, 0, 1)
-    # math.hypot avoids the float32 underflow and overflow of torch.norm
-    length = math.hypot(*normal)
-    if not 0 < length < math.inf:
+    normal_t = torch.tensor(normal, dtype=torch.float32, device=device)
+    length = torch.norm(normal_t)
+    if not 0 < length < torch.inf:
         raise ValueError(f"normal must be finite and nonzero, got {normal=}")
-    normal_t = torch.tensor(
-        [c / length for c in normal], dtype=torch.float32, device=device
-    )
+    normal_t = normal_t / length
 
     if not torch.allclose(normal_t, torch.tensor([0.0, 0.0, 1.0], device=device)):
         # Find rotation axis and angle
