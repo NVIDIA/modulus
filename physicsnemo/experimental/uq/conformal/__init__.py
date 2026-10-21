@@ -24,8 +24,9 @@ then call ``predictor.predict_interval`` on new model outputs to get
 
 :class:`~physicsnemo.experimental.uq.conformal.CellwiseCalibrator` covers
 each output element with probability at least :math:`1 - \alpha`. Every
-sample must use the same mesh, with the same points in the same order, and
-you pass the coordinates as ``points=`` on every call.
+sample must have the same output layout: the same mesh, with the same points
+in the same order, or a fixed set of outputs such as scalar observables. For
+a mesh, pass the coordinates as ``points=`` on every call to check it.
 
 Pick the score by what the model outputs:
 :class:`~physicsnemo.experimental.uq.conformal.AbsoluteErrorScore` for a

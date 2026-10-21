@@ -92,8 +92,9 @@ class ConformalPredictor:
     only to restore thresholds you computed elsewhere.
 
     The predictor has the guarantee of the calibrator that produced it and
-    works only on the calibration mesh (same coordinates, dtype, and point
-    order).
+    works only on the calibration output shape. If calibration used
+    ``points``, it also requires the calibration mesh (same coordinates,
+    dtype, and point order).
 
     Parameters
     ----------
@@ -113,11 +114,12 @@ class ConformalPredictor:
         one tensor of shape :math:`(*\text{dims})` per field. Values must be
         finite, and nonnegative unless ``score`` is a
         :class:`~physicsnemo.experimental.uq.conformal.QuantileRegressionScore`.
-    points : torch.Tensor
+    points : torch.Tensor, optional
         Calibration mesh coordinates of shape
         :math:`(n_{\text{points}}, n_{\text{spatial\_dims}})`. The predictor
-        keeps only a checksum of them, and :meth:`predict_interval` accepts
-        only the same coordinates, dtype, and point order.
+        keeps only a checksum of them, and :meth:`predict_interval` then
+        requires the same coordinates, dtype, and point order. Omit them for
+        outputs without a mesh.
 
     Raises
     ------
@@ -127,9 +129,9 @@ class ConformalPredictor:
         - ``tier`` is not ``"cellwise"``.
         - :math:`n_{cal} < (1 - \alpha) / \alpha`: collect more samples or
           raise ``alpha``.
-        - ``points`` is missing, empty, not 2-D, or not finite.
-        - A threshold is not finite, or its leading size is not the number
-          of mesh points.
+        - ``points`` is empty, not 2-D, or not finite.
+        - A threshold is not finite, or, with ``points``, its leading size is
+          not the number of mesh points.
         - A threshold is negative and ``score`` is not
           ``QuantileRegressionScore``.
     TypeError
@@ -196,21 +198,22 @@ class ConformalPredictor:
         alpha = float(alpha)
         score_snapshot = _snapshot_strategy(score, _SCORE_REGISTRY, "score")
 
-        if mesh_fingerprint is None:
-            raise ValueError(
-                "A cellwise predictor requires points=, the calibration "
-                "mesh coordinates."
-            )
-        mesh_snapshot = _validate_mesh_fingerprint(mesh_fingerprint)
+        mesh_snapshot = (
+            None
+            if mesh_fingerprint is None
+            else _validate_mesh_fingerprint(mesh_fingerprint)
+        )
 
         self._tier = tier
         self._score = score_snapshot
         self._alpha = alpha
         self._n_cal = n_cal
         self._thresholds_by_key = _validate_thresholds(thresholds, type(score_snapshot))
-        n_points = mesh_point_count(mesh_snapshot)
+        n_points = None if mesh_snapshot is None else mesh_point_count(mesh_snapshot)
         for key, threshold in self._thresholds_by_key.items():
-            if threshold.ndim == 0 or threshold.shape[0] != n_points:
+            if n_points is not None and (
+                threshold.ndim == 0 or threshold.shape[0] != n_points
+            ):
                 raise ValueError(
                     f"{_field_label(key)}: threshold shape {tuple(threshold.shape)} "
                     f"must have one leading entry per mesh point ({n_points})."
@@ -302,12 +305,19 @@ class ConformalPredictor:
         pending: list[Tensor] | None,
     ) -> tuple[dict[str, Tensor], dict[str, Tensor]]:
         """Validate the inputs and compute bounds; ``pending`` as in ``check_finite``."""
-        require_mesh(points, self._mesh_fingerprint, pending)
+        if self._mesh_fingerprint is not None:
+            require_mesh(points, self._mesh_fingerprint, pending)
+        elif points is not None:
+            raise TypeError(
+                "This predictor was calibrated without points=, so it has no "
+                "mesh to compare against; omit points=."
+            )
 
         lo_out: dict[str, Tensor] = {}
         hi_out: dict[str, Tensor] = {}
         for key, prediction_field in items:
-            check_point_alignment(key, prediction_field, points, "prediction")
+            if points is not None:
+                check_point_alignment(key, prediction_field, points, "prediction")
             aux_field = slice_aux(aux, key)
             check_real(key, "prediction", prediction_field, pending)
             check_aux(key, self._score, prediction_field, aux_field, pending)
@@ -339,8 +349,7 @@ class ConformalPredictor:
         prediction : torch.Tensor | TensorDict
             Model output for one sample, of shape :math:`(*\text{dims})`, or
             a ``TensorDict`` of such tensors. The shape must equal the
-            calibration shape, with leading dimension
-            :math:`n_{\text{points}}`.
+            calibration shape.
         aux : Mapping[str, torch.Tensor] | Mapping[str, Mapping], optional
             Extra tensors the score reads, each with the shape of the
             prediction: ``"sigma"`` for
@@ -349,9 +358,10 @@ class ConformalPredictor:
             :class:`~physicsnemo.experimental.uq.conformal.QuantileRegressionScore`.
             For ``TensorDict`` inputs, nest by field name, for example
             ``aux={"pressure": {"sigma": s}}``.
-        points : torch.Tensor
+        points : torch.Tensor, optional
             Mesh coordinates of shape
-            :math:`(n_{\text{points}}, n_{\text{spatial\_dims}})`. They must
+            :math:`(n_{\text{points}}, n_{\text{spatial\_dims}})`, required
+            if calibration used ``points`` and rejected otherwise. They must
             match the calibration coordinates, dtype, and point order.
 
         Returns
@@ -364,8 +374,8 @@ class ConformalPredictor:
         ------
         TypeError
             If ``prediction`` is a plain tensor for a predictor calibrated on
-            ``TensorDict`` fields, or the reverse, or a cellwise predictor
-            gets no ``points``.
+            ``TensorDict`` fields, or the reverse, or ``points`` is missing
+            when calibration used it or passed when calibration did not.
         ValueError
             If a shape differs from calibration, values are not finite, or
             ``points`` describes a different mesh.
@@ -380,7 +390,7 @@ class ConformalPredictor:
         rescale the model outputs and recalibrate. Do not clip bounds
         inward: that can remove coverage.
 
-        Each call checks every input value and the ``points`` checksum on the
+        Each call checks every input value and any ``points`` checksum on the
         inputs' device, then synchronizes with the GPU once to read the
         results. This method is not intended for use inside ``torch.compile``
         regions.

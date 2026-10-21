@@ -115,7 +115,6 @@ class _CustomScore(AbsoluteErrorScore):
 # fmt: off
 CONSTRUCTOR_REJECTIONS = [  # (id, make_predictor overrides, error, match)
     ("custom-score", {"score": _CustomScore()}, TypeError, "a subclass needs its own registration"),
-    ("cellwise-without-mesh", {"points": None}, ValueError, "requires points="),
     ("cellwise-scalar-threshold", {"thresholds": torch.tensor(1.0)}, ValueError, "one leading entry per mesh point"),
     ("dict-thresholds", {"thresholds": {"pressure": torch.ones(3)}}, TypeError, "Tensor or TensorDict"),
     ("empty-tensordict-thresholds", {"thresholds": TensorDict({})}, ValueError, "at least one"),
@@ -205,3 +204,11 @@ def test_aux_and_points_are_keyword_only():
     for method in (score.score, score.interval):
         with pytest.raises(TypeError, match="positional"):
             method(torch.zeros(2), torch.zeros(2), {})
+
+
+def test_cellwise_predictor_without_points_checks_only_the_shape():
+    predictor = make_predictor(points=None)
+    lo, hi = predictor.predict_interval(torch.zeros(3))
+    torch.testing.assert_close(hi - lo, torch.ones(3))
+    with pytest.raises(ValueError, match="shape"):
+        predictor.predict_interval(torch.zeros(2))
