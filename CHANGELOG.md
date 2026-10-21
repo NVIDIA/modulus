@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Adds a Rotor37 compressor blade example with GeoTransolver
+  (`examples/cfd/rotor37_geotransolver`)
+- Adds an experimental, independently implemented SMART operator with sampled
+  geometry encoding, reusable latent contexts, and chunked field decoding.
+
 - Adds standalone FLARE++ attention and model APIs, with input-conditioned
   dynamic routing, plus a ``GALE_FPP`` backend for using the same mixer inside
   GeoTransolver.
@@ -73,6 +78,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   charges the target leaf's own extent: on a 200k-face car with 200k volume
   points the dual plan held 1.6e9 pairs at `theta=0.5` and the point plan
   holds 1.5e8.
+- The PhysicsNeMo-Mesh API reference documents `physicsnemo.mesh.fields`
+  (`RankSpec` and `FieldSchema`) and the `physicsnemo.mesh.primitives` catalog.
+- `ClusterTree.merge` joins trees into one forest, whose `root_ids` list the
+  root of each tree. Every traversal starts from all of them, so one
+  traversal plans a tree against every tree of a forest, on either side.
 
 ### Changed
 
@@ -88,6 +98,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   peak memory. The plan's interactions are no longer sorted by source.
 - GLOBE's `BarnesHutKernel` needs less memory to train: an 80k-face DrivAerML
   training step no longer runs out of memory.
+- An eager GLOBE training step on 10k-face DrivAerML samples runs 2.2x
+  faster, and `torch.compile` builds GLOBE faster, with the same outputs.
+- GLOBE's `BarnesHutKernel.forward` takes `near_chunk_count`, a number of
+  chunks, in place of `near_chunk_size`, and no longer takes
+  `source_aggregates`.
+- The `source_data` and `global_data` of GLOBE's kernel classes must hold
+  exactly the declared fields, under nested keys: a flat key such as
+  `"grp.v"` now raises a `KeyError` that names the wrong fields.
+- GLOBE returns nested output fields in sorted key order, such as
+  `("flow", "nut")` before `("flow", "u")`.
+- `ClusterTree.compute_source_aggregates` packs its source data with
+  `TensorDict.pack`, so source data with leaves of several dtypes now raises
+  a `TypeError` instead of being promoted.
 - Refresh core, optional, development, and container dependency versions.
   Require PyTorch 2.13 or newer;
   use PyTorch 2.13's CUDA 12.9 wheels for the CUDA 12 backend. NATTEN
@@ -96,28 +119,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Mesh connectivity sorts the vertices of its short index tuples (edges,
   faces, cells) with a sorting network of elementwise minima and maxima on
-  large CUDA inputs, instead of `torch.sort`. On a GB300, facet and boundary
-  extraction, edge graphs, point adjacency and manifold checks of 10M-cell
-  meshes are 3-5x faster, butterfly subdivision 2.3x, and cell adjacency,
-  cleaning and the DEC Laplacian 1.2-2.1x. Results are unchanged.
+  large CUDA inputs, instead of `torch.sort`. On an NVIDIA GB300, facet and
+  boundary extraction, edge graphs, point adjacency, and manifold checks of
+  10M-cell meshes are 3-5x faster, butterfly subdivision 2.3x, and cell
+  adjacency, cleaning, and the DEC Laplacian 1.2-2.1x. Results are unchanged.
 - `physicsnemo.mesh.fields` is rebuilt around two types. `RankSpec` (`rank`,
   `symmetric`, `parity`; `shape(n_spatial_dims)`, `numel(n_spatial_dims)`) is
   one field's transformation law; `FieldSchema` is an insertion-ordered
   mapping from dotted field names to `RankSpec`, parsed once at a model's
   boundary with `FieldSchema.parse` (nested groups and dotted names flatten
-  alike) and queried with `.ranks`, `.count(rank)`, `FieldSchema.key(name)`
+  alike) and queried with `.ranks`, `.count(rank)`, `FieldSchema.key(name)`,
   and `.check(tensordict, label=...)`. Both are read-only `dict`s, so a
   declaration serializes to JSON as written and model checkpoints can record
   them directly. Validation is construction, so an invalid schema cannot
   exist. A field is declared as a `RankSpec` or a mapping of values,
   `{"rank": n}` (YAML: `pressure: {rank: 0}`); a mapping of mappings is a
   nested group. Integer leaves are no longer accepted.
-- Mesh geometry, curvature, sampling, mesh generation and LSQ gradients, and
-  the PyTorch backends of the deformation functionals, solve their small
-  per-cell determinants, inverses and least-squares problems in closed form
+- Mesh geometry, curvature, sampling, mesh generation, LSQ gradients, and
+  the PyTorch backends of the deformation functionals solve their small
+  per-cell determinants, inverses, and least-squares problems in closed form
   instead of with batched `torch.linalg` calls. Vertex angles, Gaussian
-  curvature and quality metrics become up to 1000x faster on GPU, and many
+  curvature, and quality metrics become up to 1,000x faster on GPU, and many
   mesh operations 4-130x faster on CPU.
+- Mesh vertex angles, dual volumes, curvature, quality metrics, and cell and
+  point normals use up to 3.4x less peak memory, and gradients through cell
+  centroids and normals are faster on GPU. Results are unchanged up to
+  rounding.
+- Mesh LSQ gradients (`Mesh.gradient`, `curl`, `divergence`,
+  `compute_point_derivatives`, `compute_cell_derivatives`, and the torch
+  backend of `physicsnemo.nn.functional.mesh_lsq_gradient`) solve the float32
+  systems of all points or cells at once rather than one neighbor count at a
+  time, and the derivatives of several fields share their least-squares
+  systems. On a GB200, the gradient of a 5.1M-tet mesh is 2.4x faster and
+  that of meshes up to 1.3M tets 3.4-3.7x faster; the derivatives of eight
+  scalar fields on a 1M-tet mesh are 13x faster. Results are unchanged up to
+  rounding. The intrinsic gradient of a float64 field on a float32 mesh now
+  returns a result of float32 accuracy instead of raising a dtype error.
 - GLOBE's field declarations are renamed after the schemas they hold:
   `output_field_ranks`, `boundary_source_data_ranks` and `global_data_ranks`
   become `output_schema`, `boundary_source_schemas` and `global_schema`
@@ -131,18 +168,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bincount`, and adjacencies carry their device, so cached adjacencies are
   reused without revalidation. Cell adjacency and the dual graph are 1.4-1.6x
   faster with 30% less peak memory, and synchronize CUDA 5 times instead of 38.
-- Mesh adjacencies, facet extraction, manifold checks and `fix_orientation`
+- Mesh adjacencies, facet extraction, manifold checks, and `fix_orientation`
   use up to 3x less peak memory, with unchanged results.
 - `physicsnemo.mesh.Mesh`, `DomainMesh`, `Adjacency`, `BVH`, `ClusterTree`,
   `DualInteractionPlan`, and `SourceAggregates` now inherit directly from
   `TensorClass` instead of using the `@tensorclass` decorator. Existing
   constructor defaults and `Mesh[m, s]` runtime specialization remain
   available, and nested mesh types survive memmap round trips. The memmap
-  layout is unchanged: existing `.pmsh` / `.pdmsh` files remain readable, and
+  layout is unchanged: existing `.pmsh` and `.pdmsh` files remain readable, and
   new files are byte-identical to those written with the decorator.
-- Mesh facet extraction, repair, merging, smoothing, subdivision and quality
+- `from_pyvista(point_source="cell_centroids", manifold_dim=1)` builds the
+  dual graph of line, triangle, and tetrahedral meshes 25-30x faster, with
+  identical output. With the default `force_copy=False`, `to_pyvista` output
+  of 1D and 3D meshes now shares cell storage with the `Mesh`, as 2D output
+  already did.
+- Mesh facet extraction, repair, merging, smoothing, subdivision, and quality
   metrics avoid CUDA synchronizations hidden in indexing with Python lists,
-  blocking copies of small host tables, boolean masks and one `.item()` per
+  blocking copies of small host tables, boolean masks, and one `.item()` per
   count. Laplacian smoothing synchronizes at most 4 times instead of about 30,
   independent of the number of iterations, and `remove_degenerate_cells` is
   about 5x faster. Results are unchanged.
@@ -150,11 +192,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   select with `torch.where`, instead of compacting boundary and interior edges
   with boolean masks. Butterfly subdivision synchronizes CUDA 3 times instead
   of 13, Loop subdivision 9 instead of 13, and both are 10-15% faster.
+- Mesh subdivision, `cell_data_to_point_data`, `point_data_to_cell_data`, and
+  `Mesh.merge` need up to 2.9x less peak memory, with unchanged results.
 - Mesh integration uses a shared `_effective_measure` field for complete cell
   and point measures. Cell measures fall back to geometry; point measures are
   explicit and independent of connectivity. `Mesh.integrate_samples` evaluates
   point quadrature separately from existing cell and vertex-field integration.
-  Sampling, centroid conversion, geometric transformations, subdivision and
+  Sampling, centroid conversion, geometric transformations, subdivision, and
   GLOBE use the mesh-owned measure API. Point measures carry their represented
   dimension so geometric scaling preserves their physical units.
 - Promotes the volumetric `DiffusionUNet3D` and its reusable `Conv3D`,
@@ -199,9 +243,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   used as the multistep extrapolation coordinate by `DPMPlusPlus2M` and
   `DPMPlusPlus2MUniC2`.
 
-- `translate`, `rotate`, `scale` and their `DomainMesh` and datapipe
+- `translate`, `rotate`, `scale`, and their `DomainMesh` and datapipe
   counterparts no longer synchronize CUDA for Python-number arguments, string
-  axes, rotations and scalar scales, so they return without waiting for queued
+  axes, rotations, and scalar scales, so they return without waiting for queued
   GPU work. `transform` gains `assume_similarity` and `rotate` gains
   `assume_valid_axis`, to skip the remaining runtime checks for general
   matrices and device-tensor axes. Cached normals are mapped with one small
@@ -209,13 +253,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path for pivoting matrices made `RandomRotateMesh(mode="uniform")` take 1.3 s
   on the 17.7M-triangle DrivAerML surface (6.5 ms now, on a GB300).
 
-- The `tolerance` of `sample_data_at_points`, `find_containing_cells` and
+- The `tolerance` of `sample_data_at_points`, `find_containing_cells`, and
   `find_all_containing_cells` is now relative. Barycentric coordinates must
   still be `>= -tolerance`, but the distance from a point to a cell's affine
   hull is now limited to `tolerance` times the largest absolute coordinate of
   the mesh, instead of `tolerance` in mesh units. Results no longer depend on
   the mesh's length unit and are identical when the mesh and query points are
   scaled by a power of two.
+- Mesh BVH queries, and with them `validate`, `Mesh.clean()`, point
+  containment and sampling, use up to 2.7x less peak memory. Results are
+  unchanged.
 - `fix_orientation` orients cells of any dimension and is 6x faster on the
   DrivAerML surface. Cells that fill their space, such as tetrahedra in 3D,
   come out with positive volumes. Its stats add `n_cells_flipped`, with
@@ -232,6 +279,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CUDA device.
 - `BoundingBoxFilter` takes about half as long on CPU. On a GPU it
   synchronizes once per coordinate key, instead of once per filtered tensor.
+- Every PhysicsNeMo-Mesh API page now opens with a figure, and the nine
+  tutorials in `examples/minimal/mesh` are reorganized from a first mesh to ML
+  pipelines. New sections show how to use the edge graph of a mesh, a
+  `Mesh[1, n]`, in graph network models.
 
 ### Deprecated
 
@@ -243,8 +294,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `physicsnemo.experimental.models.globe.utilities`, whose TensorDict helpers
+  GLOBE no longer uses.
 - `physicsnemo.mesh.fields`: `RankSpecDict`, `flatten_rank_spec`,
-  `rank_counts`, `ranks_from_tensordict` and `validate_data_contains_ranks`,
+  `rank_counts`, `ranks_from_tensordict`, and `validate_data_contains_ranks`,
   replaced by `FieldSchema` (see Changed). Importing one of them from
   `physicsnemo.mesh` or `physicsnemo.mesh.fields` raises an `ImportError` that
   names its replacement.
@@ -258,46 +311,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Replacements:
   - `sdf_to_stl(field, threshold)`: `marching_cubes` from
     `physicsnemo.mesh.generate` returns a `Mesh`; save it with `to_pyvista`
-    from `physicsnemo.mesh.io`, e.g.
+    from `physicsnemo.mesh.io`, for example,
     `to_pyvista(marching_cubes(torch.as_tensor(field), threshold)).save("out.stl")`.
   - `combine_vtp_files(files, out)`:
     `pyvista.merge([pyvista.read(f) for f in files]).save(out)`.
   - `convert_tesselated_files_in_directory`: `pyvista.read(src).save(dst)` per
-    file; PyVista reads and writes OBJ, VTP and STL.
+    file; PyVista reads and writes OBJ, VTP, and STL.
 
 ### Fixed
 
+- `GLOBE` accepts `boundary_meshes` as a TensorDict, as the DrivAerML example
+  passes them. Before, every forward pass of that example failed.
+- Under `torch.compile`, GLOBE no longer recompiles on its second training
+  step, nor for each new sample of a similar size. Each of these recompiles
+  took minutes at DrivAerML sizes.
+- The GLOBE examples' requirements no longer downgrade PyVista and Matplotlib
+  below the versions PhysicsNeMo requires.
 - `signed_distance_field`, in `physicsnemo.nn.functional` and
   `physicsnemo.mesh.spatial`, supports backpropagation: the signed distance is
   differentiable with respect to the mesh vertices and the query points.
   Before, `backward` raised because the Warp op had no autograd formula. The
   hit points and hit faces carry no gradients.
+- `Mesh.clean()`, `clean_mesh`, `merge_duplicate_points`, and `validate()` find
+  every duplicate point in clusters of more than 100 coincident points. Before,
+  some duplicates were missed and stayed in the cleaned mesh.
+- `fill_holes` works on meshes with point or cell data, where it raised before.
+  The new points and faces hold NaN in floating-point fields and 0 in others.
+- `compute_mesh_statistics` reports the mean and standard deviation of the
+  edge lengths of all cells. Before, the mean averaged each cell's shortest and
+  longest edge, and the standard deviation covered only the longest edges.
+- `is_manifold()` rejects triangle surfaces pinched at a vertex, such as two
+  closed surfaces that share a single vertex.
+- `get_boundary_edges` returns edges, not triangles, for meshes of four or more
+  manifold dimensions.
+- `Mesh.with_data` given a dict no longer shares nested data groups with the
+  source mesh, so changing the result leaves the source unchanged.
+- `cell_data_to_point_data` and `point_data_to_cell_data` raise, unless
+  `overwrite_keys=True`, when a field has the name of a data group in the
+  destination or the reverse. Before, they silently dropped data.
+- Cleaning or repairing a mesh with no cells keeps its point data fields, now
+  empty, so the result can be merged with other meshes.
+- `get_point_to_points_adjacency()` returns no neighbors for meshes of vertex
+  cells, where it raised before.
 - `Mesh` and `DomainMesh` subclasses that add fields no longer need their own
-  `__init__` with tensordict 0.15, whose tensorclass subclasses inherit the
+  `__init__` with TensorDict 0.15, whose tensorclass subclasses inherit the
   parent's `__init__`. The base `__init__` accepts and stores the fields that a
   subclass declares, and still raises `TypeError` for any other keyword.
+- Linear subdivision of tetrahedral meshes keeps the orientation of every
+  child cell. Before, half of the children came out inverted.
+- Meshes with `int32` connectivity give the same results as `int64` ones in
+  Butterfly and Loop subdivision, edge lookups and `refit_mesh_to_implicit`.
+  Before, large meshes could get wrong Butterfly midpoints and edge matches,
+  Loop subdivision raised on open surfaces, and `refit_mesh_to_implicit` could
+  leave boundary vertices off the surface.
+- Loop subdivision of `float64` meshes computes its vertex weights in
+  `float64`. Before, it computed them in `float32`, which limited the new
+  vertex positions to `float32` precision.
 - A mesh saved with cached adjacencies now loads in a new Python process.
   Before, `Mesh.load` raised unless `physicsnemo.mesh.neighbors` was already
   imported.
+- Intrinsic cell gradients on curves in 3D now lie along each cell's own
+  direction. Before, they crashed on open curves and were projected onto the
+  wrong tangent on closed curves.
+- Curvature of a curve whose two edges at a vertex both start or both end
+  there, as `get_boundary_mesh` produces, is now correct. Before, the angle at
+  such a vertex was wrong, so a right-angled corner had zero curvature.
+- DEC gradients, divergences, and Laplacians of a float32 field on a float64
+  mesh now return float64 results instead of raising. DEC gradients and
+  Laplacians of tensor fields, and LSQ cell gradients, no longer fail on meshes
+  without cells, and `flat` handles fields with several trailing dimensions.
 - `DefaultCollator` with a `stack_dim` past the batch dimensions of the
   samples stacks each tensor with `torch.stack`, without TensorDict behaviour
   that 0.15 deprecates. The batch's `batch_size` now matches its tensors, and
   samples with non-tensor data no longer fail to collate.
-- The API reference again shows the docstrings of `Mesh`, `DomainMesh` and the
+- `physicsnemo.mesh` no longer raises small lengths, areas and volumes to a
+  fixed floor, which distorted results on float32 meshes in meters a few
+  millimeters across. Area-weighted aggregation, `partition_cells` centroids,
+  support volumes, the DEC Laplacian, the sharp, Gaussian, and mean curvatures,
+  and triangle circumcenters now give the same results at any scale.
+- `sample_random_points_on_cells` with a small `alpha` no longer places some
+  points outside their cells.
+- In float32, `sdf_polygon_2d` no longer gives NaN distances for a polygon
+  with a repeated vertex or NaN gradients on its edges, and
+  `mesh_implicit_domain` now meshes float32 polygons such as a square.
+- The API reference again shows the docstrings of `Mesh`, `DomainMesh`, and the
   other tensorclasses in `physicsnemo.mesh`. TensorDict 0.14 replaced them
   with generated signatures.
 - The GLOBE examples no longer pin TensorDict 0.12, which conflicted with
   PhysicsNeMo's own requirement.
+- `delaunay_mesh_2d` recovers boundary segments that cross several triangles.
+  Before, it raised on simple polygons, even rectilinear ones, and blamed
+  float64 degeneracy or crossing segments.
+- `signed_distance_field` accepts non-contiguous query points and vertices,
+  such as a transposed tensor, which used to raise a Warp error.
+- The mesh `signed_distance_field` keeps the orientation of the near-degenerate
+  faces it repairs. Before, the repair could flip a thin face, so points
+  outside a watertight mesh got a negative distance.
+- `knn` with the cuML backend, `find_nearest_cells` and `match_points` return
+  empty results for an empty query set on CUDA, as they do on CPU, instead of
+  raising a CUDA error. `match_points` also returns no matches for an empty
+  target.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only
   the cells whose three vertices all survived the point cut, about `N / 27` of
-  the `N` requested. The default keeps the composed behaviour.
+  the `N` requested. The default keeps the composed behavior.
 - Unified external aero recipe: GLOBE-volume trains on all the requested
   vehicle surface cells, not about 4% of them.
-- Seeded `DomainMeshReader` subsamples select the same rows from zarr stores
+- Seeded `DomainMeshReader` subsamples select the same rows from Zarr stores
   as from memmap files. Before, boundaries read in full, and interiors read
   with `drop_interior_cells`, could differ between the two formats.
+- `from_pyvista(point_source="cell_centroids")` places the centroid of every
+  linear cell at the mean of its vertices, as `Mesh.cell_centroids` does.
+  Before, polygons, pyramids, prisms and polyhedra got other points, and even
+  a regular pentagon was off-center.
+- `to_pyvista` exports vertex-cell meshes, and empty line and triangle meshes,
+  with their cell data. Before, the export failed.
+- `to_zarr` raises a `TypeError` naming any field it cannot store, such as a
+  bfloat16 field, before it writes anything. Before, it left a partial store
+  that loaded without those fields.
+- `from_zarr`, `MeshReader` and `DomainMeshReader` raise on a zarr store that
+  `to_zarr` did not write or did not finish. Before, a store cut short by a
+  full disk, for example, loaded without its missing fields.
+- `from_zarr` loads scalar uint64 fields, where it raised before.
+- `Mesh.draw` with matplotlib colors 2D curves by their scalars and honors
+  `alpha_edges`. It also draws 1D meshes in view, vertex cells as colored
+  markers, and integer vector scalars, where it failed before.
+- `Mesh.draw` with PyVista lets `backend_options` set the edge color, line
+  width and scalar bar, where it raised before.
 - GLOBE DrivAerML postprocessing reports correct Cd, Cl, and Cs on subsampled
   surfaces. Before, they shrank with the fraction of cells kept.
 - The unified external aero recipe documents how surface subsampling affects
@@ -308,6 +449,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With `expand_far_targets=True` and `leaf_size > 1`,
   `ClusterTree.find_dual_interaction_pairs` still approximated some targets by
   their leaf's centroid.
+- Unified external aero recipe: the final epoch is always checkpointed,
+  resumed runs keep the epoch-mode learning-rate schedule (older checkpoints
+  resume one epoch behind), and fp16 runs save and restore `GradScaler` state.
 - Checkpoint loading resolves model weights at the selected training checkpoint's
   filename index, preventing resumes that mix epochs. Missing required weights
   raise before any model or training state is restored. Distributed loads validate
@@ -325,19 +469,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   They now use the edges of every cell and are exact for linear fields on
   segments, triangles and tetrahedra. `to_edge_graph()` works on 1D meshes, and
   `get_facet_mesh(manifold_codimension=0)` returns the deduplicated cells.
+- Meshes from `slice_cells` and `subdivide` get their own data containers, so
+  adding or removing a field on them no longer changes the source mesh.
 - Triangle areas use direct area components and a rescaled norm, preserving
   thin faces and their quadrature measures without Gram cancellation or
-  overflow/underflow in the norm.
+  overflow or underflow in the norm.
 - Vertex angles of nearly flat triangles in 2D and nearly flat tetrahedra are
-  now accurate. A 2D triangle with an angle near pi used to get angles of 0, 0
+  now accurate. A 2D triangle with an angle near pi used to get angles of 0, 0,
   and 0, which also threw off Gaussian curvature and quality metrics.
-- Gaussian curvature of curves in 3D is now correct: a unit circle with 1000
+- Gaussian curvature of curves in 3D is now correct: a unit circle with 1,000
   segments had a curvature of 499 instead of 1.
 - Small angles from `stable_angle_between_vectors`, volumes of thin
   tetrahedra in 4D or more, and FEM cotangent weights of thin cells keep their
   accuracy in float32. The first two used to come out as 0.
 - FEM cotangent weights of long, thin but well-shaped cells are accurate in
-  any vertex order. A tetrahedron with one edge 5000 times longer than the
+  any vertex order. A tetrahedron with one edge 5,000 times longer than the
   others used to get the weights of a degenerate cell.
 - Vertex angles of triangles in 3D are correct in float16 and at any
   coordinate scale, and `stable_angle_between_vectors` is correct in float16.
@@ -355,8 +501,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unified external aero recipe: near-wall SDF normals no longer flip inward
   from float32 roundoff. Stored signed distances are unchanged.
 - Fixes mesh dtype handling: preserves integer-coordinate precision, normalizes
-  connectivity safely, and rejects integer `.to()` casts. Floating/complex casts
-  preserve the source mesh.
+  connectivity safely, and rejects integer `.to()` casts. Floating-point and
+  complex casts preserve the source mesh.
 - Fixed an issue in `Natten2DSelfAttention` and `RopeNatten2DSelfAttention`
   with `qk_norm=True` mixing `LayerNorm` fp32 Q/K outputs with autocasted V
   dtypes.
@@ -368,7 +514,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recipe no longer silently skip or mis-handle nested `TensorDict` fields
   (membership was tested against top-level `td.keys()`, and
   `NormalizeMeshFields.inverse_td` matched leaves by their last name only).
-- `from_pyvista` / `to_pyvista` round-trip nested `Mesh` data keys, and GLOBE
+- `from_pyvista` and `to_pyvista` round-trip nested `Mesh` data keys, and GLOBE
   accepts a nested `global_data_ranks` declaration.
 - Fixes out-of-bounds reads in the `Darcy2D` multi-grid solver for
   `nr_multigrids >= 3` that could return huge or NaN pressure fields, and
@@ -386,7 +532,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   domain-level `global_data`.
 - `sample_data_at_points` and `find_containing_cells` find on-surface points
   of float32 surface meshes in large length units. A torus scaled to
-  `|x| ~ 1300` (millimetres) previously found 0.4% of its on-surface points
+  `|x| ~ 1300` (millimeters) previously found 0.4% of its on-surface points
   and returned NaN for the rest, because float32 rounding (about
   `1.2e-7 * |x|`) exceeded the absolute `1e-6` distance tolerance.
 - `BVH.from_mesh` and `ClusterTree.from_points` compute Morton codes for 1-3
@@ -405,13 +551,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coordinates in unused neighbor slots when `max_points` exceeds the number of
   points. Those slots now stay zero, as with the warp backend, so point 0 no
   longer receives their gradient.
+- Eleven PhysicsNeMo-Mesh API pages that listed no functions now document them,
+  and the pages of tensorclasses such as `Mesh` no longer list every TensorDict
+  method.
+- PhysicsNeMo-Mesh examples that raised an error, and claims that the code
+  contradicts, are corrected across the API reference, READMEs, and docstrings.
+  The corrected claims include the sign of the Laplacian and the dimensions
+  that each calculus operator supports.
+- The transient conjugate heat transfer tank filling example trains again, on
+  one GPU or several. Before, its `train.py` stopped with a `TypeError` before
+  the first step.
 
 ### Security
 
 ### Dependencies
 
 - Requires TensorDict 0.15 (`tensordict[zarr]>=0.15.0,<0.16.0`). Building,
-  copying and moving small meshes takes 20-50% less time on CPU.
+  copying, and moving small meshes takes 20-50% less time on CPU.
 - Drops `onnx`, `torchvision` and `pandas` from the required dependencies.
   `pandas` is now optional via `datapipes-extras` or `model-extras`.
 
