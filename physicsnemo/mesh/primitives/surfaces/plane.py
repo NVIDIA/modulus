@@ -19,6 +19,8 @@
 Dimensional: 2D manifold in 3D space (has boundary).
 """
 
+import math
+
 import torch
 
 from physicsnemo.mesh.mesh import Mesh
@@ -40,7 +42,8 @@ def load(
         Number of subdivisions per edge. Creates (subdivisions+1)^2 vertices
         and 2*subdivisions^2 triangles.
     normal : tuple[float, float, float]
-        Normal vector to the plane (will be normalized).
+        Normal vector to the plane (will be normalized). Must be finite and
+        nonzero.
     device : str
         Compute device ('cpu' or 'cuda').
 
@@ -64,8 +67,13 @@ def load(
     )
 
     # Rotate to align with normal if not (0, 0, 1)
-    normal_t = torch.tensor(normal, dtype=torch.float32, device=device)
-    normal_t = normal_t / torch.norm(normal_t)
+    # math.hypot avoids the float32 underflow and overflow of torch.norm
+    length = math.hypot(*normal)
+    if not 0 < length < math.inf:
+        raise ValueError(f"normal must be finite and nonzero, got {normal=}")
+    normal_t = torch.tensor(
+        [c / length for c in normal], dtype=torch.float32, device=device
+    )
 
     if not torch.allclose(normal_t, torch.tensor([0.0, 0.0, 1.0], device=device)):
         # Find rotation axis and angle

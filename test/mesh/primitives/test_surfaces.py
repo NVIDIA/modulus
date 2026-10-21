@@ -118,16 +118,27 @@ class TestSurfacePrimitives:
             (1e-4, 0.0, -1.0),
             (1.0, 0.0, 0.0),
             (0.0, 1.0, 1.0),
+            (1e-30, 0.0, 0.0),
+            (0.0, 1e30, 0.0),
         ],
     )
     def test_plane_normal(self, normal):
         """The cell normals of a plane match the requested normal."""
         mesh = primitives.surfaces.plane.load(normal=normal)
 
-        expected = torch.nn.functional.normalize(torch.tensor(normal), dim=0)
+        expected = torch.tensor(normal, dtype=torch.float64)
+        expected = (expected / expected.norm()).float()
         torch.testing.assert_close(
             mesh.cell_normals, expected.expand_as(mesh.cell_normals)
         )
+
+    @pytest.mark.parametrize(
+        "normal", [(0.0, 0.0, 0.0), (float("nan"), 0.0, 1.0), (float("inf"), 0.0, 0.0)]
+    )
+    def test_plane_rejects_degenerate_normal(self, normal):
+        """A zero or non-finite normal raises instead of giving the +z plane."""
+        with pytest.raises(ValueError, match="normal must be finite and nonzero"):
+            primitives.surfaces.plane.load(normal=normal)
 
     def test_torus_radii(self):
         """Test that torus has correct radii."""
