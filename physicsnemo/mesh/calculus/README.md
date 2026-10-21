@@ -138,7 +138,7 @@ Properties:
 
 <!-- markdownlint-disable MD033 -->
 <details>
-<summary>Cotangent weights from the FEM stiffness matrix</summary>
+<summary>Cotangent Weights from the FEM Stiffness Matrix</summary>
 <!-- markdownlint-enable MD033 -->
 
 For an $n$-simplex with vertices $v_0, \ldots, v_n$, the cotangent weight
@@ -149,8 +149,7 @@ w_{ij} = -|\sigma| \, (\nabla \lambda_i \cdot \nabla \lambda_j),
 $$
 
 where $\lambda_i$ are barycentric coordinate functions and $|\sigma|$ is
-the cell volume. The gradient dot products are computed from the inverse
-Gram matrix:
+the cell volume. The inverse Gram matrix gives the gradient dot products:
 
 $$
 \begin{aligned}
@@ -277,7 +276,7 @@ Implementation:
   barycentric gradients[^hirani2003-eq581].
 - Flat ($\flat$): PDP-flat with averaged endpoint vectors[^hirani2003-s56].
 
-Sharp and flat are not exact inverses in discrete
+Sharp and flat are not exact inverses in
 DEC[^hirani2003-prop553]. This is a property of the discrete theory, not a
 bug.
 
@@ -334,7 +333,7 @@ from physicsnemo.mesh.calculus.divergence import compute_divergence_points_lsq
 div_v = compute_divergence_points_lsq(mesh, vector_field)  # (n_points,)
 ```
 
-Computes the divergence
+It computes the divergence
 
 $$
 \operatorname{div}(v) = \partial_x v_x + \partial_y v_y + \partial_z v_z
@@ -351,7 +350,7 @@ from physicsnemo.mesh.calculus.curl import compute_curl_points_lsq
 curl_v = compute_curl_points_lsq(mesh, vector_field)  # Requires n_spatial_dims = 3
 ```
 
-Computes the curl from the antisymmetric part of the LSQ Jacobian.
+It computes the curl from the antisymmetric part of the LSQ Jacobian.
 `compute_curl_cells_lsq` does the same at cell centers.
 
 ## Integration
@@ -390,7 +389,7 @@ Algorithm (dimension-specific):
 1D manifolds (edges):
 
 - Each vertex gets half the length of each incident edge.
-- Exact for piecewise linear 1-manifolds.
+- Exact for piecewise-linear 1-manifolds.
 
 2D manifolds (triangles):
 
@@ -526,7 +525,7 @@ uses the FEM cotangent weights in every dimension.
 
 $\operatorname{div}(\nabla f)$ is close to $\Delta f$, but not equal to it:
 
-- In discrete DEC, sharp ($\sharp$) and flat ($\flat$) are not exact
+- In DEC, sharp ($\sharp$) and flat ($\flat$) are not exact
   inverses[^hirani2003-prop553].
 - Therefore, the composed operator differs from
   `compute_laplacian_points_dec`. Away from the boundary of a regular mesh,
@@ -552,7 +551,7 @@ The three primary works are:
 
 - Meyer, M., Desbrun, M., Schröder, P., & Barr, A. H. (2003).
   *Discrete Differential-Geometry Operators for Triangulated 2-Manifolds*.
-  In: Visualization and Mathematics III, pp. 35-57.
+  In: Visualization and Mathematics III, pp. 35–57.
 - Desbrun, M., Hirani, A. N., Leok, M., & Marsden, J. E. (2005).
   *Discrete Exterior Calculus*. arXiv:math/0508341v2.
 - Hirani, A. N. (2003). *Discrete Exterior Calculus*. PhD thesis,
@@ -569,7 +568,7 @@ for acute triangles).
 curvature).
 [^meyer2003-fig4]: Meyer et al. (2003), Fig. 4 (mixed-area subdivision for
 obtuse triangles).
-[^meyer2003-s32_34]: Meyer et al. (2003), §3.2-3.4 (mixed Voronoi areas).
+[^meyer2003-s32_34]: Meyer et al. (2003), §3.2–3.4 (mixed Voronoi areas).
 [^desbrun2005]: Desbrun et al. (2005), *Discrete Exterior Calculus*,
 arXiv:math/0508341v2.
 [^desbrun2005-s3]: Desbrun et al. (2005), §3 (Primal Simplicial Complex and
