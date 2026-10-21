@@ -61,7 +61,7 @@ The following curves are embedded in 1D, 2D, and 3D spaces:
 
 | Function | Dimensions | Description | Properties |
 | ---------- | ------------ | ------------- | ------------ |
-| `line_segment_1d` | 1D→1D | Line segment on real line | Open |
+| `line_segment_1d` | 1D→1D | Line segment on the real line | Open |
 | `line_segments_1d` | 1D→1D | Multiple disconnected segments | Disconnected |
 | `straight_line_2d` | 1D→2D | Straight line in 2D | Open |
 | `circular_arc_2d` | 1D→2D | Circular arc in 2D | Open, constant curvature |
@@ -141,8 +141,8 @@ The following functions create mesh variations:
 | ---------- | ------------- | ---------- |
 | `lumpy_sphere` | Sphere surface with radial noise (2D→3D) | Testing robustness to irregular geometry |
 | `lumpy_ball` | Tetrahedral ball with radial noise (3D→3D) | Irregular volume meshes |
-| `noisy_mesh` | Add Gaussian noise to any mesh | Generic perturbation utility |
-| `perturbed_grid` | Structured grid with random perturbations (2D→2D) | Testing on nearly-regular grids |
+| `noisy_mesh` | Any mesh with added Gaussian noise | Generic perturbation utility |
+| `perturbed_grid` | Structured grid with random perturbations (2D→2D) | Testing on nearly regular grids |
 <!-- markdownlint-enable MD013 -->
 
 The following procedural noise functions are in
@@ -150,7 +150,7 @@ The following procedural noise functions are in
 
 | Function | Description | Dimensions | GPU |
 | ---------- | ------------- | ------------ | ----- |
-| `perlin_noise_nd` | Dimension-agnostic Perlin noise | 1D-nD | ✓ |
+| `perlin_noise_nd` | Dimension-agnostic Perlin noise | 1D–nD | ✓ |
 | `perlin_noise_1d` | 1D Perlin noise | 1D | ✓ |
 | `perlin_noise_2d` | 2D Perlin noise | 2D | ✓ |
 | `perlin_noise_3d` | 3D Perlin noise | 3D | ✓ |
@@ -186,7 +186,7 @@ The following functions wrap PyVista's example datasets:
 ### `text`: Text as Meshes
 
 `physicsnemo.mesh.primitives.text` renders a string into a mesh with
-matplotlib's fonts, through the following functions:
+Matplotlib's fonts, through the following functions:
 
 - `text_1d_2d`: outlines
 - `text_2d_2d`: filled glyphs

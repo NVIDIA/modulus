@@ -1,6 +1,6 @@
 # Mesh Visualization
 
-`Mesh.draw()` plots a mesh with matplotlib or PyVista, optionally colored by
+`Mesh.draw()` plots a mesh with Matplotlib or PyVista, optionally colored by
 point or cell data. For the API reference, refer to the
 [visualization page](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/visualization.html).
 
@@ -32,7 +32,7 @@ mesh.draw()
 With `backend="auto"` (the default), the backend depends on the spatial
 dimension of the mesh (`n_spatial_dims`):
 
-- 0D to 2D space: matplotlib.
+- 0D to 2D space: Matplotlib.
 - 3D space: PyVista.
 
 If the preferred backend is not installed, `draw()` uses the other one.
@@ -76,7 +76,7 @@ mesh.draw(cell_scalars=scalars)
 
 ### Vector Fields (Automatic Norming)
 
-`draw()` colors by the L2 norm of multi-dimensional data:
+`draw()` colors by the L2 norm of multidimensional data:
 
 ```python
 # 3D velocity field at each point
@@ -133,8 +133,8 @@ The PyVista backend ignores `alpha_edges` and warns when it is not 1.0.
 
 ### Drawing on Existing Axes or Plotters
 
-Pass `ax` to draw on an existing matplotlib `Axes` or pyvista `Plotter`, for
-example to overlay several meshes in one scene. With matplotlib:
+Pass `ax` to draw on an existing Matplotlib `Axes` or PyVista `Plotter`, for
+example to overlay several meshes in one scene. With Matplotlib:
 
 ```python
 import matplotlib.pyplot as plt
@@ -159,7 +159,7 @@ colors depend on which scalars are active:
 | `cell_scalars` | Black | Colored by the scalars |
 <!-- markdownlint-enable MD013 -->
 
-Line segments that matplotlib draws in 1D or 3D space stay light gray.
+Line segments that Matplotlib draws in 1D or 3D space stay light gray.
 
 ## Return Values
 
@@ -178,7 +178,7 @@ plotter.show()
 
 The full signature of `Mesh.draw()`, with every default, is on the
 [visualization page](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/visualization.html).
-The matplotlib backend ignores `backend_options` and warns when it is set.
+The Matplotlib backend ignores `backend_options` and warns when it is set.
 
 ## Examples
 

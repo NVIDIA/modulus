@@ -24,7 +24,7 @@ PhysicsNeMo-Mesh brings meshes into PyTorch:
 
 ## Quick Start
 
-Install PhysicsNeMo with the `mesh-extras` extra, which adds matplotlib,
+Install PhysicsNeMo with the `mesh-extras` extra, which adds Matplotlib,
 PyVista, and VTK for drawing and file I/O:
 
 ```bash
@@ -231,7 +231,7 @@ clean = mesh.clean()  # Merge duplicate points, drop bad and unused cells
 
 ### Spatial Queries and Sampling
 
-![A vertex field on a torus, and 5000 random points on the same surface
+![A vertex field on a torus, and 5,000 random points on the same surface
 colored by the field interpolated at each point](../../docs/img/mesh/sampling_interpolation.png)
 
 ```python
@@ -322,7 +322,7 @@ Each area links to its reference:
 | [Boundaries](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/boundaries.html) and [geometry](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/geometry.html) | Boundary and facet meshes, watertight and manifold checks, areas, normals, dual volumes |
 | [Calculus](./calculus/README.md) and [curvature](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/curvature.html) | Gradient, divergence, curl, Laplacian, integration, Gaussian and mean curvature |
 | [Neighbors](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/neighbors.html), [spatial](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/spatial.html), [sampling](https://docs.nvidia.com/physicsnemo/latest/physicsnemo/api/mesh/sampling.html) | Adjacency, edge and dual graphs, BVH queries, signed distance, random sampling, interpolation |
-| [Visualization](./visualization/README.md) | `Mesh.draw()` with matplotlib or PyVista |
+| [Visualization](./visualization/README.md) | `Mesh.draw()` with Matplotlib or PyVista |
 <!-- markdownlint-enable MD013 -->
 
 The tests in [`test/mesh/`](../../test/mesh/) show usage patterns for every
