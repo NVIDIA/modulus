@@ -18,9 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adds standalone FLARE++ attention and model APIs, with input-conditioned
   dynamic routing, plus a ``GALE_FPP`` backend for using the same mixer inside
   GeoTransolver.
-- Adds `physicsnemo.nn.functional.safe_normalize` for vector normalization
-  across floating-point dtypes and scales, preserving zero vectors and the
-  input dtype under autocast.
 - Adds `physicsnemo.datapipes.keys` and routes every config-driven field name
   in `physicsnemo.datapipes` through it, so a `"."` in a YAML field name
   (`"solution.pressure"`) addresses a leaf inside a nested `TensorDict`.
@@ -286,6 +283,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
+- `weighted_multinomial` and `WeightedMultinomial` moved from
+  `physicsnemo.nn.functional` to `physicsnemo.utils`. Importing them from
+  `physicsnemo.nn.functional` still works but emits `LegacyFeatureWarning`.
 - Unified external aerodynamics recipe: `training.loss_type: rmse` is
   deprecated in favour of `relative_mse`, which names what it always
   computed (target-normalized relative MSE, no square root) and delegates
@@ -320,6 +320,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `weighted_multinomial` with `replacement=True` accepts more than 2^24
+  weights, instead of raising `torch.multinomial`'s category-limit error. So
+  DoMINO's `sample_points_on_mesh` now works on meshes with over 2^24 faces.
 - `GLOBE` accepts `boundary_meshes` as a TensorDict, as the DrivAerML example
   passes them. Before, every forward pass of that example failed.
 - Under `torch.compile`, GLOBE no longer recompiles on its second training
