@@ -320,6 +320,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The "Research and Publications" docs page renders its tables. The page is
+  now `docs/research.rst`, since the docs site's Markdown parser renders pipe
+  tables as plain text.
 - `GLOBE` accepts `boundary_meshes` as a TensorDict, as the DrivAerML example
   passes them. Before, every forward pass of that example failed.
 - Under `torch.compile`, GLOBE no longer recompiles on its second training
