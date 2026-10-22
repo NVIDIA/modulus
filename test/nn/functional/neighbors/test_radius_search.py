@@ -425,6 +425,32 @@ def test_radius_search_compare_forward_contract(device: str):
     RadiusSearch.compare_forward(output, reference)
 
 
+# Validate that compare-forward ignores the order of the neighbors of each query.
+# With three queries, fixed-size indices have as many rows as batched dynamic ones.
+@pytest.mark.parametrize("batched", [False, True])
+def test_radius_search_compare_forward_reordered_neighbors(device: str, batched: bool):
+    torch.manual_seed(0)
+    batch = (2,) if batched else ()
+    points = torch.rand(*batch, 50, 3, device=device)
+    queries = torch.rand(*batch, 3, 3, device=device)
+
+    # Every point is within the radius, so every slot holds a neighbor.
+    output = radius_search(
+        points,
+        queries,
+        radius=2.0,
+        max_points=4,
+        return_dists=True,
+        return_points=True,
+        implementation="torch",
+    )
+    # Reverse the neighbors of each query, which the indices hold along their
+    # last dimension.
+    neighbor_dim = output[0].ndim - 1
+    reference = tuple(torch.flip(t, dims=[neighbor_dim]) for t in output)
+    RadiusSearch.compare_forward(output, reference)
+
+
 # Validate compare-backward hook contract for radius search.
 def test_radius_search_compare_backward_contract(device: str):
     _, args, kwargs = next(iter(RadiusSearch.make_inputs_backward(device=device)))
@@ -745,21 +771,30 @@ def test_radius_search_batched_opcheck(device: str):
 _IMPLEMENTATIONS = ("torch", pytest.param("warp", marks=requires_module("warp")))
 
 
-def _build_point_dim_problem(device: str, dim: int):
-    """Build (50, dim) points and (10, dim) queries in the unit cube."""
+def _build_point_dim_problem(device: str, dim: int, batched: bool = False):
+    """Build (50, dim) points and (10, dim) queries in the unit cube.
+
+    With ``batched``, add a leading batch dimension of size 2.
+    """
     # Generate on CPU so that every device gets the same points. None of them is
     # within float32 rounding of the 0.3 search radius from a query.
     torch.manual_seed(0)
-    points = torch.rand(50, dim).to(device)
-    queries = torch.rand(10, dim).to(device)
+    batch = (2,) if batched else ()
+    points = torch.rand(*batch, 50, dim).to(device)
+    queries = torch.rand(*batch, 10, dim).to(device)
     return points, queries
 
 
-# Compare all neighbors within the radius with a brute-force cdist reference.
+# Compare all neighbors within the radius, and gradients through them, with a
+# brute-force cdist reference.
 @pytest.mark.parametrize("implementation", _IMPLEMENTATIONS)
 @pytest.mark.parametrize("dim", [1, 2, 3])
-def test_radius_search_point_dims(device: str, implementation: str, dim: int):
-    points, queries = _build_point_dim_problem(device, dim)
+@pytest.mark.parametrize("batched", [False, True])
+def test_radius_search_point_dims(
+    device: str, implementation: str, dim: int, batched: bool
+):
+    points, queries = _build_point_dim_problem(device, dim, batched)
+    points.requires_grad_(True)
     radius = 0.3
     indices, selected_points, distances = radius_search(
         points,
@@ -770,27 +805,37 @@ def test_radius_search_point_dims(device: str, implementation: str, dim: int):
         implementation=implementation,
     )
 
-    # Each (query, point) pair within the radius is found exactly once.
-    reference = torch.cdist(queries.double(), points.double())
+    # Each (query, point) pair within the radius is found exactly once. Batched
+    # indices start with a row of batch indices.
+    reference = torch.cdist(queries.double(), points.detach().double())
+    *batch_idx, query_idx, point_idx = indices
     found = torch.zeros_like(reference, dtype=torch.bool)
-    found[indices[0], indices[1]] = True
+    found[(*batch_idx, query_idx, point_idx)] = True
     assert torch.equal(found, reference <= radius)
     assert indices.shape[1] == found.sum()
 
     assert selected_points.shape == (indices.shape[1], dim)
-    torch.testing.assert_close(selected_points, points[indices[1]])
     torch.testing.assert_close(
-        distances, reference[indices[0], indices[1]].to(distances.dtype)
+        selected_points, points.detach()[(*batch_idx, point_idx)]
     )
+    torch.testing.assert_close(
+        distances, reference[(*batch_idx, query_idx, point_idx)].to(distances.dtype)
+    )
+
+    # Each neighbor passes a gradient of 1 to its point.
+    selected_points.sum().backward()
+    counts = found.sum(dim=-2).to(points.dtype)
+    torch.testing.assert_close(points.grad, counts[..., None].expand_as(points))
 
 
 # Validate the fixed-size outputs, and gradients through them, with max_points.
 @pytest.mark.parametrize("implementation", _IMPLEMENTATIONS)
 @pytest.mark.parametrize("dim", [1, 2, 3])
+@pytest.mark.parametrize("batched", [False, True])
 def test_radius_search_point_dims_max_points(
-    device: str, implementation: str, dim: int
+    device: str, implementation: str, dim: int, batched: bool
 ):
-    points, queries = _build_point_dim_problem(device, dim)
+    points, queries = _build_point_dim_problem(device, dim, batched)
     points.requires_grad_(True)
     radius, max_points = 0.3, 4
     indices, selected_points, distances = radius_search(
@@ -802,34 +847,38 @@ def test_radius_search_point_dims_max_points(
         return_points=True,
         implementation=implementation,
     )
-    assert indices.shape == (queries.shape[0], max_points)
-    assert selected_points.shape == (queries.shape[0], max_points, dim)
-    assert distances.shape == (queries.shape[0], max_points)
+    assert indices.shape == (*queries.shape[:-1], max_points)
+    assert selected_points.shape == (*queries.shape[:-1], max_points, dim)
+    assert distances.shape == (*queries.shape[:-1], max_points)
 
     # Each query fills its first slots with distinct neighbors, as many as fit,
     # and leaves the other slots zero.
     reference = torch.cdist(queries.double(), points.detach().double())
     within = reference <= radius
-    num_used = within.sum(dim=1, keepdim=True).clamp(max=max_points)
+    num_used = within.sum(dim=-1, keepdim=True).clamp(max=max_points)
     used = torch.arange(max_points, device=device) < num_used
-    query_idx, _ = torch.nonzero(used, as_tuple=True)
+    *batch_idx, query_idx, _ = torch.nonzero(used, as_tuple=True)
     point_idx = indices[used]
-    assert within[query_idx, point_idx].all()
+    assert within[(*batch_idx, query_idx, point_idx)].all()
     found = torch.zeros_like(within)
-    found[query_idx, point_idx] = True
+    found[(*batch_idx, query_idx, point_idx)] = True
     assert found.sum() == used.sum()
-    torch.testing.assert_close(selected_points[used], points.detach()[point_idx])
     torch.testing.assert_close(
-        distances[used], reference[query_idx, point_idx].to(distances.dtype)
+        selected_points[used], points.detach()[(*batch_idx, point_idx)]
+    )
+    torch.testing.assert_close(
+        distances[used],
+        reference[(*batch_idx, query_idx, point_idx)].to(distances.dtype),
     )
     assert (indices[~used] == 0).all()
     assert (selected_points[~used] == 0).all()
     assert (distances[~used] == 0).all()
 
-    # Each used slot passes a gradient of 1 to the point that it holds.
+    # Each used slot passes a gradient of 1 to the point that it holds, and the
+    # slots of a query hold distinct points.
     selected_points.sum().backward()
-    counts = torch.bincount(point_idx, minlength=points.shape[0]).to(points.dtype)
-    torch.testing.assert_close(points.grad, counts[:, None].expand_as(points))
+    counts = found.sum(dim=-2).to(points.dtype)
+    torch.testing.assert_close(points.grad, counts[..., None].expand_as(points))
 
 
 # Compare warp and torch outputs with the order-invariant compare hook.

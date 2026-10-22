@@ -204,11 +204,16 @@ class RadiusSearch(FunctionSpec):
         if len(output) != len(reference):
             raise AssertionError("output and reference tuples must have equal length")
 
+        # Fixed-size (max_points) indices for 2 or 3 queries also have 2 or 3
+        # rows, so also require the dynamic (N, D) points and (N,) distances.
         dynamic_output = (
             len(output) > 0
             and output[0].ndim == 2
             and output[0].shape[0] in (2, 3)
             and output[0].dtype in (torch.int32, torch.int64)
+            and all(
+                t.ndim <= 2 and t.shape[0] == output[0].shape[1] for t in output[1:]
+            )
         )
 
         for output_tensor, reference_tensor in zip(output, reference):
@@ -219,9 +224,10 @@ class RadiusSearch(FunctionSpec):
                         reference_tensor.sum(dim=1).to(torch.int64),
                     )
                 elif output_tensor.ndim >= 2:
+                    # Indices hold the neighbors along their last dimension.
                     torch.testing.assert_close(
-                        output_tensor.sum(dim=1).to(torch.int64),
-                        reference_tensor.sum(dim=1).to(torch.int64),
+                        output_tensor.sum(dim=-1).to(torch.int64),
+                        reference_tensor.sum(dim=-1).to(torch.int64),
                     )
                 else:
                     torch.testing.assert_close(
@@ -240,15 +246,12 @@ class RadiusSearch(FunctionSpec):
                     output_tensor.sum(),
                     reference_tensor.sum(),
                 )
-            elif output_tensor.ndim == 2 and output_tensor.shape[0] == 2:
-                torch.testing.assert_close(
-                    output_tensor.sum(dim=0),
-                    reference_tensor.sum(dim=0),
-                )
             elif output_tensor.ndim >= 2:
+                # Fixed-size outputs hold the neighbors of each query along the
+                # last dimension of the indices.
                 torch.testing.assert_close(
-                    output_tensor.sum(dim=1),
-                    reference_tensor.sum(dim=1),
+                    output_tensor.sum(dim=output[0].ndim - 1),
+                    reference_tensor.sum(dim=output[0].ndim - 1),
                 )
             else:
                 torch.testing.assert_close(
