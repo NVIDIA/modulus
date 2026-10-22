@@ -139,6 +139,43 @@ from a surface whose cells are arbitrary polygons, use
    such as triangles in 3D or edges in 2D. On any other mesh, they raise
    ``ValueError``.
 
+.. _mesh-orientation-conventions:
+
+Orientation Conventions
+-----------------------
+
+The order of the points in a cell sets its orientation. Cell normals and
+signed volumes follow from this order, and so do the quantities that use
+them, such as the sign of the mean curvature. The library and its primitives
+follow these conventions:
+
+- Every cell of a ``Mesh[n, n]``, such as a triangle in 2D or a tetrahedron
+  in 3D, has a positive signed volume, ``det(v1 - v0, ..., vn - v0) > 0``. In
+  2D, this means that each triangle is wound counterclockwise.
+- A closed ``Mesh[2, 3]`` has outward normals. Seen from outside, each
+  triangle is wound counterclockwise.
+- A triangle in the xy plane that is wound counterclockwise has the normal
+  +z.
+- A closed curve, ``Mesh[1, 2]``, has no outward rule. The normal of an edge
+  is its tangent rotated 90 degrees counterclockwise, so a counterclockwise
+  curve has inward normals. ``curves.circle_2d`` and ``curves.ellipse_2d``
+  run counterclockwise.
+- The facets from :meth:`Mesh.get_boundary_mesh` carry no orientation. Their
+  point order does not depend on the winding of the parent cells.
+
+To check and fix the orientation of a mesh, use the following methods:
+
+- ``mesh.validate(check_inverted_cells=True)`` counts the cells with a
+  negative signed volume in ``n_inverted_cells``. It checks a ``Mesh[n, n]``
+  with a manifold dimension of 2 or more.
+- :func:`~physicsnemo.mesh.repair.fix_orientation` makes each cell agree with
+  its neighbors. On a ``Mesh[n, n]``, it then reverses each connected
+  component whose total signed volume is negative. On a surface in 3D, it
+  makes the winding consistent but does not choose outward normals.
+- ``repair_mesh(mesh, fix_orientation=True)`` runs
+  :func:`~physicsnemo.mesh.repair.fix_orientation` as one step of
+  :func:`~physicsnemo.mesh.repair.repair_mesh`.
+
 Choosing an Update Method
 -------------------------
 
