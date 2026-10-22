@@ -320,6 +320,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The DALI `cos_zenith_angle` datapipe
+  (`physicsnemo.datapipes.climate.utils.zenith_angle`) now uses the correct
+  cubic coefficient `6.2e-6` in its Greenwich mean sidereal time polynomial.
+  It previously used `6.2 * 10e-6` (`6.2e-5`), a factor-of-ten error that
+  disagreed with the cited AIAA 2006 reference and with the torch
+  implementation in `physicsnemo.utils.zenith_angle`.
 - `GLOBE` accepts `boundary_meshes` as a TensorDict, as the DrivAerML example
   passes them. Before, every forward pass of that example failed.
 - Under `torch.compile`, GLOBE no longer recompiles on its second training

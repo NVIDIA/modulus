@@ -86,7 +86,7 @@ def _greenwich_mean_sidereal_time(model_time):
     theta = 67310.54841 + jul_centuries * (
         876600 * 3600
         + 8640184.812866
-        + jul_centuries * (0.093104 - jul_centuries * 6.2 * 10e-6)
+        + jul_centuries * (0.093104 - jul_centuries * 6.2e-6)
     )
 
     theta_radians = _dali_mod((theta / 240.0) * RAD_PER_DEG, 2 * np.pi)
