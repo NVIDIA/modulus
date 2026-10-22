@@ -729,6 +729,27 @@ class TestExtrude:
         torch.testing.assert_close(cell_measures(extruded), 3.0 * extruded.cell_areas)
         torch.testing.assert_close(cell_measures(extruded).sum(), torch.tensor(72.0))
 
+    @pytest.mark.parametrize("n_spatial_dims", [2, 3])
+    def test_extrude_rejects_dimensional_point_measures(self, n_spatial_dims):
+        """Copied area quadrature would double; counting measures carry over."""
+        from physicsnemo.mesh.calculus.measure import (
+            point_measures,
+            set_point_measures,
+        )
+
+        ### Unit square, extruded with (2D) or without (3D) a new spatial dimension
+        points = torch.tensor([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
+        points = torch.nn.functional.pad(points, (0, n_spatial_dims - 2))
+        mesh = Mesh(points=points, cells=torch.tensor([[0, 1, 2], [0, 2, 3]]))
+        set_point_measures(mesh, torch.full((4,), 0.25), dimension=2)
+
+        with pytest.raises(ValueError, match="dimensional point measures"):
+            extrude(mesh, allow_new_spatial_dims=True)
+
+        set_point_measures(mesh, torch.ones(4), dimension=0)
+        extruded = extrude(mesh, allow_new_spatial_dims=True)
+        torch.testing.assert_close(point_measures(extruded), torch.ones(8))
+
 
 class TestEmbed:
     """Test suite for spatial dimension embedding functionality."""

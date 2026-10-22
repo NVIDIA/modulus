@@ -294,7 +294,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `get_boundary_mesh`, `to_edge_graph`, `extrude`, `project`, `embed` and `pad`.
   Before, facets and extruded cells inherited the parent's measure, `project`
   kept the old one, `embed` raised on centroid point clouds, and padding cells
-  got NaN measures that made a later `scale` raise.
+  got NaN measures that made a later `scale` raise. `extrude` now raises on
+  dimensional point measures instead of copying them to the extruded points.
 - `DomainMesh.apply_to_meshes` leaves each boundary mesh on the device the
   function returns it on. Before, the boundaries went back to the domain's
   device.

@@ -25,6 +25,7 @@ from tensordict import TensorDict
 from physicsnemo.mesh.calculus.measure import (
     EFFECTIVE_MEASURE_KEY,
     _transfer_cell_measures,
+    point_measure_dimension,
 )
 from physicsnemo.mesh.mesh import Mesh
 from physicsnemo.mesh.projections._embed import embed
@@ -97,7 +98,8 @@ def extrude(
     ------
     ValueError
         If ``n_manifold_dims + 1 > n_spatial_dims`` and
-        ``allow_new_spatial_dims=False``.
+        ``allow_new_spatial_dims=False``, or if the mesh has dimensional point
+        measures, which cannot be copied to the extruded points.
     NotImplementedError
         If ``capping=True`` (not yet implemented).
 
@@ -161,6 +163,16 @@ def extrude(
     ### Validate inputs
     if capping:
         raise NotImplementedError("Capping is not yet implemented. Use capping=False.")
+    # Counting measures carry over to the copied points, but copying
+    # dimensional ones would double every integral.
+    if EFFECTIVE_MEASURE_KEY in mesh.point_data and bool(
+        point_measure_dimension(mesh) != 0
+    ):
+        raise ValueError(
+            "Extrusion cannot copy dimensional point measures to the extruded "
+            "points; remove them before extruding and set replacement measures "
+            "on the result"
+        )
 
     ### Determine target spatial dimensions and construct extrusion vector
     n_manifold_dims = mesh.n_manifold_dims
