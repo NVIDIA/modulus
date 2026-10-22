@@ -329,7 +329,7 @@ To add your work, see `Add your paper`_ below.
      - Aygun, Karakus
      - computational fluid dynamics / heat transfer (incompressible thermal convection PINNs)
 
-Add your paper
+Add Your Paper
 --------------
 
 Used PhysicsNeMo in your research? Open a
