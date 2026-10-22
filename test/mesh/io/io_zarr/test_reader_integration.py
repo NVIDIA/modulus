@@ -27,6 +27,7 @@ from conftest import (
     make_domain_mesh,
     make_mesh,
     make_point_cloud,
+    write_unfinished_store,
 )
 
 from physicsnemo.datapipes.readers.mesh import (
@@ -56,6 +57,19 @@ def test_domain_mesh_reader_reads_zarr(tmp_path):
     assert_meshes_equal(dm.interior, back.interior)
     for name in dm.boundary_names:
         assert_meshes_equal(dm.boundaries[name], back.boundaries[name])
+
+
+@pytest.mark.parametrize("domain", [False, True])
+def test_partial_read_rejects_unfinished_store(tmp_path, domain):
+    """Subsampled reads, which bypass from_zarr, also reject a partial store."""
+    sample = make_domain_mesh() if domain else make_mesh()
+    write_unfinished_store(sample, tmp_path / "sample.zarr")
+    reader_type = DomainMeshReader if domain else MeshReader
+    reader = reader_type(
+        tmp_path, pattern="*.zarr", subsample_n_points=8, pin_memory=False
+    )
+    with pytest.raises(ValueError, match="did not finish"):
+        reader[0]
 
 
 def test_pushdown_matches_eager_subsample(tmp_path):
