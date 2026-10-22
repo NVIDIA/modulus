@@ -34,7 +34,7 @@ release = version
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    "recommonmark",
+    "myst_parser",
     "sphinx.ext.mathjax",
     "sphinx.ext.todo",
     "sphinx.ext.autosectionlabel",
@@ -57,6 +57,10 @@ except ImportError:
     _HAVE_SPHINX_DESIGN = False
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
+
+# Give Markdown h1/h2 headings anchors so in-page links like
+# research.md's [Add your paper](#add-your-paper) resolve.
+myst_heading_anchors = 2
 
 pdf_documents = [
     ("index", "rst2pdf", "Sample rst2pdf doc", "Your Name"),

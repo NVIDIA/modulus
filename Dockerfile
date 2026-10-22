@@ -195,7 +195,7 @@ ARG TARGETPLATFORM
 
 # Install packages for Sphinx build
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
-    uv pip install "recommonmark>=0.7.1" "sphinx>=9.1.0" "nvidia-sphinx-theme>=0.0.9.post1" "pydocstyle>=6.3.0" "nbsphinx>=0.9.8" "nbconvert>=7.17.1" "jinja2>=3.1.6" && \
+    uv pip install "myst-parser>=4.0.0" "sphinx>=9.1.0" "nvidia-sphinx-theme>=0.0.9.post1" "pydocstyle>=6.3.0" "nbsphinx>=0.9.8" "nbconvert>=7.17.1" "jinja2>=3.1.6" && \
     wget https://github.com/jgm/pandoc/releases/download/3.12/pandoc-3.12-1-amd64.deb && \
     dpkg -i pandoc-3.12-1-amd64.deb && \
     rm -f pandoc-3.12-1-amd64.deb
