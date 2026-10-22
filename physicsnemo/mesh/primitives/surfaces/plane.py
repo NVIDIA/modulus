@@ -32,6 +32,9 @@ def load(
 ) -> Mesh[2, 3]:
     """Create a flat triangulated plane in 3D space.
 
+    The normals point in the direction of ``normal``, as described in
+    :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     size : float

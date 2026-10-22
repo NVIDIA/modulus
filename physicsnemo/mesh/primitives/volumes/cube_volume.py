@@ -34,6 +34,9 @@ def load(
     triangulation naturally produces matching faces between adjacent cubes,
     ensuring a valid watertight volume mesh.
 
+    Every tetrahedron has a positive signed volume, as described in
+    :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     size : float

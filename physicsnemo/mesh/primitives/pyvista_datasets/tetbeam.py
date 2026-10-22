@@ -43,6 +43,10 @@ def load(device: torch.device | str = "cpu") -> Mesh[3, 3]:
 
     A classic finite element test case consisting of tetrahedral elements.
 
+    The PyVista tetrahedra are inverted, so this function reorders their
+    vertices to give every tetrahedron a positive signed volume, as described
+    in :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     device : str

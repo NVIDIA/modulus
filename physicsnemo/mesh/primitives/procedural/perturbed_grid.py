@@ -34,6 +34,9 @@ def load(
 ) -> Mesh[2, 2]:
     """Create a perturbed structured grid in 2D space.
 
+    Before the perturbation, every triangle is wound counterclockwise, as
+    described in :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     n_x : int

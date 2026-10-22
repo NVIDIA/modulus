@@ -35,6 +35,9 @@ def load(
 ) -> Mesh[2, 2]:
     """Create a structured triangular grid in 2D space.
 
+    Every triangle is wound counterclockwise, with a positive signed area, as
+    described in :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     x_min : float

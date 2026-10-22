@@ -32,6 +32,9 @@ def load(
 ) -> Mesh[2, 3]:
     """Create a flat disk in 3D space (lying in xy-plane).
 
+    The triangles are wound counterclockwise, so the normals point in the +z
+    direction, as described in :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     radius : float

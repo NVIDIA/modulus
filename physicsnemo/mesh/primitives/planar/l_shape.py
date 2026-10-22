@@ -37,6 +37,9 @@ def load(
     Both parts use uniform grid spacing of size/(2*subdivisions), and the
     vertices at y=size/2 for x in [0, size/2] are shared between the parts.
 
+    Every triangle is wound counterclockwise, with a positive signed area, as
+    described in :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     size : float

@@ -33,6 +33,9 @@ def load(
 ) -> Mesh[2, 3]:
     """Create a torus surface in 3D space.
 
+    The normals point outward, away from the center of the tube, as described
+    in :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     major_radius : float

@@ -27,6 +27,9 @@ from physicsnemo.mesh.mesh import Mesh
 def load(subdivisions: int = 1, device: torch.device | str = "cpu") -> Mesh[2, 2]:
     """Create a triangulated unit square in 2D space.
 
+    Every triangle is wound counterclockwise, with a positive signed area, as
+    described in :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     subdivisions : int

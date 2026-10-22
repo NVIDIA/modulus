@@ -32,6 +32,9 @@ def load(
 ) -> Mesh[2, 3]:
     """Create a hemisphere surface in 3D space.
 
+    The normals point outward, away from the center of the sphere, as
+    described in :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     radius : float
