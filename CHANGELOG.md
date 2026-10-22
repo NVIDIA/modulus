@@ -564,6 +564,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The transient conjugate heat transfer tank filling example trains again, on
   one GPU or several. Before, its `train.py` stopped with a `TypeError` before
   the first step.
+- Importing `physicsnemo.domain_parallel` no longer breaks `torch.compile` for
+  the whole process when nothing has imported `torch._dynamo` before it.
 
 ### Security
 
