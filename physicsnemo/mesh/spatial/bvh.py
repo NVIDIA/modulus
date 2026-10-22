@@ -43,9 +43,32 @@ if TYPE_CHECKING:
 # Morton code computation
 # ---------------------------------------------------------------------------
 
+# Shift-and-mask steps that move bit b of a coordinate to bit b*D, for the bits
+# per dimension that _compute_morton_codes uses (D=2: 31 bits, D=3: 21 bits).
+# D=1 needs no spreading.
+_MORTON_SPREAD_STEPS: dict[int, tuple[tuple[int, int], ...]] = {
+    1: (),
+    2: (
+        (16, 0x0000_FFFF_0000_FFFF),
+        (8, 0x00FF_00FF_00FF_00FF),
+        (4, 0x0F0F_0F0F_0F0F_0F0F),
+        (2, 0x3333_3333_3333_3333),
+        (1, 0x5555_5555_5555_5555),
+    ),
+    3: (
+        (32, 0x001F_0000_0000_FFFF),
+        (16, 0x001F_0000_FF00_00FF),
+        (8, 0x100F_00F0_0F00_F00F),
+        (4, 0x10C3_0C30_C30C_30C3),
+        (2, 0x1249_2492_4924_9249),
+    ),
+}
+
 
 def _compute_morton_codes(
     centroids: Float[torch.Tensor, "n_centroids n_spatial_dims"],
+    *,
+    isotropic: bool = False,
 ) -> Int[torch.Tensor, " n_centroids"]:
     """Compute morton codes (Z-order curve) for a set of points.
 
@@ -59,6 +82,11 @@ def _compute_morton_codes(
     ----------
     centroids : torch.Tensor
         Point coordinates, shape ``(N, D)``, any float dtype.
+    isotropic : bool, optional, default=False
+        If ``True``, every axis is quantized with the same scale (the largest
+        extent), so the Morton grid's cells are cubes. If ``False``, each axis
+        is stretched to the full grid independently, so the cells inherit the
+        aspect ratio of the bounding box.
 
     Returns
     -------
@@ -100,6 +128,8 @@ def _compute_morton_codes(
     cmin = quantization_points.min(dim=0).values  # (D,)
     cmax = quantization_points.max(dim=0).values  # (D,)
     extent = cmax - cmin
+    if isotropic:
+        extent = extent.amax().expand(D)
     # Preserve every representable nonzero extent. Constant axes have a zero
     # numerator, so replacing only their zero denominator maps them to zero.
     safe_extent = torch.where(extent != 0, extent, torch.ones_like(extent))
@@ -108,17 +138,18 @@ def _compute_morton_codes(
     )  # (N, D)
 
     ### Bit-interleave all dimensions: bit b of dim d -> position b*D + d.
-    if device.type == "cuda":
-        # CUDA is launch-bound in the bit loop below. Materializing all bits at
-        # once trades a modest temporary for far fewer kernel launches.
-        bit_offsets = torch.arange(n_bits, dtype=torch.int64, device=device)
-        dim_offsets = torch.arange(D, dtype=torch.int64, device=device)
-        bits = (coords.unsqueeze(-1) >> bit_offsets) & 1  # (N, D, n_bits)
-        shifts = bit_offsets.view(1, 1, -1) * D + dim_offsets.view(1, -1, 1)
-        return (bits << shifts).reshape(N, -1).sum(dim=1)
+    dim_offsets = torch.arange(D, dtype=torch.int64, device=device)  # (D,)
+    spread_steps = _MORTON_SPREAD_STEPS.get(D)
+    if spread_steps is not None:
+        # Spread every coordinate's bits D apart in a few whole-tensor steps,
+        # then shift dimension d by d. The dimensions' bits do not overlap, so
+        # the sum is their bitwise OR. Temporaries are O(N * D), and the number
+        # of kernel launches depends on neither N nor n_bits.
+        for shift, mask in spread_steps:
+            coords = (coords | (coords << shift)) & mask
+        return (coords << dim_offsets).sum(dim=1)
 
     code = torch.zeros(N, dtype=torch.int64, device=device)
-    dim_offsets = torch.arange(D, dtype=torch.int64, device=device)  # (D,)
     for b in range(n_bits):
         bits = (coords >> b) & 1  # (N, D) - extract bit b from every dim
         code += (bits << (b * D + dim_offsets)).sum(dim=1)  # (N,)
@@ -255,6 +286,10 @@ def _compute_leaf_aabbs(
 # BVH tensorclass
 # ---------------------------------------------------------------------------
 
+# Queries per BVH traversal for eager CPU queries: bounds the traversal
+# frontier's memory, which otherwise grows with the number of queries.
+_QUERY_CHUNK_SIZE = 32768
+
 
 class BVH(TensorClass):
     """Bounding Volume Hierarchy for efficient spatial queries.
@@ -296,8 +331,18 @@ class BVH(TensorClass):
 
     Examples
     --------
+    >>> import torch
+    >>> from physicsnemo.mesh import Mesh
+    >>> mesh = Mesh(
+    ...     points=torch.tensor(
+    ...         [[0.0, 0.0], [2.0, 0.0], [0.0, 2.0], [2.0, 2.0], [4.0, 0.0]]
+    ...     ),
+    ...     cells=torch.tensor([[0, 1, 2], [1, 4, 3]]),
+    ... )
     >>> bvh = BVH.from_mesh(mesh)
-    >>> candidates = bvh.find_candidate_cells(query_points)
+    >>> query_points = torch.tensor([[0.5, 0.5], [3.5, 0.2], [9.0, 9.0]])
+    >>> bvh.find_candidate_cells(query_points).to_list()
+    [[0], [1], []]
     """
 
     node_aabb_min: Float[torch.Tensor, "n_nodes n_spatial_dims"]
@@ -529,19 +574,24 @@ class BVH(TensorClass):
 
         ### Iterative traversal: one iteration per tree level
         while len(current_query_indices) > 0:
-            ### Vectorized AABB containment test for all active pairs
-            batch_points = query_points[current_query_indices]  # (n_active, D)
-            batch_min = self.node_aabb_min[current_node_indices]
-            batch_max = self.node_aabb_max[current_node_indices]
+            ### Vectorized AABB containment test for all active pairs, one
+            # spatial dimension at a time so temporaries are (n_active,) only
+            inside = None
+            for d in range(query_points.shape[1]):
+                p = query_points[:, d][current_query_indices]
+                ok = (
+                    p >= self.node_aabb_min[:, d][current_node_indices] - aabb_tolerance
+                ) & (
+                    p <= self.node_aabb_max[:, d][current_node_indices] + aabb_tolerance
+                )
+                inside = ok if inside is None else inside & ok
+            del p, ok
 
-            inside = (
-                (batch_points >= batch_min - aabb_tolerance)
-                & (batch_points <= batch_max + aabb_tolerance)
-            ).all(dim=1)
-
-            ### Filter to intersecting pairs only
+            ### Filter to intersecting pairs only; free the old frontier now so
+            # it is never alive together with the next one
             hit_query = current_query_indices[inside]
             hit_node = current_node_indices[inside]
+            del current_query_indices, current_node_indices, inside
 
             if len(hit_query) == 0:
                 break
@@ -569,6 +619,7 @@ class BVH(TensorClass):
             is_internal = ~is_leaf
             int_query = hit_query[is_internal]
             int_node = hit_node[is_internal]
+            del hit_query, hit_node, hit_leaf_count, is_leaf, is_internal
 
             # Enforce max_candidates limit
             if max_candidates_per_point is not None and len(int_query) > 0:
@@ -579,26 +630,13 @@ class BVH(TensorClass):
             if len(int_query) == 0:
                 break
 
-            left_children = self.node_left_child[int_node]
-            right_children = self.node_right_child[int_node]
-
-            valid_left = left_children >= 0
-            valid_right = right_children >= 0
-
-            parts_q: list[torch.Tensor] = []
-            parts_n: list[torch.Tensor] = []
-            if valid_left.any():
-                parts_q.append(int_query[valid_left])
-                parts_n.append(left_children[valid_left])
-            if valid_right.any():
-                parts_q.append(int_query[valid_right])
-                parts_n.append(right_children[valid_right])
-
-            if parts_q:
-                current_query_indices = torch.cat(parts_q)
-                current_node_indices = torch.cat(parts_n)
-            else:
-                break
+            # Every internal node of the LBVH (build_lbvh_topology) has two
+            # valid children, so the next frontier needs no -1 filtering.
+            current_query_indices = int_query.repeat(2)
+            current_node_indices = torch.cat(
+                [self.node_left_child[int_node], self.node_right_child[int_node]]
+            )
+            del int_query, int_node
 
         if all_query_indices_list:
             return torch.cat(all_query_indices_list), torch.cat(all_cell_indices_list)
@@ -614,7 +652,8 @@ class BVH(TensorClass):
         r"""Find candidate cells that might contain each query point.
 
         Uses batched iterative BVH traversal where all queries are processed
-        simultaneously in a vectorized manner.
+        simultaneously in a vectorized manner. CPU queries outside
+        ``torch.compile`` are traversed in bounded-size slices to bound memory.
 
         Parameters
         ----------
@@ -644,12 +683,36 @@ class BVH(TensorClass):
         (:math:`O(\log N)` iterations).
         """
         self._validate_query_points(query_points)
-        all_q, all_c = self._traverse(
-            query_points,
-            max_candidates_per_point,
-            aabb_tolerance,
-        )
         n_queries = query_points.shape[0]
+        # CUDA does not slice: each traversal level synchronizes with the host
+        # several times, so slicing multiplies those syncs and kernel launches
+        # by the number of slices (about 30x slower validate at 10M cells).
+        if (
+            not torch.compiler.is_compiling()
+            and query_points.device.type == "cpu"
+            and n_queries > _QUERY_CHUNK_SIZE
+        ):
+            ### Traverse fixed-size query slices. Each query's candidates (and its
+            # max_candidates cutoff) are independent of the other queries, and
+            # the adjacency sorts pairs by (query, cell), so the result is the same.
+            parts_q: list[torch.Tensor] = []
+            parts_c: list[torch.Tensor] = []
+            for start in range(0, n_queries, _QUERY_CHUNK_SIZE):
+                chunk_q, chunk_c = self._traverse(
+                    query_points[start : start + _QUERY_CHUNK_SIZE],
+                    max_candidates_per_point,
+                    aabb_tolerance,
+                )
+                parts_q.append(chunk_q + start)
+                parts_c.append(chunk_c)
+            all_q, all_c = torch.cat(parts_q), torch.cat(parts_c)
+            del parts_q, parts_c
+        else:
+            all_q, all_c = self._traverse(
+                query_points,
+                max_candidates_per_point,
+                aabb_tolerance,
+            )
         adjacency = build_adjacency_from_pairs(
             source_indices=all_q,
             target_indices=all_c,
