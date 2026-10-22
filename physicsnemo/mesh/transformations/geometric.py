@@ -498,6 +498,8 @@ def _scale_assumptions(
     peak = max(abs(v) for v in values)
     squares = [(v / peak) * (v / peak) if peak > 0 else v * v for v in values]
     mean = sum(squares) / len(squares)
+    # _is_similarity_transform's torch.allclose(..., I, atol=1e-6, rtol=1e-5)
+    # bounds each diagonal entry by atol + rtol * 1.
     is_similarity = mean == 0 or all(abs(s / mean - 1) <= 1e-6 + 1e-5 for s in squares)
     return abs(math.prod(values)) > 1e-10, is_similarity
 
