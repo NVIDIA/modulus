@@ -426,9 +426,14 @@ def test_radius_search_compare_forward_contract(device: str):
 
 
 # Validate that compare-forward ignores the order of the neighbors of each query.
-# With three queries, fixed-size indices have as many rows as batched dynamic ones.
+# With three queries, fixed-size indices have as many rows as batched dynamic ones,
+# and without points, the distances for three slots pass as dynamic points.
 @pytest.mark.parametrize("batched", [False, True])
-def test_radius_search_compare_forward_reordered_neighbors(device: str, batched: bool):
+@pytest.mark.parametrize("max_points", [3, 4])
+@pytest.mark.parametrize("return_points", [True, False])
+def test_radius_search_compare_forward_reordered_neighbors(
+    device: str, batched: bool, max_points: int, return_points: bool
+):
     torch.manual_seed(0)
     batch = (2,) if batched else ()
     points = torch.rand(*batch, 50, 3, device=device)
@@ -439,9 +444,9 @@ def test_radius_search_compare_forward_reordered_neighbors(device: str, batched:
         points,
         queries,
         radius=2.0,
-        max_points=4,
+        max_points=max_points,
         return_dists=True,
-        return_points=True,
+        return_points=return_points,
         implementation="torch",
     )
     # Reverse the neighbors of each query, which the indices hold along their

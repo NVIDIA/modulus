@@ -236,7 +236,14 @@ class RadiusSearch(FunctionSpec):
                     )
                 continue
 
-            if dynamic_output and output_tensor.ndim == 2:
+            if dynamic_output and output_tensor.shape == output[0].shape:
+                # With max_points equal to the number of queries, fixed-size
+                # distances pass as dynamic points, so compare their total sum.
+                torch.testing.assert_close(
+                    output_tensor.sum(),
+                    reference_tensor.sum(),
+                )
+            elif dynamic_output and output_tensor.ndim == 2:
                 torch.testing.assert_close(
                     output_tensor.sum(dim=0),
                     reference_tensor.sum(dim=0),
