@@ -18,9 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adds standalone FLARE++ attention and model APIs, with input-conditioned
   dynamic routing, plus a ``GALE_FPP`` backend for using the same mixer inside
   GeoTransolver.
-- Adds `physicsnemo.nn.functional.safe_normalize` for vector normalization
-  across floating-point dtypes and scales, preserving zero vectors and the
-  input dtype under autocast.
 - Adds `physicsnemo.datapipes.keys` and routes every config-driven field name
   in `physicsnemo.datapipes` through it, so a `"."` in a YAML field name
   (`"solution.pressure"`) addresses a leaf inside a nested `TensorDict`.
@@ -283,9 +280,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tutorials in `examples/minimal/mesh` are reorganized from a first mesh to ML
   pipelines. New sections show how to use the edge graph of a mesh, a
   `Mesh[1, n]`, in graph network models.
+- The `perturbed_grid` primitive takes `perturbation_scale` as a fraction of
+  the grid spacing (was an absolute length), so its default no longer folds
+  cells, even on fine grids.
 
 ### Deprecated
 
+- `weighted_multinomial` and `WeightedMultinomial` moved from
+  `physicsnemo.nn.functional` to `physicsnemo.utils`. Importing them from
+  `physicsnemo.nn.functional` still works but emits `LegacyFeatureWarning`.
 - Unified external aerodynamics recipe: `training.loss_type: rmse` is
   deprecated in favour of `relative_mse`, which names what it always
   computed (target-normalized relative MSE, no square root) and delegates
@@ -320,6 +323,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `weighted_multinomial` with `replacement=True` accepts more than 2^24
+  weights, instead of raising `torch.multinomial`'s category-limit error. So
+  DoMINO's `sample_points_on_mesh` now works on meshes with over 2^24 faces.
 - `GLOBE` accepts `boundary_meshes` as a TensorDict, as the DrivAerML example
   passes them. Before, every forward pass of that example failed.
 - Under `torch.compile`, GLOBE no longer recompiles on its second training
@@ -359,6 +365,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subclass declares, and still raises `TypeError` for any other keyword.
 - Linear subdivision of tetrahedral meshes keeps the orientation of every
   child cell. Before, half of the children came out inverted.
+- The `unit_square`, `rectangle`, `structured_grid`, `l_shape`, `cube_volume`,
+  `torus`, `hemisphere`, `disk`, `plane` and `tetbeam` primitives have
+  positively oriented cells and outward or +z normals. Before, their cells were
+  inverted or their normals pointed the wrong way. `plane` also raises
+  `ValueError` for a zero or non-finite normal, where it used to return the +z
+  plane.
 - Meshes with `int32` connectivity give the same results as `int64` ones in
   Butterfly and Loop subdivision, edge lookups and `refit_mesh_to_implicit`.
   Before, large meshes could get wrong Butterfly midpoints and edge matches,

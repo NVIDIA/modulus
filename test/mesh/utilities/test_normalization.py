@@ -21,10 +21,7 @@ import inspect
 import pytest
 import torch
 
-from benchmarks.physicsnemo.nn.functional._spec_utils import build_benchmark_plan
-from benchmarks.physicsnemo.nn.functional.registry import FUNCTIONAL_SPECS
-from physicsnemo.nn.functional import safe_normalize
-from physicsnemo.nn.functional.normalization import SafeNormalize
+from physicsnemo.mesh.utilities._normalization import SafeNormalize, safe_normalize
 
 _ALL_DTYPES = [torch.bfloat16, torch.float16, torch.float32, torch.float64]
 
@@ -222,19 +219,6 @@ class TestSafeNormalize:
         torch.testing.assert_close(result, expected)
         torch.testing.assert_close(vectors.grad, expected_gradient)
 
-    def test_benchmark_registration(self) -> None:
-        """The shared benchmark runner discovers both normalization phases."""
-        assert SafeNormalize in FUNCTIONAL_SPECS
-        keys, specs = build_benchmark_plan(
-            device="cpu",
-            phases=("forward", "backward"),
-            selected_specs=(SafeNormalize,),
-        )
-
-        assert {key[0] for key in keys} == {"forward", "backward"}
-        assert {key[2] for key in keys} == {"torch"}
-        assert all(spec is SafeNormalize for spec in specs.values())
-
     @pytest.mark.parametrize("backward", [False, True])
     def test_benchmark_inputs(self, device, backward) -> None:
         """Each benchmark workload runs with unit outputs and finite gradients."""
@@ -246,7 +230,7 @@ class TestSafeNormalize:
         for _, (vectors,), kwargs in make_inputs(device=device):
             assert vectors.requires_grad == backward
             result = SafeNormalize.dispatch(vectors, implementation="torch", **kwargs)
-            assert result.device == torch.device(device)
+            assert result.device.type == torch.device(device).type
             torch.testing.assert_close(
                 result.norm(dim=kwargs["dim"]),
                 torch.ones_like(result[..., 0]),
