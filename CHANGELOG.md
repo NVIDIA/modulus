@@ -83,6 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ClusterTree.merge` joins trees into one forest, whose `root_ids` list the
   root of each tree. Every traversal starts from all of them, so one
   traversal plans a tree against every tree of a forest, on either side.
+- `radius_search` accepts 1D and 2D points, as well as 3D, with both the Warp
+  and torch backends. The Warp backend pads them with zero coordinates, which
+  leaves distances unchanged. Points and queries with different numbers of
+  coordinates, or with a number other than 1, 2, or 3, raise a `ValueError`
+  with both backends. Before, the torch backend accepted more than 3.
 
 ### Changed
 

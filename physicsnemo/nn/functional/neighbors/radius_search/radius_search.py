@@ -28,7 +28,8 @@ class RadiusSearch(FunctionSpec):
 
     Can use brute-force methods with PyTorch, or an accelerated spatial decomposition method with Warp.
 
-    Accepts both unbatched inputs of shape ``(N, 3)`` and batched inputs of shape ``(B, N, 3)``.
+    Accepts both unbatched inputs of shape ``(N, D)`` and batched inputs of shape ``(B, N, D)``,
+    where the number of coordinates ``D`` is 1, 2, or 3 and the same for points and queries.
     When unbatched inputs are provided, they are treated as ``B=1`` internally and the batch
     dimension is stripped from the output. Only ranks 2 and 3 are accepted; higher-rank inputs
     raise ``ValueError``.
@@ -61,8 +62,8 @@ class RadiusSearch(FunctionSpec):
         and results will be returned in their original precision.
 
     Args:
-        points (torch.Tensor): The reference point cloud tensor of shape ``(N, 3)`` or ``(B, N, 3)``.
-        queries (torch.Tensor): The query points tensor of shape ``(M, 3)`` or ``(B, M, 3)``.
+        points (torch.Tensor): The reference point cloud tensor of shape ``(N, D)`` or ``(B, N, D)``.
+        queries (torch.Tensor): The query points tensor of shape ``(M, D)`` or ``(B, M, D)``.
         radius (float): The search radius. Points within or at this radius of a query point will be
             considered neighbors.
         max_points (int | None, optional): Maximum number of neighbors to return for each query point.
@@ -85,7 +86,8 @@ class RadiusSearch(FunctionSpec):
     Raises:
         KeyError: If an explicit implementation name is not registered.
         ImportError: If the selected implementation is unavailable.
-        ValueError: If inputs are not rank 2 or 3.
+        ValueError: If inputs are not rank 2 or 3, if points and queries have a
+            different number of coordinates, or if that number is not 1, 2, or 3.
 
     """
 
@@ -103,8 +105,8 @@ class RadiusSearch(FunctionSpec):
 
     @FunctionSpec.register(name="warp", required_imports=("warp>=0.6.0",), rank=0)
     def warp_forward(
-        points: Float[torch.Tensor, "*batch num_points 3"],
-        queries: Float[torch.Tensor, "*batch num_queries 3"],
+        points: Float[torch.Tensor, "*batch num_points dim"],
+        queries: Float[torch.Tensor, "*batch num_queries dim"],
         radius: float,
         max_points: int | None = None,
         return_dists: bool = False,
@@ -117,8 +119,8 @@ class RadiusSearch(FunctionSpec):
 
     @FunctionSpec.register(name="torch", rank=1, baseline=True)
     def torch_forward(
-        points: Float[torch.Tensor, "*batch num_points 3"],
-        queries: Float[torch.Tensor, "*batch num_queries 3"],
+        points: Float[torch.Tensor, "*batch num_points dim"],
+        queries: Float[torch.Tensor, "*batch num_queries dim"],
         radius: float,
         max_points: int | None = None,
         return_dists: bool = False,
@@ -228,11 +230,7 @@ class RadiusSearch(FunctionSpec):
                     )
                 continue
 
-            if (
-                dynamic_output
-                and output_tensor.ndim == 2
-                and output_tensor.shape[1] == 3
-            ):
+            if dynamic_output and output_tensor.ndim == 2:
                 torch.testing.assert_close(
                     output_tensor.sum(dim=0),
                     reference_tensor.sum(dim=0),

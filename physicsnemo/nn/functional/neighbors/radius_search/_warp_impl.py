@@ -731,11 +731,14 @@ def radius_search(
     """
     Perform a radius search between points and queries.
 
-    Accepts both unbatched (N, 3) and batched (B, N, 3) inputs.
+    Accepts both unbatched (N, D) and batched (B, N, D) inputs, with D from 1
+    to 3. The kernels use 3D points, so 1D and 2D inputs are padded with zero
+    coordinates, which leaves distances unchanged. Returned points are sliced
+    back to D coordinates.
 
     Args:
-        points (torch.Tensor): The input points tensor, (N, 3) or (B, N, 3).
-        queries (torch.Tensor): The query points tensor, (M, 3) or (B, M, 3).
+        points (torch.Tensor): The input points tensor, (N, D) or (B, N, D).
+        queries (torch.Tensor): The query points tensor, (M, D) or (B, M, D).
         radius (float): The search radius.
         max_points (int | None): The maximum number of neighbors per query, or
             None for unlimited.
@@ -747,7 +750,17 @@ def radius_search(
         The formatted radius search results, whose contents depend on
         ``return_dists`` and ``return_points``.
     """
+    # Validate before padding, which would hide unsupported shapes.
+    validate_inputs(points, queries)
+
+    dim = points.shape[-1]
+    if dim < 3:
+        points = torch.nn.functional.pad(points, (0, 3 - dim))
+        queries = torch.nn.functional.pad(queries, (0, 3 - dim))
+
     indices, points_out, distances, _ = radius_search_impl(
         points, queries, radius, max_points, return_dists, return_points
     )
+    if dim < 3:
+        points_out = points_out[..., :dim]
     return format_returns(indices, points_out, distances, return_dists, return_points)
