@@ -18,9 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adds standalone FLARE++ attention and model APIs, with input-conditioned
   dynamic routing, plus a ``GALE_FPP`` backend for using the same mixer inside
   GeoTransolver.
-- Adds `physicsnemo.nn.functional.safe_normalize` for vector normalization
-  across floating-point dtypes and scales, preserving zero vectors and the
-  input dtype under autocast.
 - Adds `physicsnemo.datapipes.keys` and routes every config-driven field name
   in `physicsnemo.datapipes` through it, so a `"."` in a YAML field name
   (`"solution.pressure"`) addresses a leaf inside a nested `TensorDict`.
@@ -236,6 +233,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cells out of a mesh with hundreds of millions of vertices). Index
   normalization avoids allocating a full-mesh range and preserves empty slices,
   integer indices, and boolean masks. Point fields use ordinary indexed gathers.
+- `Darcy2D` solves with multi-grid red-black successive over-relaxation
+  instead of Jacobi iteration, converging in far fewer iterations and about
+  100x closer to the discrete solution at the default tolerance. Batches whose
+  SOR solve diverges are re-solved with Gauss-Seidel. `Darcy2D` now raises a
+  `ValueError` unless `0 < min_permeability <= max_permeability` and
+  `max_permeability / min_permeability <= 4`; above that ratio the
+  finite-difference scheme does not converge.
 - Extends `LinearGaussianNoiseScheduler` with two methods.
   `get_linear_denoiser` accepts `prediction_type` and `denoising_type`, and
   returns bias, antiderivative, and slope callables for the new exponential
@@ -283,9 +287,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tutorials in `examples/minimal/mesh` are reorganized from a first mesh to ML
   pipelines. New sections show how to use the edge graph of a mesh, a
   `Mesh[1, n]`, in graph network models.
+- The `perturbed_grid` primitive takes `perturbation_scale` as a fraction of
+  the grid spacing (was an absolute length), so its default no longer folds
+  cells, even on fine grids.
 
 ### Deprecated
 
+- `weighted_multinomial` and `WeightedMultinomial` moved from
+  `physicsnemo.nn.functional` to `physicsnemo.utils`. Importing them from
+  `physicsnemo.nn.functional` still works but emits `LegacyFeatureWarning`.
 - Unified external aerodynamics recipe: `training.loss_type: rmse` is
   deprecated in favour of `relative_mse`, which names what it always
   computed (target-normalized relative MSE, no square root) and delegates
@@ -320,6 +330,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `weighted_multinomial` with `replacement=True` accepts more than 2^24
+  weights, instead of raising `torch.multinomial`'s category-limit error. So
+  DoMINO's `sample_points_on_mesh` now works on meshes with over 2^24 faces.
 - `GLOBE` accepts `boundary_meshes` as a TensorDict, as the DrivAerML example
   passes them. Before, every forward pass of that example failed.
 - Under `torch.compile`, GLOBE no longer recompiles on its second training
@@ -359,6 +372,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   subclass declares, and still raises `TypeError` for any other keyword.
 - Linear subdivision of tetrahedral meshes keeps the orientation of every
   child cell. Before, half of the children came out inverted.
+- The `unit_square`, `rectangle`, `structured_grid`, `l_shape`, `cube_volume`,
+  `torus`, `hemisphere`, `disk`, `plane` and `tetbeam` primitives have
+  positively oriented cells and outward or +z normals. Before, their cells were
+  inverted or their normals pointed the wrong way. `plane` also raises
+  `ValueError` for a zero or non-finite normal, where it used to return the +z
+  plane.
 - Meshes with `int32` connectivity give the same results as `int64` ones in
   Butterfly and Loop subdivision, edge lookups and `refit_mesh_to_implicit`.
   Before, large meshes could get wrong Butterfly midpoints and edge matches,
@@ -397,6 +416,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The API reference again shows the docstrings of `Mesh`, `DomainMesh`, and the
   other tensorclasses in `physicsnemo.mesh`. TensorDict 0.14 replaced them
   with generated signatures.
+- Meshes with explicit measures integrate correctly after `get_facet_mesh`,
+  `get_boundary_mesh`, `to_edge_graph`, `extrude`, `project`, `embed` and `pad`.
+  Before, facets and extruded cells inherited the parent's measure, `project`
+  kept the old one, `embed` raised on centroid point clouds, and padding cells
+  got NaN measures that made a later `scale` raise. `extrude` now raises on
+  dimensional point measures instead of copying them to the extruded points.
+- `DomainMesh.apply_to_meshes` leaves each boundary mesh on the device the
+  function returns it on. Before, the boundaries went back to the domain's
+  device.
+- `rotate` with a Python angle rotates float64 meshes at float64 precision.
+  Before, it computed the rotation in float32.
+- Anisotropic maps with a small overall scale are no longer taken for
+  similarities. Before, transforming by one kept wrong cached point normals,
+  and scaled point measures instead of raising.
+- `pad_to_next_power` pads to the smallest power that fits. Before, a size that
+  already was such a power could be padded to the next one, and some
+  non-integer powers raised.
 - The GLOBE examples no longer pin TensorDict 0.12, which conflicted with
   PhysicsNeMo's own requirement.
 - `delaunay_mesh_2d` recovers boundary segments that cross several triangles.
@@ -411,6 +447,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty results for an empty query set on CUDA, as they do on CPU, instead of
   raising a CUDA error. `match_points` also returns no matches for an empty
   target.
+- Mesh transforms and projections keep the dtype of each vector and tensor
+  field. A float32 field on float64 points, as VTK files often store them,
+  raised a dtype error.
+- The GLOBE AirfRANS example casts its meshes to float32. Since `from_pyvista`
+  began keeping float64 points, preprocessing failed on every sample.
 - `DomainMeshReader` gains `boundary_subsample` (`"both"`, `"cells"`,
   `"points"`) to choose which subsample applies to the in-file boundaries.
   Composing the cell and point subsamples on a triangulated boundary kept only
@@ -529,6 +570,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `nr_multigrids >= 3` that could return huge or NaN pressure fields, and
   corrects the coarse-node coordinates used by bilinear upsampling for
   reduction factors greater than 2.
+- `Darcy2D` permeability fields are random per sample again: the
+  `init_uniform_random_4d` and `init_uniform_random_2d` kernels seeded every
+  thread from only its first launch index, so all samples in a batch shared
+  four random Fourier coefficients
+  ([#2035](https://github.com/NVIDIA/physicsnemo/issues/2035)).
+  `init_uniform_random_2d` also negated `min_value`, which made the
+  `KelvinHelmholtz2D` perturbations constant.
+- `Darcy2D` solves the Darcy equation it documents: the Jacobi update divided
+  the `grad(k) . grad(u)` term by `2 dx` instead of `4 dx**2`, effectively
+  dropping it ([#2036](https://github.com/NVIDIA/physicsnemo/issues/2036)).
+  Generated pressure fields change; the `darcy` normaliser in the `darcy_fno`,
+  `darcy_transolver` and `darcy_nested_fnos` examples is updated to match, and
+  `darcy_nested_fnos` datasets must be regenerated.
+- The `Darcy2D` convergence check no longer reports a diverged (NaN) solve as
+  converged.
 - `Module.save` now writes `.mdlus` checkpoints atomically (transfer to a
   temporary sibling name, then rename into place), so a process killed
   mid-write no longer leaves an unloadable truncated checkpoint. Also fixes
@@ -570,6 +626,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The transient conjugate heat transfer tank filling example trains again, on
   one GPU or several. Before, its `train.py` stopped with a `TypeError` before
   the first step.
+- Importing `physicsnemo.domain_parallel` no longer breaks `torch.compile` for
+  the whole process when nothing has imported `torch._dynamo` before it.
 
 ### Security
 

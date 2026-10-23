@@ -61,6 +61,84 @@ class TestSurfacePrimitives:
         assert mesh.n_points > 0
         assert mesh.n_cells > 0
 
+    @pytest.mark.parametrize(
+        "example_name",
+        [
+            "sphere_icosahedral",
+            "sphere_uv",
+            "cylinder",
+            "torus",
+            "cone",
+            "cube_surface",
+            "tetrahedron_surface",
+            "octahedron_surface",
+            "icosahedron_surface",
+        ],
+    )
+    def test_closed_surface_outward_normals(self, example_name):
+        """A closed surface wound outward encloses a positive signed volume."""
+        mesh = getattr(primitives.surfaces, example_name).load()
+
+        tri = mesh.points.double()[mesh.cells]
+        signed_volume = torch.linalg.det(tri).sum() / 6
+        assert signed_volume > 0
+
+    def test_torus_signed_volume(self):
+        """The torus encloses +2 pi^2 R r^2, so its normals point out of the tube."""
+        mesh = primitives.surfaces.torus.load(major_radius=1.0, minor_radius=0.3)
+
+        tri = mesh.points.double()[mesh.cells]
+        signed_volume = torch.linalg.det(tri).sum().item() / 6
+        assert signed_volume == pytest.approx(2 * torch.pi**2 * 1.0 * 0.3**2, rel=0.02)
+        assert mesh.mean_curvature_vertices.mean() > 0
+
+    def test_hemisphere_outward_normals(self):
+        """Every hemisphere normal points away from the center."""
+        mesh = primitives.surfaces.hemisphere.load()
+
+        # Skip the zero-area triangles at the pole, whose normals are rounding noise
+        nondegenerate = mesh.cell_areas > 1e-6 * mesh.cell_areas.max()
+        radial = (mesh.cell_normals * mesh.cell_centroids).sum(dim=-1)
+        assert (radial[nondegenerate] > 0).all()
+
+    @pytest.mark.parametrize("example_name", ["disk", "plane"])
+    def test_xy_surface_normals_point_up(self, example_name):
+        """A surface in the xy plane is wound counterclockwise, with +z normals."""
+        mesh = getattr(primitives.surfaces, example_name).load()
+
+        expected = torch.tensor([0.0, 0.0, 1.0]).expand_as(mesh.cell_normals)
+        torch.testing.assert_close(mesh.cell_normals, expected)
+
+    @pytest.mark.parametrize(
+        "normal",
+        [
+            (0.0, 0.0, 1.0),
+            (0.0, 0.0, -1.0),
+            (1e-7, 0.0, 1.0),
+            (1e-7, 0.0, -1.0),
+            (1e-4, 0.0, 1.0),
+            (1e-4, 0.0, -1.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 1.0),
+        ],
+    )
+    def test_plane_normal(self, normal):
+        """The cell normals of a plane match the requested normal."""
+        mesh = primitives.surfaces.plane.load(normal=normal)
+
+        expected = torch.nn.functional.normalize(torch.tensor(normal), dim=0)
+        torch.testing.assert_close(
+            mesh.cell_normals, expected.expand_as(mesh.cell_normals)
+        )
+
+    @pytest.mark.parametrize(
+        "normal", [(0.0, 0.0, 0.0), (float("nan"), 0.0, 1.0), (float("inf"), 0.0, 0.0)]
+    )
+    def test_plane_rejects_degenerate_normal(self, normal):
+        """A zero or non-finite normal raises instead of giving the +z plane."""
+        with pytest.raises(ValueError, match="normal must be finite and nonzero"):
+            primitives.surfaces.plane.load(normal=normal)
+
     def test_torus_radii(self):
         """Test that torus has correct radii."""
         major_radius = 2.0

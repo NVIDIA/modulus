@@ -32,6 +32,9 @@ def load(
 ) -> Mesh[2, 3]:
     """Create a hemisphere surface in 3D space.
 
+    The normals point outward, away from the center of the sphere, as
+    described in :ref:`mesh-orientation-conventions`.
+
     Parameters
     ----------
     radius : float
@@ -91,4 +94,5 @@ def load(
     tri2 = torch.stack([p01, p11, p10], dim=1)
     cells = torch.cat([pole_fan, tri1, tri2], dim=0)
 
-    return Mesh(points=points, cells=cells)
+    # Reverse the winding so that normals point outward
+    return Mesh(points=points, cells=cells.flip(-1))

@@ -52,6 +52,21 @@ class TestVolumePrimitives:
         assert mesh.n_points > 0
         assert mesh.n_cells > 0
 
+    @pytest.mark.parametrize(
+        "example_name,kwargs",
+        [
+            ("cube_volume", {}),
+            ("cube_volume", {"subdivisions": 1}),
+            ("cube_volume", {"subdivisions": 2}),
+            ("tetrahedron_volume", {}),
+        ],
+    )
+    def test_volume_mesh_positively_oriented(self, example_name, kwargs):
+        """Every tetrahedron has positive signed volume."""
+        mesh = getattr(primitives.volumes, example_name).load(**kwargs)
+
+        assert mesh.validate(check_inverted_cells=True)["n_inverted_cells"] == 0
+
     @requires_pyvista
     @pytest.mark.parametrize("example_name", PYVISTA_VOLUMES)
     def test_volume_mesh_pyvista(self, example_name):
