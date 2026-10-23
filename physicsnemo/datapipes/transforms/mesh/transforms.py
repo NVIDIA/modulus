@@ -53,7 +53,7 @@ from physicsnemo.mesh.calculus.measure import (
     scale_measures,
     set_point_measures,
 )
-from physicsnemo.nn.functional import weighted_multinomial
+from physicsnemo.utils import weighted_multinomial
 
 
 @register()
