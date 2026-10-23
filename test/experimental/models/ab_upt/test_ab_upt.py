@@ -159,6 +159,55 @@ def test_checkpoint_roundtrip(tmp_path, monkeypatch):
     assert validate_checkpoint(ABUPT(**SMALL), ABUPT(**SMALL), inputs())
 
 
+@pytest.mark.parametrize("field", ["surface", "volume"])
+@pytest.mark.parametrize("interactions", [0, 1])
+def test_single_branch_context_gradients_and_checkpoint(
+    field, interactions, device, tmp_path
+):
+    inactive = "volume" if field == "surface" else "surface"
+    model = ABUPT(
+        **(SMALL | {f"{inactive}_channels": 0, "num_interaction_blocks": interactions})
+    ).to(device)
+    g, sp, s, v = inputs(device)
+    anchors = s if field == "surface" else v
+    kwargs = {f"{field}_anchors": anchors}
+    assert getattr(model, f"{inactive}_embedding") is None
+    assert not any(name.startswith(inactive) for name, _ in model.named_parameters())
+    assert not any(model.cross_branch)
+    context = model.encode(g, sp, **kwargs)
+    assert getattr(context, inactive) == ()
+    assert getattr(context, f"{inactive}_predictions") is None
+    queries = torch.rand(2, 9, 3, device=device)
+    full = model.decode_queries(queries, context, field)
+    chunks = torch.cat(
+        [model.decode_queries(q, context, field) for q in queries.split(4, dim=1)],
+        dim=1,
+    )
+    torch.testing.assert_close(full, chunks)
+    torch.testing.assert_close(
+        model.decode_queries(anchors, context, field),
+        getattr(context, f"{field}_predictions"),
+    )
+    full.square().mean().backward()
+    for name, p in model.named_parameters():
+        assert p.grad is not None and torch.isfinite(p.grad).all(), name
+    path = tmp_path / "single.mdlus"
+    model.save(str(path))
+    restored = Module.from_checkpoint(str(path)).to(device)
+    torch.testing.assert_close(
+        restored(g, sp, **kwargs, **{f"{field}_queries": queries})[
+            0 if field == "surface" else 1
+        ],
+        full,
+    )
+    with pytest.raises(ValueError, match="required"):
+        model.encode(g, sp)
+    with pytest.raises(ValueError, match="disabled"):
+        model.encode(g, sp, s, v)
+    with pytest.raises(ValueError, match="disabled"):
+        model.decode_queries(queries, context, inactive)
+
+
 @pytest.mark.parametrize("channels", [(4, 7), (4, 0), (0, 7)])
 def test_gradients_and_disabled_heads(channels, device):
     model = ABUPT(
@@ -171,7 +220,10 @@ def test_gradients_and_disabled_heads(channels, device):
             )
         )
     ).to(device)
-    args = inputs(device)
+    args = list(inputs(device))
+    for index, count in enumerate(channels, start=2):
+        if not count:
+            args[index] = None
     conditioning = torch.randn(2, 2, device=device, requires_grad=True)
     result = model(*args, parameters=conditioning)
     sum(x.square().mean() for x in result if x is not None).backward()
@@ -401,7 +453,6 @@ def test_supported_optimizations(helper, device):
         dict(pooling_chunk_size=0),
         dict(radius_search_backend="missing"),
         dict(parameter_channels=-1),
-        dict(surface_channels=0, num_interaction_blocks=0),
     ],
 )
 def test_bad_constructor(config):

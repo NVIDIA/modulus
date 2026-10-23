@@ -51,6 +51,7 @@ class ABUPTContext:
         shape :math:`(B,H,M,D)`; keys already include rotary position encoding.
     volume : tuple[tuple[torch.Tensor, torch.Tensor], ...]
         Corresponding volume contexts of shape :math:`(B,H,M,D)` per layer.
+        Either branch's context is empty when that branch is disabled.
     surface_predictions : torch.Tensor or None
         Predictions at surface anchors, shape :math:`(B,M_s,C_s)`.
     volume_predictions : torch.Tensor or None
@@ -153,15 +154,16 @@ class ABUPT(Module):
     Parameters
     ----------
     surface_channels : int, optional, default=4
-        Surface output channels. Zero disables its output head and decoder.
+        Surface output channels. Zero removes the entire surface branch.
     volume_channels : int, optional, default=7
-        Volume output channels. Zero disables its output head and decoder.
+        Volume output channels. Zero removes the entire volume branch.
     hidden_dim : int, optional, default=192
         Token width, divisible by ``num_heads``.
     num_heads : int, optional, default=3
         Attention heads. Each head must have at least six channels for 3D RoPE.
     num_interaction_blocks : int, optional, default=2
-        Pairs of shared within-branch and cross-branch attention blocks.
+        Pairs of shared within-branch and cross-branch attention blocks. With
+        one branch enabled, both blocks use self-attention, preserving depth.
     num_shared_layers : int, optional, default=1
         Shared within-branch blocks after the interactions.
     num_decoder_layers : int, optional, default=6
@@ -187,11 +189,12 @@ class ABUPT(Module):
     supernodes : torch.Tensor
         Selected geometry supernode coordinates of shape :math:`(B,S,3)`.
         Normally a uniform subset of ``geometry``; chosen by the caller.
-    surface_anchors : torch.Tensor
-        Fixed surface anchor coordinates of shape :math:`(B,M_s,3)`.
-    volume_anchors : torch.Tensor
-        Fixed volume anchor coordinates of shape :math:`(B,M_v,3)`.
-        Both anchor streams are required, including single-output modes.
+    surface_anchors : torch.Tensor or None, optional, default=None
+        Fixed surface anchor coordinates of shape :math:`(B,M_s,3)`, required
+        when the surface branch is enabled and otherwise omitted.
+    volume_anchors : torch.Tensor or None, optional, default=None
+        Fixed volume anchor coordinates of shape :math:`(B,M_v,3)`, required
+        when the volume branch is enabled and otherwise omitted.
     surface_queries : torch.Tensor or None, optional, default=None
         Surface query coordinates of shape :math:`(B,Q_s,3)`. ``None`` uses
         predictions at the surface anchors without another decoder pass.
@@ -218,6 +221,10 @@ class ABUPT(Module):
     leaves some details unspecified; this implementation uses mean message
     aggregation, GELU MLPs, axis-wise sinusoidal/RoPE encodings, and no dropout.
     It does not claim numerical compatibility with the research code.
+
+    Single-branch models are ablations of the paper's coupled architecture:
+    they retain geometry encoding and anchor decoding, replace cross-branch
+    attention with self-attention, and require no inactive-branch inputs.
 
     Sampling and normalization belong to the caller. Queries must never be
     used to resample anchors between chunks. ``encode`` / ``decode_queries``
@@ -284,10 +291,6 @@ class ABUPT(Module):
             )
         if surface_channels + volume_channels == 0:
             raise ValueError("At least one output head must be enabled")
-        if not num_interaction_blocks and (not surface_channels or not volume_channels):
-            raise ValueError(
-                "Single-output models require at least one interaction block"
-            )
         if not math.isfinite(pooling_radius) or pooling_radius <= 0:
             raise ValueError("pooling_radius must be finite and positive")
         if radius_search_backend not in (None, "torch", "warp"):
@@ -298,17 +301,22 @@ class ABUPT(Module):
         self.message = Mlp(4, hidden_dim, hidden_dim)
         self.pool_projection = Mlp(2 * hidden_dim, hidden_dim, hidden_dim)
         self.geometry_block = _AnchorBlock(hidden_dim, num_heads, mlp_ratio)
-        self.surface_embedding = Mlp(hidden_dim, hidden_dim, hidden_dim)
-        self.volume_embedding = Mlp(hidden_dim, hidden_dim, hidden_dim)
+        self.surface_embedding = (
+            Mlp(hidden_dim, hidden_dim, hidden_dim) if surface_channels else None
+        )
+        self.volume_embedding = (
+            Mlp(hidden_dim, hidden_dim, hidden_dim) if volume_channels else None
+        )
         self.conditioning = (
             nn.Linear(parameter_channels, hidden_dim) if parameter_channels else None
         )
         self.geometry_attention = _AnchorBlock(
             hidden_dim, num_heads, mlp_ratio, cross=True
         )
-        self.cross_branch = (False, True) * num_interaction_blocks + (
+        self.cross_branch = (
             False,
-        ) * num_shared_layers
+            bool(surface_channels and volume_channels),
+        ) * num_interaction_blocks + (False,) * num_shared_layers
         self.shared_blocks = nn.ModuleList(
             [
                 _AnchorBlock(hidden_dim, num_heads, mlp_ratio, cross=cross)
@@ -452,8 +460,8 @@ class ABUPT(Module):
         self,
         geometry: Float[Tensor, "B Ng 3"],
         supernodes: Float[Tensor, "B S 3"],
-        surface_anchors: Float[Tensor, "B Ms 3"],
-        volume_anchors: Float[Tensor, "B Mv 3"],
+        surface_anchors: Float[Tensor, "B Ms 3"] | None = None,
+        volume_anchors: Float[Tensor, "B Mv 3"] | None = None,
         parameters: Float[Tensor, "B P"] | None = None,
     ) -> ABUPTContext:
         r"""Build a reusable field context from geometry and fixed anchors.
@@ -464,10 +472,10 @@ class ABUPT(Module):
             Geometry coordinates of shape :math:`(B,N_g,3)`.
         supernodes : torch.Tensor
             Geometry supernodes of shape :math:`(B,S,3)`.
-        surface_anchors : torch.Tensor
-            Surface anchors of shape :math:`(B,M_s,3)`.
-        volume_anchors : torch.Tensor
-            Volume anchors of shape :math:`(B,M_v,3)`.
+        surface_anchors : torch.Tensor or None, optional, default=None
+            Surface anchors of shape :math:`(B,M_s,3)`. Omit for volume-only.
+        volume_anchors : torch.Tensor or None, optional, default=None
+            Volume anchors of shape :math:`(B,M_v,3)`. Omit for surface-only.
         parameters : torch.Tensor or None, optional, default=None
             Global conditions of shape :math:`(B,P)`.
 
@@ -475,16 +483,21 @@ class ABUPT(Module):
         -------
         ABUPTContext
             Layer contexts and anchor predictions, retaining their autograd
-            graph for training. Both anchor streams interact synchronously.
+            graph for training. In joint mode, streams interact synchronously.
         """
         if not torch.compiler.is_compiling():
             self._validate_points(geometry, "geometry")
-            for name, points in (
-                ("supernodes", supernodes),
-                ("surface_anchors", surface_anchors),
-                ("volume_anchors", volume_anchors),
+            self._validate_points(supernodes, "supernodes", geometry)
+            for name, points, channels in (
+                ("surface_anchors", surface_anchors, self.surface_channels),
+                ("volume_anchors", volume_anchors, self.volume_channels),
             ):
-                self._validate_points(points, name, geometry)
+                if channels:
+                    if points is None:
+                        raise ValueError(f"{name} are required for the enabled branch")
+                    self._validate_points(points, name, geometry)
+                elif points is not None:
+                    raise ValueError(f"{name} supplied for a disabled branch")
             if self.parameter_channels:
                 if parameters is None or parameters.shape != (
                     geometry.shape[0],
@@ -507,23 +520,38 @@ class ABUPT(Module):
             if self.conditioning is not None
             else None
         )
-        surface = self.surface_embedding(self.position(surface_anchors))
-        volume = self.volume_embedding(self.position(volume_anchors))
-        if conditioning is not None:
-            surface, volume = surface + conditioning, volume + conditioning
-        surface = self.geometry_attention(surface, surface_anchors, geometry_kv)
-        volume = self.geometry_attention(volume, volume_anchors, geometry_kv)
-        surface_context, volume_context = [geometry_kv], [geometry_kv]
+        surface = volume = None
+        surface_context, volume_context = [], []
+        if self.surface_embedding is not None:
+            surface = self.surface_embedding(self.position(surface_anchors))
+            if conditioning is not None:
+                surface = surface + conditioning
+            surface = self.geometry_attention(surface, surface_anchors, geometry_kv)
+            surface_context.append(geometry_kv)
+        if self.volume_embedding is not None:
+            volume = self.volume_embedding(self.position(volume_anchors))
+            if conditioning is not None:
+                volume = volume + conditioning
+            volume = self.geometry_attention(volume, volume_anchors, geometry_kv)
+            volume_context.append(geometry_kv)
         for block, cross in zip(self.shared_blocks, self.cross_branch):
-            surface_kv = block._key_value(surface, surface_anchors)
-            volume_kv = block._key_value(volume, volume_anchors)
+            surface_kv = (
+                block._key_value(surface, surface_anchors)
+                if surface is not None
+                else None
+            )
+            volume_kv = (
+                block._key_value(volume, volume_anchors) if volume is not None else None
+            )
             if cross:
                 surface_kv, volume_kv = volume_kv, surface_kv
-            surface_context.append(surface_kv)
-            volume_context.append(volume_kv)
             # Form both contexts before updating either branch (Eq. 8).
-            surface = block(surface, surface_anchors, surface_kv)
-            volume = block(volume, volume_anchors, volume_kv)
+            if surface is not None:
+                surface_context.append(surface_kv)
+                surface = block(surface, surface_anchors, surface_kv)
+            if volume is not None:
+                volume_context.append(volume_kv)
+                volume = block(volume, volume_anchors, volume_kv)
         for block in self.surface_decoder:
             kv = block._key_value(surface, surface_anchors)
             surface_context.append(kv)
@@ -694,8 +722,8 @@ class ABUPT(Module):
         self,
         geometry: Float[Tensor, "B Ng 3"],
         supernodes: Float[Tensor, "B S 3"],
-        surface_anchors: Float[Tensor, "B Ms 3"],
-        volume_anchors: Float[Tensor, "B Mv 3"],
+        surface_anchors: Float[Tensor, "B Ms 3"] | None = None,
+        volume_anchors: Float[Tensor, "B Mv 3"] | None = None,
         surface_queries: Float[Tensor, "B Qs 3"] | None = None,
         volume_queries: Float[Tensor, "B Qv 3"] | None = None,
         parameters: Float[Tensor, "B P"] | None = None,
