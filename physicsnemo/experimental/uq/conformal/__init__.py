@@ -22,7 +22,7 @@ calibration set to a calibrator, call its ``finalize()`` to get a predictor,
 then call ``predictor.predict_interval`` on new model outputs to get
 ``(lo, hi)`` bounds with a stated coverage level.
 
-:class:`~physicsnemo.experimental.uq.conformal.CellwiseCalibrator` covers
+:class:`~physicsnemo.experimental.uq.conformal.PointwiseCalibrator` covers
 each output element with probability at least :math:`1 - \alpha`. Every
 sample must have the same output layout: the same mesh, with the same points
 in the same order, or a fixed set of outputs such as scalar observables. For
@@ -43,7 +43,7 @@ The calibrator accepts plain tensors or ``TensorDict`` containers of fields.
 
 Typical usage::
 
-    calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.1)
+    calibrator = PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.1)
     for pred, target in calibration_set:
         calibrator.update(pred, target, points=points)
     predictor = calibrator.finalize()
@@ -69,7 +69,7 @@ If deployment data drifts away from the calibration data, the coverage is
 no longer guaranteed.
 """
 
-from .calibrators import CellwiseCalibrator
+from .calibrators import PointwiseCalibrator
 from .diagnostics import CoverageAccumulator
 from .predictors import ConformalPredictor
 from .scores import (
@@ -83,11 +83,11 @@ from .scores import (
 
 __all__ = [
     "AbsoluteErrorScore",
-    "CellwiseCalibrator",
     "ConformalPredictor",
     "CoverageAccumulator",
     "NonconformityScore",
     "NormalizedErrorScore",
+    "PointwiseCalibrator",
     "QuantileRegressionScore",
     "check_score",
     "register_score",

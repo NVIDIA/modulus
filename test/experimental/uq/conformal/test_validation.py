@@ -178,7 +178,7 @@ def _calibrator_entry(tier):
 
 
 def _predictor_entry():
-    predictor, points = fit("cellwise", n_samples=8, shape=(3,))
+    predictor, points = fit("pointwise", n_samples=8, shape=(3,))
     return (
         lambda bad: predictor.predict_interval(bad, points=points),
         lambda: predictor.thresholds,
@@ -186,7 +186,7 @@ def _predictor_entry():
 
 
 def _accumulator_entry():
-    accumulator = fit("cellwise", n_samples=8, shape=(3,))[0].coverage_accumulator()
+    accumulator = fit("pointwise", n_samples=8, shape=(3,))[0].coverage_accumulator()
     accumulator.update(-torch.ones(3), torch.ones(3), _F)
     return (
         lambda bad: accumulator.update(-torch.ones(3), torch.ones(3), bad),
@@ -216,7 +216,7 @@ def test_entry_points_reject_bad_inputs_transactionally(entry_point, bad_kind):
 
 
 def test_field_mode_entry_points_reject_plain_tensors():
-    predictor, _ = fit("cellwise", n_samples=10, shape=(3,), fields=["p"])
+    predictor, _ = fit("pointwise", n_samples=10, shape=(3,), fields=["p"])
     accumulator = predictor.coverage_accumulator()
     message = r"calibrated on TensorDict fields \['p'\]; pass {} as a TensorDict"
     with pytest.raises(TypeError, match=message.format("prediction")):
@@ -227,7 +227,7 @@ def test_field_mode_entry_points_reject_plain_tensors():
 
 def test_tensordict_inputs_take_the_same_validation_path():
     """Field containers route each field through the shared validators."""
-    calibrator = CALIBRATORS["cellwise"](AbsoluteErrorScore(), alpha=0.5)
+    calibrator = CALIBRATORS["pointwise"](AbsoluteErrorScore(), alpha=0.5)
     bad = TensorDict({"bad": torch.full((3,), torch.nan)}, batch_size=[])
     with pytest.raises(ValueError, match="Field 'bad': 3 non-finite"):
         calibrator.update(bad, bad, points=_POINTS)

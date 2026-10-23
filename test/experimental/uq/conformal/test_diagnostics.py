@@ -24,14 +24,14 @@ from tensordict import TensorDict
 
 from physicsnemo.experimental.uq.conformal import (
     AbsoluteErrorScore,
-    CellwiseCalibrator,
     CoverageAccumulator,
+    PointwiseCalibrator,
     QuantileRegressionScore,
 )
 from test.experimental.uq.conformal._helpers import TIERS, count_syncs, fit
 
 
-def _accumulator(tier="cellwise", **fit_kwargs):
+def _accumulator(tier="pointwise", **fit_kwargs):
     """Diagnostics for a 3-sample, alpha=0.5 predictor (fit kwargs override)."""
     kwargs = {"n_samples": 3, "alpha": 0.5, "shape": (3,), **fit_kwargs}
     return fit(tier, **kwargs)[0].coverage_accumulator()
@@ -51,8 +51,8 @@ def _interval_sample(n_points, n_covered, *, n_components=1, half_width=1.0):
     return lo, hi, target
 
 
-def test_cellwise_map_and_summary_are_elementwise():
-    accumulator = _accumulator("cellwise")
+def test_pointwise_map_and_summary_are_elementwise():
+    accumulator = _accumulator("pointwise")
     for covered in ([True, True, False], [True, False, False], [True, True, True]):
         target = torch.where(torch.tensor(covered), 0.0, 2.0)
         accumulator.update(-torch.ones(3), torch.ones(3), target)
@@ -68,8 +68,8 @@ def test_cellwise_map_and_summary_are_elementwise():
     }
 
 
-def test_cellwise_target_fraction_uses_exact_declared_alpha():
-    accumulator = _accumulator("cellwise", shape=(2,), alpha=0.58)
+def test_pointwise_target_fraction_uses_exact_declared_alpha():
+    accumulator = _accumulator("pointwise", shape=(2,), alpha=0.58)
     for sample in range(100):
         covered = torch.tensor([sample < 42, sample < 41])
         accumulator.update(
@@ -82,7 +82,7 @@ def test_cellwise_target_fraction_uses_exact_declared_alpha():
 
 
 def test_mean_interval_width_uses_all_reported_elements():
-    accumulator = _accumulator("cellwise", shape=(2,))
+    accumulator = _accumulator("pointwise", shape=(2,))
     for half_width in ([1.0, 2.0], [3.0, 3.0]):
         half_width = torch.tensor(half_width)
         accumulator.update(-half_width, half_width, torch.zeros(2))
@@ -92,7 +92,7 @@ def test_mean_interval_width_uses_all_reported_elements():
 
 
 def test_empty_quantile_regression_set_has_zero_width():
-    calibrator = CellwiseCalibrator(QuantileRegressionScore(), alpha=0.5)
+    calibrator = PointwiseCalibrator(QuantileRegressionScore(), alpha=0.5)
     prediction = torch.zeros(1)
     target = torch.zeros(1)
     points = torch.zeros(1, 1)
@@ -135,7 +135,7 @@ def test_tensordict_fields_report_per_field_and_select_fitted_keys():
 
 
 EMPTY_ENTRIES = {
-    "cellwise": {
+    "pointwise": {
         "mean_element_coverage": None,
         "minimum_element_coverage": None,
         "fraction_at_target": None,
@@ -178,11 +178,11 @@ TRANSACTIONAL_REJECTIONS = [  # (id, fields, warm-up update, rejected update, er
     ("width-overflow", None, _PLAIN, tuple(torch.full((3,), v, dtype=_F64) for v in (-1e308, 1e308, 0.0)), ValueError, "width overflows"),
     ("empty-target", None, _PLAIN, (torch.empty(0),) * 3, ValueError, "Plain tensor: empty"),
     ("container-mode-mismatch", None, _PLAIN, (_td(value=0 * _ONES3),) * 3, TypeError, "calibrated on a plain tensor; pass lo as a tensor"),
-    ("cellwise-second-field-fails", ["a", "b"], (_LO3, _HI3, _T3), (_LO3, _HI3, _td(a=0 * _ONES3, b=0 * _ONES4)), ValueError, "shape"),
+    ("pointwise-second-field-fails", ["a", "b"], (_LO3, _HI3, _T3), (_LO3, _HI3, _td(a=0 * _ONES3, b=0 * _ONES4)), ValueError, "shape"),
     ("width-sum-within-sample", ["a", "b"], (_LO3, _HI3, _T3), (_WIDE[0], _td(a=_Z64 + 2, b=_BIG.roll(1) + _BIG), _WIDE[2]), ValueError, "Field 'b'.*width sum.*[Rr]escale"),
     ("width-sum-cross-call", ["a", "b"], _WIDE, _WIDER, ValueError, "Field 'b'.*width sum.*[Rr]escale"),
     ("nonfinite-bounds", None, _PLAIN, (-_ONES3, torch.full((3,), torch.inf), 0 * _ONES3), ValueError, "non-finite"),
-    ("cellwise-sample-shape-drift", None, _PLAIN, (-_ONES4, _ONES4, 0 * _ONES4), ValueError, "fixed sample shape"),
+    ("pointwise-sample-shape-drift", None, _PLAIN, (-_ONES4, _ONES4, 0 * _ONES4), ValueError, "fixed sample shape"),
 ]
 # fmt: on
 
@@ -214,7 +214,7 @@ def test_update_rejections_are_transactional(fields, warmup, rejected, error, ma
 
 def test_infinite_prediction_bounds_require_recomputing_in_wider_dtype():
     """Conservative fp16 bounds can overflow; upcast before predicting again."""
-    predictor, points = fit("cellwise", n_samples=3, alpha=0.5, shape=(1,))
+    predictor, points = fit("pointwise", n_samples=3, alpha=0.5, shape=(1,))
     prediction = torch.full((1,), 65504.0, dtype=torch.float16)
     lo, hi = predictor.predict_interval(prediction, points=points)
     assert torch.isfinite(prediction).all()
@@ -234,7 +234,7 @@ def test_infinite_prediction_bounds_require_recomputing_in_wider_dtype():
 
 def test_coverage_map_requires_samples():
     with pytest.raises(RuntimeError, match="No samples collected"):
-        _accumulator("cellwise").empirical_coverage_map()
+        _accumulator("pointwise").empirical_coverage_map()
 
 
 @pytest.mark.parametrize("tier", TIERS)
@@ -268,14 +268,14 @@ def test_update_does_not_keep_the_autograd_graph():
 
 def test_accumulator_constructor_rejects_bare_string_keys():
     with pytest.raises(TypeError, match="not the string"):
-        CoverageAccumulator(tier="cellwise", alpha=0.5, n_cal=3, keys="p")
+        CoverageAccumulator(tier="pointwise", alpha=0.5, n_cal=3, keys="p")
 
 
 @pytest.mark.parametrize(
     "make",
     [
-        lambda: CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.5, keys=[]),
-        lambda: CoverageAccumulator(tier="cellwise", alpha=0.5, n_cal=3, keys=[]),
+        lambda: PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.5, keys=[]),
+        lambda: CoverageAccumulator(tier="pointwise", alpha=0.5, n_cal=3, keys=[]),
     ],
     ids=["calibrator", "accumulator"],
 )
@@ -291,7 +291,7 @@ def test_empty_key_selection_is_rejected_up_front(make):
 )
 def test_accumulator_constructor_validates_alpha_and_n_cal(alpha, n_cal, error):
     with pytest.raises(error):
-        CoverageAccumulator(tier="cellwise", alpha=alpha, n_cal=n_cal)
+        CoverageAccumulator(tier="pointwise", alpha=alpha, n_cal=n_cal)
 
 
 def test_accumulator_constructor_rejects_unknown_tier():
@@ -305,7 +305,7 @@ def test_report_metadata_is_private():
         setattr(accumulator, name, value)
     accumulator.keys = ("other",)
     assert accumulator.finalize()["meta"] == {
-        "tier": "cellwise",
+        "tier": "pointwise",
         "alpha": 0.5,
         "n_cal": 3,
         "target_coverage": 0.5,
@@ -313,7 +313,7 @@ def test_report_metadata_is_private():
 
 
 def _calibrator_finalizer():
-    calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
+    calibrator = PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
     for _ in range(3):
         calibrator.update(torch.zeros(2), torch.zeros(2), points=torch.zeros(2, 1))
     return calibrator.finalize
@@ -326,7 +326,7 @@ def _accumulator_finalizer():
 
 
 def _coverage_map_finalizer():
-    accumulator = _accumulator("cellwise")
+    accumulator = _accumulator("pointwise")
     accumulator.update(*_PLAIN)
     return accumulator.empirical_coverage_map
 

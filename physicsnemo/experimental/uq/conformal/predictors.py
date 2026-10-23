@@ -98,9 +98,9 @@ class ConformalPredictor:
 
     Parameters
     ----------
-    tier : {"cellwise"}
-        Calibrator that produced ``thresholds``: ``"cellwise"`` for
-        :class:`~physicsnemo.experimental.uq.conformal.CellwiseCalibrator`.
+    tier : {"pointwise"}
+        Calibrator that produced ``thresholds``: ``"pointwise"`` for
+        :class:`~physicsnemo.experimental.uq.conformal.PointwiseCalibrator`.
     score : NonconformityScore
         Score used during calibration: a built-in score or a registered
         custom one. The predictor keeps its own copy, so
@@ -126,7 +126,7 @@ class ConformalPredictor:
     ValueError
         If any of these hold:
 
-        - ``tier`` is not ``"cellwise"``.
+        - ``tier`` is not ``"pointwise"``.
         - :math:`n_{cal} < (1 - \alpha) / \alpha`: collect more samples or
           raise ``alpha``.
         - ``points`` is empty, not 2-D, or not finite.
@@ -147,7 +147,7 @@ class ConformalPredictor:
     >>> _ = torch.manual_seed(0)
     >>> points = torch.rand(50, 3)
     >>> predictor = ConformalPredictor(
-    ...     tier="cellwise", score=AbsoluteErrorScore(), alpha=0.1, n_cal=20,
+    ...     tier="pointwise", score=AbsoluteErrorScore(), alpha=0.1, n_cal=20,
     ...     thresholds=torch.full((50, 2), 0.3), points=points,
     ... )
     >>> lo, hi = predictor.predict_interval(torch.randn(50, 2), points=points)
@@ -223,7 +223,7 @@ class ConformalPredictor:
 
     @property
     def tier(self) -> Tier:
-        r"""Calibrator that produced this predictor: ``"cellwise"``."""
+        r"""Calibrator that produced this predictor: ``"pointwise"``."""
         return self._tier
 
     @property

@@ -29,8 +29,8 @@ from tensordict import TensorDict
 
 from physicsnemo.experimental.uq.conformal import (
     AbsoluteErrorScore,
-    CellwiseCalibrator,
     ConformalPredictor,
+    PointwiseCalibrator,
 )
 from physicsnemo.experimental.uq.conformal._utils import TIERS
 
@@ -47,7 +47,7 @@ __all__ = [
 ]
 
 CALIBRATORS = {
-    "cellwise": CellwiseCalibrator,
+    "pointwise": PointwiseCalibrator,
 }
 CALIBRATOR_CLASSES = [
     pytest.param(CALIBRATORS[tier], id=tier) for tier in sorted(CALIBRATORS)
@@ -108,7 +108,7 @@ def fit(
 def make_predictor(**overrides) -> ConformalPredictor:
     """Directly constructed predictor with valid defaults on a 3-point mesh."""
     kwargs = {
-        "tier": "cellwise",
+        "tier": "pointwise",
         "score": AbsoluteErrorScore(),
         "alpha": 0.5,
         "n_cal": 3,

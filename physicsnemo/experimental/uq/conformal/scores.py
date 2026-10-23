@@ -242,7 +242,7 @@ class NonconformityScore:
         threshold : torch.Tensor
             Fitted threshold, broadcastable against ``prediction``, such as
             the one value per element of shape :math:`(*\text{dims})` fitted
-            by the cellwise calibrator.
+            by the pointwise calibrator.
         aux : Mapping[str, torch.Tensor], optional
             The same ``aux`` entries that :meth:`score` needs.
 

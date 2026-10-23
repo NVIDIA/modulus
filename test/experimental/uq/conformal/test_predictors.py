@@ -25,8 +25,8 @@ from tensordict import TensorDict
 import physicsnemo.experimental.uq.conformal as conformal
 from physicsnemo.experimental.uq.conformal import (
     AbsoluteErrorScore,
-    CellwiseCalibrator,
     ConformalPredictor,
+    PointwiseCalibrator,
 )
 from physicsnemo.experimental.uq.conformal._utils import points_fingerprint
 from test.experimental.uq.conformal._helpers import count_syncs, fit, make_predictor
@@ -35,7 +35,7 @@ from test.experimental.uq.conformal._helpers import count_syncs, fit, make_predi
 @pytest.mark.parametrize("fields", [None, ["a", "b"]])
 def test_predict_interval_syncs_once(monkeypatch, fields):
     """All value checks, including the mesh checksum, share one host sync."""
-    predictor, points = fit("cellwise", shape=(20,), fields=fields, n_samples=10)
+    predictor, points = fit("pointwise", shape=(20,), fields=fields, n_samples=10)
     prediction = torch.randn(20)
     if fields is not None:
         prediction = TensorDict({key: prediction for key in fields}, batch_size=[])
@@ -47,7 +47,7 @@ def test_predict_interval_syncs_once(monkeypatch, fields):
 def test_prediction_container_contract():
     """Superset containers select the fitted fields; missing fields, plain
     mappings, and containers handed to a tensor-mode predictor are named."""
-    predictor, points = fit("cellwise", n_samples=10, shape=(4, 2), fields=["a", "b"])
+    predictor, points = fit("pointwise", n_samples=10, shape=(4, 2), fields=["a", "b"])
     zeros = torch.zeros(4, 2)
     superset = TensorDict({"a": zeros, "b": zeros, "extra": zeros}, batch_size=[])
     lo, hi = predictor.predict_interval(superset, points=points)
@@ -64,7 +64,7 @@ def test_prediction_container_contract():
         with pytest.raises(TypeError, match="Tensor or TensorDict"):
             predictor.predict_interval(mapping, points=points)
 
-    tensor_predictor, points = fit("cellwise", n_samples=10, shape=(4, 2))
+    tensor_predictor, points = fit("pointwise", n_samples=10, shape=(4, 2))
     lo, hi = tensor_predictor.predict_interval(zeros, points=points)
     assert isinstance(lo, torch.Tensor) and isinstance(hi, torch.Tensor)
     with pytest.raises(TypeError, match="calibrated on a plain tensor"):
@@ -73,8 +73,8 @@ def test_prediction_container_contract():
         )
 
 
-def test_exact_cellwise_mesh_identity_and_point_alignment():
-    predictor, points = fit("cellwise", n_samples=10, shape=(4, 2))
+def test_exact_pointwise_mesh_identity_and_point_alignment():
+    predictor, points = fit("pointwise", n_samples=10, shape=(4, 2))
     assert predictor._mesh_fingerprint == points_fingerprint(points)
     with pytest.raises(TypeError, match="points must be a torch.Tensor"):
         predictor.predict_interval(torch.zeros(4, 2))
@@ -90,7 +90,7 @@ def test_exact_cellwise_mesh_identity_and_point_alignment():
 def test_mesh_storage_mutations_are_rejected(mutation):
     points = torch.arange(4.0).reshape(4, 1)
     prediction = torch.zeros(4, 2)
-    calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
+    calibrator = PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
     for _ in range(3):
         calibrator.update(prediction, prediction + 1, points=points)
     predictor = calibrator.finalize()
@@ -115,7 +115,7 @@ class _CustomScore(AbsoluteErrorScore):
 # fmt: off
 CONSTRUCTOR_REJECTIONS = [  # (id, make_predictor overrides, error, match)
     ("custom-score", {"score": _CustomScore()}, TypeError, "a subclass needs its own registration"),
-    ("cellwise-scalar-threshold", {"thresholds": torch.tensor(1.0)}, ValueError, "one leading entry per mesh point"),
+    ("pointwise-scalar-threshold", {"thresholds": torch.tensor(1.0)}, ValueError, "one leading entry per mesh point"),
     ("dict-thresholds", {"thresholds": {"pressure": torch.ones(3)}}, TypeError, "Tensor or TensorDict"),
     ("empty-tensordict-thresholds", {"thresholds": TensorDict({})}, ValueError, "at least one"),
     ("integer-thresholds", {"thresholds": torch.ones(3, dtype=torch.int32)}, TypeError, "floating"),
@@ -140,7 +140,7 @@ def test_constructor_tier_invariants_and_threshold_guards(overrides, error, matc
 def test_public_api_exports():
     expected = {
         "AbsoluteErrorScore",
-        "CellwiseCalibrator",
+        "PointwiseCalibrator",
         "ConformalPredictor",
         "CoverageAccumulator",
         "NonconformityScore",
@@ -153,10 +153,10 @@ def test_public_api_exports():
     assert all(hasattr(conformal, name) for name in expected)
 
 
-def test_cellwise_predict_rejects_output_shape_drift_on_the_same_mesh():
+def test_pointwise_predict_rejects_output_shape_drift_on_the_same_mesh():
     points = torch.arange(12, dtype=torch.float32).reshape(6, 2)
     predictor = make_predictor(
-        tier="cellwise",
+        tier="pointwise",
         thresholds=torch.ones(6, 3),
         points=points,
     )
@@ -167,7 +167,7 @@ def test_cellwise_predict_rejects_output_shape_drift_on_the_same_mesh():
 def test_to_moves_thresholds_in_place_and_preserves_predictions_and_provenance(
     device, tmp_path
 ):
-    fitted, points = fit("cellwise", n_samples=10, shape=(4, 2))
+    fitted, points = fit("pointwise", n_samples=10, shape=(4, 2))
     fitted.save(tmp_path / "predictor.pt", provenance={"dataset": "drivaer"})
     predictor = ConformalPredictor.load(tmp_path / "predictor.pt")
     lo_ref, hi_ref = predictor.predict_interval(torch.zeros(4, 2), points=points)
@@ -177,7 +177,7 @@ def test_to_moves_thresholds_in_place_and_preserves_predictions_and_provenance(
         p = predictor
         return (p.tier, p.alpha, p.n_cal, p._mesh_fingerprint, p.provenance)
 
-    expected = ("cellwise", 0.2, 10, fitted._mesh_fingerprint, {"dataset": "drivaer"})
+    expected = ("pointwise", 0.2, 10, fitted._mesh_fingerprint, {"dataset": "drivaer"})
     assert state() == expected
     moved = predictor.to(device)
     assert moved is predictor  # nn.Module convention: in place, returns self
@@ -193,11 +193,11 @@ def test_to_moves_thresholds_in_place_and_preserves_predictions_and_provenance(
 
 
 def test_aux_and_points_are_keyword_only():
-    predictor, points = fit("cellwise", n_samples=10, shape=(4, 2))
+    predictor, points = fit("pointwise", n_samples=10, shape=(4, 2))
     with pytest.raises(TypeError, match="positional"):
         predictor.predict_interval(torch.zeros(4, 2), points)
     with pytest.raises(TypeError, match="positional"):
-        CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.2).update(
+        PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.2).update(
             torch.zeros(4, 2), torch.zeros(4, 2), points
         )
     score = predictor.score
@@ -206,7 +206,7 @@ def test_aux_and_points_are_keyword_only():
             method(torch.zeros(2), torch.zeros(2), {})
 
 
-def test_cellwise_predictor_without_points_checks_only_the_shape():
+def test_pointwise_predictor_without_points_checks_only_the_shape():
     predictor = make_predictor(points=None)
     lo, hi = predictor.predict_interval(torch.zeros(3))
     torch.testing.assert_close(hi - lo, torch.ones(3))

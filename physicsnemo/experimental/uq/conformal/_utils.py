@@ -235,7 +235,7 @@ def cast_directed(t: Tensor, dtype: torch.dtype, *, up: bool) -> Tensor:
     return torch.where(wrong_side, bumped, cast)
 
 
-Tier = Literal["cellwise"]
+Tier = Literal["pointwise"]
 """Guarantee tier names."""
 
 TIERS: tuple[str, ...] = get_args(Tier)
@@ -368,7 +368,7 @@ def require_mesh(
     fingerprint = points_fingerprint(points)
     if expected is not None and fingerprint != expected:
         raise ValueError(
-            "points does not match the exact calibration mesh; cellwise "
+            "points does not match the exact calibration mesh; pointwise "
             "conformal needs the same mesh (coordinates, dtype, and point "
             "order) on every call."
         )

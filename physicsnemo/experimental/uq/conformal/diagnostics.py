@@ -91,11 +91,11 @@ class CoverageAccumulator:
 
     Parameters
     ----------
-    tier : {"cellwise"}
+    tier : {"pointwise"}
         The predictor's ``tier``, naming the calibrator that produced it.
     alpha : float
         The predictor's target miscoverage level. Reported in the
-        metadata and used to count cellwise elements at or above target
+        metadata and used to count pointwise elements at or above target
         coverage.
     n_cal : int
         Number of calibration samples of the predictor; reported only.
@@ -118,7 +118,7 @@ class CoverageAccumulator:
     >>> _ = torch.manual_seed(0)
     >>> points = torch.rand(50, 3)
     >>> predictor = ConformalPredictor(
-    ...     tier="cellwise", score=AbsoluteErrorScore(), alpha=0.1, n_cal=20,
+    ...     tier="pointwise", score=AbsoluteErrorScore(), alpha=0.1, n_cal=20,
     ...     thresholds=torch.full((50, 2), 0.3), points=points,
     ... )
     >>> accumulator = predictor.coverage_accumulator()
@@ -269,13 +269,13 @@ class CoverageAccumulator:
             )
 
             match self._tier:
-                case "cellwise":
+                case "pointwise":
                     # Hit counts stay on device until finalize().
                     coverage = element_covered.to(torch.int64)
                     previous = self._element_hits.get(key)
                     if previous is not None and previous.shape != coverage.shape:
                         raise ValueError(
-                            f"{_field_label(key)}: a cellwise accumulator needs a "
+                            f"{_field_label(key)}: a pointwise accumulator needs a "
                             f"fixed sample shape; got {tuple(coverage.shape)} after "
                             f"{tuple(previous.shape)}."
                         )
@@ -346,7 +346,7 @@ class CoverageAccumulator:
                 ),
             }
             match self._tier:
-                case "cellwise" if n:
+                case "pointwise" if n:
                     hits = self._element_hits[key]
                     at_target = hits >= _minimum_hits_at_target(n, self._alpha)
                     entry.update(
@@ -354,7 +354,7 @@ class CoverageAccumulator:
                         minimum_element_coverage=float(hits.min()) / n,
                         fraction_at_target=float(at_target.to(torch.float64).mean()),
                     )
-                case "cellwise":
+                case "pointwise":
                     entry.update(
                         mean_element_coverage=None,
                         minimum_element_coverage=None,
