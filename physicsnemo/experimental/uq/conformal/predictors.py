@@ -82,7 +82,7 @@ def _validate_thresholds(
     out: dict[str, Tensor] = {}
     for key, value in field_items(thresholds):
         check_real(key, "threshold", value)
-        if tier == "cellwise":
+        if tier == "pointwise":
             threshold = value
         else:
             if value.ndim != 0:
@@ -112,7 +112,7 @@ class ConformalPredictor:
     only to restore thresholds you computed elsewhere.
 
     The predictor has the guarantee of the calibrator that produced it. A
-    cellwise predictor works only on the calibration output shape and, if
+    pointwise predictor works only on the calibration output shape and, if
     calibration used ``points``, only on the calibration mesh (same
     coordinates, dtype, and point order). Functional and risk-control
     predictors accept any mesh and may widen intervals per point with an
@@ -120,9 +120,9 @@ class ConformalPredictor:
 
     Parameters
     ----------
-    tier : {"cellwise", "functional", "risk_control"}
-        Calibrator that produced ``thresholds``: ``"cellwise"`` for
-        :class:`~physicsnemo.experimental.uq.conformal.CellwiseCalibrator`,
+    tier : {"pointwise", "functional", "risk_control"}
+        Calibrator that produced ``thresholds``: ``"pointwise"`` for
+        :class:`~physicsnemo.experimental.uq.conformal.PointwiseCalibrator`,
         ``"functional"`` for
         :class:`~physicsnemo.experimental.uq.conformal.FunctionalBandCalibrator`,
         ``"risk_control"`` for
@@ -137,7 +137,7 @@ class ConformalPredictor:
         Number of calibration samples.
     thresholds : torch.Tensor | TensorDict
         A tensor for one field, or a ``TensorDict`` keyed by field name.
-        Cellwise: one tensor of shape :math:`(*\text{dims})` per field.
+        Pointwise: one tensor of shape :math:`(*\text{dims})` per field.
         Other tiers: one scalar per field, stored in float64. Values must be
         finite, and nonnegative unless ``score`` is a
         :class:`~physicsnemo.experimental.uq.conformal.QuantileRegressionScore`.
@@ -147,9 +147,9 @@ class ConformalPredictor:
     points : torch.Tensor, optional
         Calibration mesh coordinates of shape
         :math:`(n_{\text{points}}, n_{\text{spatial\_dims}})`, for the
-        cellwise tier only. The predictor keeps only a checksum of them, and
+        pointwise tier only. The predictor keeps only a checksum of them, and
         :meth:`predict_interval` then requires the same coordinates, dtype,
-        and point order. Omit them for cellwise outputs without a mesh.
+        and point order. Omit them for pointwise outputs without a mesh.
 
     Raises
     ------
@@ -159,10 +159,10 @@ class ConformalPredictor:
         - ``tier`` is not one of the three names above.
         - :math:`n_{cal} < (1 - \alpha) / \alpha`: collect more samples or
           raise ``alpha``.
-        - ``tier="cellwise"`` with ``difficulty``.
+        - ``tier="pointwise"`` with ``difficulty``.
         - Another tier with ``points``.
         - ``points`` is empty, not 2-D, or not finite.
-        - A threshold is not finite; with ``points``, a cellwise threshold's
+        - A threshold is not finite; with ``points``, a pointwise threshold's
           leading size is not the number of mesh points; another tier's
           threshold is not a scalar.
         - A threshold is negative and ``score`` is not
@@ -234,10 +234,10 @@ class ConformalPredictor:
         alpha = float(alpha)
         score_snapshot = _snapshot_strategy(score, _SCORE_REGISTRY, "score")
 
-        if tier == "cellwise":
+        if tier == "pointwise":
             if difficulty is not None:
                 raise ValueError(
-                    "A cellwise predictor does not take difficulty=; only "
+                    "A pointwise predictor does not take difficulty=; only "
                     "functional and risk_control predictors use AuxDifficulty."
                 )
             difficulty_snapshot = None
@@ -249,7 +249,7 @@ class ConformalPredictor:
         else:
             if mesh_fingerprint is not None:
                 raise ValueError(
-                    f"A {tier} predictor does not take points=; only cellwise "
+                    f"A {tier} predictor does not take points=; only pointwise "
                     "predictors use points."
                 )
             difficulty_snapshot = (
@@ -284,7 +284,7 @@ class ConformalPredictor:
     def tier(self) -> Tier:
         r"""Calibrator that produced this predictor.
 
-        ``"cellwise"`` for ``CellwiseCalibrator``, ``"functional"`` for
+        ``"pointwise"`` for ``PointwiseCalibrator``, ``"functional"`` for
         ``FunctionalBandCalibrator``, or ``"risk_control"`` for
         ``RiskControlCalibrator``.
         """
@@ -365,7 +365,7 @@ class ConformalPredictor:
         pending: list[Tensor] | None,
     ) -> Tensor:
         threshold = self._thresholds_by_key[key]
-        if self._tier == "cellwise":
+        if self._tier == "pointwise":
             if threshold.shape != prediction.shape:
                 raise ValueError(
                     f"{_field_label(key)}: prediction shape {tuple(prediction.shape)} "
@@ -406,7 +406,7 @@ class ConformalPredictor:
                 pending,
             )
         elif points is not None:
-            if self._tier == "cellwise":
+            if self._tier == "pointwise":
                 raise TypeError(
                     "This predictor was calibrated without points=, so it has no "
                     "mesh to compare against; omit points=."
@@ -448,7 +448,7 @@ class ConformalPredictor:
         ----------
         prediction : torch.Tensor | TensorDict
             Model output for one sample, of shape :math:`(*\text{dims})`, or
-            a ``TensorDict`` of such tensors. For the cellwise tier the shape
+            a ``TensorDict`` of such tensors. For the pointwise tier the shape
             must equal the calibration shape. When ``points`` is given, the
             leading dimension must be :math:`n_{\text{points}}`.
         aux : Mapping[str, torch.Tensor] | Mapping[str, Mapping], optional
@@ -463,7 +463,7 @@ class ConformalPredictor:
         points : torch.Tensor, optional
             Mesh coordinates of shape
             :math:`(n_{\text{points}}, n_{\text{spatial\_dims}})`. Required
-            for a cellwise predictor calibrated with ``points``, where they
+            for a pointwise predictor calibrated with ``points``, where they
             must match the calibration coordinates, dtype, and point order,
             and rejected by one calibrated without them. Other tiers use them
             only to check that each field has one leading entry per point.
@@ -478,12 +478,12 @@ class ConformalPredictor:
         ------
         TypeError
             If ``prediction`` is a plain tensor for a predictor calibrated on
-            ``TensorDict`` fields, or the reverse, or a cellwise predictor
+            ``TensorDict`` fields, or the reverse, or a pointwise predictor
             gets no ``points`` when calibration used them, or gets ``points``
             when calibration did not.
         ValueError
             If a shape differs from calibration, values are not finite, or
-            (cellwise) ``points`` describes a different mesh.
+            (pointwise) ``points`` describes a different mesh.
             If meshes vary between samples, calibrate with
             :class:`~physicsnemo.experimental.uq.conformal.FunctionalBandCalibrator`
             or
@@ -500,7 +500,7 @@ class ConformalPredictor:
         rescale the model outputs and recalibrate. Do not clip bounds
         inward: that can remove coverage.
 
-        Each call checks every input value, and any cellwise ``points``
+        Each call checks every input value, and any pointwise ``points``
         checksum, on the inputs' device, then synchronizes with the GPU once
         to read the results. This method is not intended for use inside
         ``torch.compile`` regions.

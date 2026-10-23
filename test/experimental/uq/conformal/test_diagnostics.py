@@ -24,9 +24,9 @@ from tensordict import TensorDict
 
 from physicsnemo.experimental.uq.conformal import (
     AbsoluteErrorScore,
-    CellwiseCalibrator,
     CoverageAccumulator,
     FunctionalBandCalibrator,
+    PointwiseCalibrator,
     QuantileRegressionScore,
     RiskControlCalibrator,
 )
@@ -109,8 +109,8 @@ def test_functional_report_counts_whole_field_containment():
     }
 
 
-def test_cellwise_map_and_summary_are_elementwise():
-    accumulator = _accumulator("cellwise")
+def test_pointwise_map_and_summary_are_elementwise():
+    accumulator = _accumulator("pointwise")
     for covered in ([True, True, False], [True, False, False], [True, True, True]):
         target = torch.where(torch.tensor(covered), 0.0, 2.0)
         accumulator.update(-torch.ones(3), torch.ones(3), target)
@@ -126,8 +126,8 @@ def test_cellwise_map_and_summary_are_elementwise():
     }
 
 
-def test_cellwise_target_fraction_uses_exact_declared_alpha():
-    accumulator = _accumulator("cellwise", shape=(2,), alpha=0.58)
+def test_pointwise_target_fraction_uses_exact_declared_alpha():
+    accumulator = _accumulator("pointwise", shape=(2,), alpha=0.58)
     for sample in range(100):
         covered = torch.tensor([sample < 42, sample < 41])
         accumulator.update(
@@ -186,7 +186,7 @@ def test_tensordict_fields_report_per_field_and_select_fitted_keys():
 
 
 EMPTY_ENTRIES = {
-    "cellwise": {
+    "pointwise": {
         "mean_element_coverage": None,
         "minimum_element_coverage": None,
         "fraction_at_target": None,
@@ -231,11 +231,11 @@ TRANSACTIONAL_REJECTIONS = [  # (id, tier, fields, warm-up update, rejected upda
     ("width-overflow", "risk_control", None, _PLAIN, tuple(torch.tensor([v], dtype=_F64) for v in (-1e308, 1e308, 0.0)), ValueError, "width overflows"),
     ("empty-target", "risk_control", None, _PLAIN, (torch.empty(0),) * 3, ValueError, "Plain tensor: empty"),
     ("container-mode-mismatch", "risk_control", None, _PLAIN, (_td(value=0 * _ONES3),) * 3, TypeError, "calibrated on a plain tensor; pass lo as a tensor"),
-    ("cellwise-second-field-fails", "cellwise", ["a", "b"], (_LO3, _HI3, _T3), (_LO3, _HI3, _td(a=0 * _ONES3, b=0 * _ONES4)), ValueError, "shape"),
-    ("width-sum-within-sample", "cellwise", ["a", "b"], (_LO3, _HI3, _T3), (_WIDE[0], _td(a=_Z64 + 2, b=_BIG.roll(1) + _BIG), _WIDE[2]), ValueError, "Field 'b'.*width sum.*[Rr]escale"),
-    ("width-sum-cross-call", "cellwise", ["a", "b"], _WIDE, _WIDER, ValueError, "Field 'b'.*width sum.*[Rr]escale"),
-    ("nonfinite-bounds", "cellwise", None, _PLAIN, (-_ONES3, torch.full((3,), torch.inf), 0 * _ONES3), ValueError, "non-finite"),
-    ("cellwise-sample-shape-drift", "cellwise", None, _PLAIN, (-_ONES4, _ONES4, 0 * _ONES4), ValueError, "fixed sample shape"),
+    ("pointwise-second-field-fails", "pointwise", ["a", "b"], (_LO3, _HI3, _T3), (_LO3, _HI3, _td(a=0 * _ONES3, b=0 * _ONES4)), ValueError, "shape"),
+    ("width-sum-within-sample", "pointwise", ["a", "b"], (_LO3, _HI3, _T3), (_WIDE[0], _td(a=_Z64 + 2, b=_BIG.roll(1) + _BIG), _WIDE[2]), ValueError, "Field 'b'.*width sum.*[Rr]escale"),
+    ("width-sum-cross-call", "pointwise", ["a", "b"], _WIDE, _WIDER, ValueError, "Field 'b'.*width sum.*[Rr]escale"),
+    ("nonfinite-bounds", "pointwise", None, _PLAIN, (-_ONES3, torch.full((3,), torch.inf), 0 * _ONES3), ValueError, "non-finite"),
+    ("pointwise-sample-shape-drift", "pointwise", None, _PLAIN, (-_ONES4, _ONES4, 0 * _ONES4), ValueError, "fixed sample shape"),
 ]
 # fmt: on
 
@@ -252,7 +252,7 @@ def test_update_rejections_are_transactional(
     accumulator = _accumulator(tier, fields=fields)
     accumulator.update(*warmup)
     before = accumulator.finalize()
-    before_map = accumulator.empirical_coverage_map() if tier == "cellwise" else None
+    before_map = accumulator.empirical_coverage_map() if tier == "pointwise" else None
     with pytest.raises(error, match=match) as excinfo:
         accumulator.update(*rejected)
     assert "__tensor__" not in str(excinfo.value)
@@ -270,7 +270,7 @@ def test_update_rejections_are_transactional(
 
 def test_infinite_prediction_bounds_require_recomputing_in_wider_dtype():
     """Conservative fp16 bounds can overflow; upcast before predicting again."""
-    predictor, points = fit("cellwise", n_samples=3, alpha=0.5, shape=(1,))
+    predictor, points = fit("pointwise", n_samples=3, alpha=0.5, shape=(1,))
     prediction = torch.full((1,), 65504.0, dtype=torch.float16)
     lo, hi = predictor.predict_interval(prediction, points=points)
     assert torch.isfinite(prediction).all()
@@ -290,8 +290,8 @@ def test_infinite_prediction_bounds_require_recomputing_in_wider_dtype():
 
 def test_coverage_map_availability_errors():
     with pytest.raises(RuntimeError, match="No samples collected"):
-        _accumulator("cellwise").empirical_coverage_map()
-    with pytest.raises(RuntimeError, match="only for cellwise"):
+        _accumulator("pointwise").empirical_coverage_map()
+    with pytest.raises(RuntimeError, match="only for pointwise"):
         _accumulator("functional").empirical_coverage_map()
 
 
@@ -332,8 +332,8 @@ def test_accumulator_constructor_rejects_bare_string_keys():
 @pytest.mark.parametrize(
     "make",
     [
-        lambda: CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.5, keys=[]),
-        lambda: CoverageAccumulator(tier="cellwise", alpha=0.5, n_cal=3, keys=[]),
+        lambda: PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.5, keys=[]),
+        lambda: CoverageAccumulator(tier="pointwise", alpha=0.5, n_cal=3, keys=[]),
     ],
     ids=["calibrator", "accumulator"],
 )
@@ -349,7 +349,7 @@ def test_empty_key_selection_is_rejected_up_front(make):
 )
 def test_accumulator_constructor_validates_alpha_and_n_cal(alpha, n_cal, error):
     with pytest.raises(error):
-        CoverageAccumulator(tier="cellwise", alpha=alpha, n_cal=n_cal)
+        CoverageAccumulator(tier="pointwise", alpha=alpha, n_cal=n_cal)
 
 
 def test_accumulator_constructor_rejects_unknown_tier():
@@ -384,7 +384,7 @@ def _accumulator_finalizer():
 
 
 def _coverage_map_finalizer():
-    accumulator = _accumulator("cellwise")
+    accumulator = _accumulator("pointwise")
     accumulator.update(*_PLAIN)
     return accumulator.empirical_coverage_map
 
