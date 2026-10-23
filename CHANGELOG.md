@@ -15,9 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adds an experimental, independently implemented SMART operator with sampled
   geometry encoding, reusable latent contexts, and chunked field decoding.
 - Adds `physicsnemo.experimental.uq.conformal`: post-hoc conformal prediction
-  for spatio-temporal fields with `PointwiseCalibrator`, `ConformalPredictor`,
-  `CoverageAccumulator`, `AbsoluteErrorScore`, `NormalizedErrorScore`, and
-  `QuantileRegressionScore`. Custom scores subclass `NonconformityScore` and
+  for spatio-temporal fields with `PointwiseCalibrator`,
+  `FunctionalBandCalibrator`, `ConformalPredictor`, `CoverageAccumulator`,
+  `AbsoluteErrorScore`, `NormalizedErrorScore`, `QuantileRegressionScore`,
+  and `AuxDifficulty`. Custom scores subclass `NonconformityScore` and
   register with `register_score`; `check_score` tests them.
 
 - Adds standalone FLARE++ attention and model APIs, with input-conditioned
