@@ -419,7 +419,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `hemisphere` and `cone` primitives have a single pole or apex vertex.
   Before, it was repeated around the ring, leaving zero-area triangles.
 - `tetrahedron_surface` edges have length `side_length`, and
-  `sphere_icosahedral` with `subdivisions=0` honours `radius`.
+  `sphere_icosahedral` with `subdivisions=0` honors `radius`.
 - `sphere_volume` and `cylinder_volume` tetrahedra fill the solid without
   overlap. With VTK 9.7, their Delaunay tetrahedra overlapped and left gaps.
 - `lumpy_ball` raises `ValueError` when `noise_amplitude` folds its surface
