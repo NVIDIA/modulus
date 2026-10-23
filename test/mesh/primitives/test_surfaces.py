@@ -96,10 +96,8 @@ class TestSurfacePrimitives:
         """Every hemisphere normal points away from the center."""
         mesh = primitives.surfaces.hemisphere.load()
 
-        # Skip the zero-area triangles at the pole, whose normals are rounding noise
-        nondegenerate = mesh.cell_areas > 1e-6 * mesh.cell_areas.max()
         radial = (mesh.cell_normals * mesh.cell_centroids).sum(dim=-1)
-        assert (radial[nondegenerate] > 0).all()
+        assert (radial > 0).all()
 
     @pytest.mark.parametrize("example_name", ["disk", "plane"])
     def test_xy_surface_normals_point_up(self, example_name):
