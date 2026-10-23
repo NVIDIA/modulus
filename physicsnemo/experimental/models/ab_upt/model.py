@@ -178,6 +178,7 @@ class ABUPT(Module):
     radius_search_backend : {None, "torch", "warp"}, optional, default=None
         ``None`` selects Warp on CUDA and PyTorch otherwise. Neighbor search
         is discrete; message passing remains differentiable in coordinates.
+        Warp searches in float32; the PyTorch backend preserves float64 inputs.
 
     Forward
     -------
@@ -364,8 +365,22 @@ class ABUPT(Module):
             "warp" if geometry.is_cuda else "torch"
         )
         batch, count, _ = supernodes.shape
-        pooled = geometry.new_zeros(batch * count, self.hidden_dim)
-        counts = geometry.new_zeros(batch * count, 1)
+        # Counts and message sums must not accumulate in fp16/bf16: large
+        # neighborhoods can overflow fp16 counts or round away bf16 increments.
+        # Retain double precision when explicitly requested by the caller.
+        accumulation_dtype = (
+            torch.float64 if geometry.dtype == torch.float64 else torch.float32
+        )
+        search_dtype = accumulation_dtype if backend == "torch" else torch.float32
+        pooled = torch.zeros(
+            batch * count,
+            self.hidden_dim,
+            device=geometry.device,
+            dtype=accumulation_dtype,
+        )
+        counts = torch.zeros(
+            batch * count, 1, device=geometry.device, dtype=accumulation_dtype
+        )
         query_step = count if backend == "warp" else min(128, count)
         point_step = geometry.shape[1] if backend == "warp" else self.pooling_chunk_size
         for q_start in range(0, count, query_step):
@@ -374,11 +389,11 @@ class ABUPT(Module):
                     edges = radius_search(
                         geometry[:, p_start : p_start + point_step]
                         .detach()
-                        .float()
+                        .to(search_dtype)
                         .contiguous(),
                         supernodes[:, q_start : q_start + query_step]
                         .detach()
-                        .float()
+                        .to(search_dtype)
                         .contiguous(),
                         self.pooling_radius,
                         implementation=backend,
@@ -397,7 +412,11 @@ class ABUPT(Module):
                     counts.index_add_(0, ids, counts.new_ones(ids.shape[0], 1))
         # Empty neighborhoods contribute zero local information; absolute
         # supernode coordinates still identify their geometry tokens.
-        pooled = (pooled / counts.clamp_min(1)).reshape(batch, count, self.hidden_dim)
+        pooled = (
+            (pooled / counts.clamp_min(1))
+            .reshape(batch, count, self.hidden_dim)
+            .to(geometry.dtype)
+        )
         return self.pool_projection(
             torch.cat((pooled, self.position(supernodes)), dim=-1)
         )

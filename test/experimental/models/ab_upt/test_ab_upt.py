@@ -303,6 +303,46 @@ def test_pooling_chunk_independence_empty_neighbors_and_coordinate_gradients():
     assert torch.isfinite(distant).all()
 
 
+@pytest.mark.parametrize(
+    "dtype,n_points,chunk_size,message_value",
+    [(torch.bfloat16, 1024, 1, 0.01), (torch.float16, 65536, 4096, 0.125)],
+)
+def test_reduced_precision_pooling_preserves_dense_neighborhood_mean(
+    dtype, n_points, chunk_size, message_value, device
+):
+    """Identical messages retain their mean across dense low-precision pools."""
+    model = ABUPT(**(SMALL | {"pooling_chunk_size": chunk_size})).to(device, dtype)
+    # A known constant message gives an analytic mean, independently of model
+    # weights and reference fixtures. Expose the aggregate before projection.
+    model.message = torch.nn.Linear(4, model.hidden_dim).to(device, dtype)
+    with torch.no_grad():
+        model.message.weight.zero_()
+        model.message.bias.fill_(message_value)
+    model.pool_projection = torch.nn.Identity()
+    geometry = torch.zeros(1, n_points, 3, device=device, dtype=dtype)
+    supernodes = geometry[:, :1]
+    result = model._pool(geometry, supernodes)[..., : model.hidden_dim]
+    expected = model.message.bias.reshape(1, 1, -1)
+    torch.testing.assert_close(result, expected, rtol=0, atol=0)
+    assert result.dtype == dtype
+
+
+def test_double_precision_torch_pooling_retains_coordinate_separation(device):
+    """Float32 rounding must not create edges in an explicit float64 search."""
+    model = ABUPT(**(SMALL | {"pooling_radius": 0.25})).to(device).double()
+    model.message = torch.nn.Linear(4, model.hidden_dim).to(device).double()
+    with torch.no_grad():
+        model.message.weight.zero_()
+        model.message.bias.fill_(1)
+    model.pool_projection = torch.nn.Identity()
+    # Both x-coordinates round to 1e8 in float32, but their true separation
+    # is twice the requested radius. No message may reach this supernode.
+    geometry = torch.tensor([[[1e8 + 0.5, 0, 0]]], device=device, dtype=torch.float64)
+    supernodes = torch.tensor([[[1e8, 0, 0]]], device=device, dtype=torch.float64)
+    result = model._pool(geometry, supernodes)[..., : model.hidden_dim]
+    torch.testing.assert_close(result, torch.zeros_like(result), rtol=0, atol=0)
+
+
 def test_vorticity_scaling_against_analytic_polynomial(monkeypatch):
     model = ABUPT(**SMALL).double()
     q = torch.randn(2, 6, 3, dtype=torch.float64)
