@@ -841,3 +841,104 @@ Specifying normalization statistics directly in the YAML config (or in a
 `.pt` file) keeps the pipeline self-contained and avoids a separate
 statistics collection step. The values are easy to inspect, update, and
 version-control alongside the rest of the configuration.
+
+## AB-UPT: separate or joint surface/volume training
+
+The experimental AB-UPT integration implements the architecture described in
+[the paper](https://arxiv.org/abs/2502.09692v4) using PhysicsNeMo components.
+Research implementation source, pretrained weights, and reference outputs were
+not used. These are integration recipes, not reproduced benchmark results.
+
+Use native DrivAerML `run_*/domain_*.pdmsh` domains with a triangulated
+`vehicle` boundary. Surface mode needs only that boundary and global metadata;
+the domain interior may be an empty mesh. Volume and joint modes also need
+interior coordinates and volume targets. Set `dataset_paths.drivaer_ml` in
+`datasets/dataset_paths.yaml`, and use the usual train/val manifest splits.
+Joint mode retains the paper's interacting surface and volume streams.
+Surface-only and volume-only modes are single-branch ablations: they omit the
+inactive branch entirely, including its anchors, embeddings, decoder, and head.
+The interleaved cross-attention blocks become self-attention blocks, preserving
+the active branch's depth. Their accuracy is not established by the paper's
+joint-training results.
+
+```bash
+# Separate surface job: pressure and wall shear stress.
+python src/train.py model=ab_upt_surface dataset=drivaer_ml_ab_upt_surface
+
+# Separate volume job: velocity, pressure, and eddy viscosity.
+python src/train.py model=ab_upt_volume dataset=drivaer_ml_ab_upt_volume
+
+# One joint job, with independently sized surface and volume query sets.
+python src/train.py model=ab_upt_joint dataset=drivaer_ml_ab_upt_joint \
+    dataset_reader_overrides.surface_queries=8192 \
+    dataset_reader_overrides.volume_queries=16384
+```
+
+The joint loss uses the existing per-field reductions and sums them across
+both branches; a larger query count does not increase a field's weight.
+Vector losses retain the recipe's sum over vector components. Joint names
+are `surface.pressure`, `surface.wss`, `volume.velocity`, `volume.pressure`,
+and `volume.nut`. Each dataset declares `target_sources` so collation and
+export locate fields on the appropriate mesh without requiring a shared
+point count. The model returns a `TensorDict` with batch size `[1]`.
+
+Geometry, supernodes, surface anchors, volume anchors, and the two query sets
+use independent per-case sampling streams. Training varies them by epoch;
+validation has a separate reader fixed at epoch zero. Geometry uses uniformly
+sampled vehicle vertices; supernodes are a subset, and surface queries and
+anchors use triangle centroids. Counts are capped at the available size.
+Changing query counts, access order, or decoder chunk size preserves anchors.
+Memory-mapped TensorDict stores gather only selected tensors before GPU
+transfer. Zarr stores currently load the full domain into host memory before
+sampling. These configurations do not add geometric augmentation.
+
+Coordinates retain the native case frame and are scaled by `L_ref`; the
+pooling radius is in those dimensionless units. Before encoding, the adapter
+multiplies coordinates and radius by `model.coordinate_scale` (default 1000),
+so sinusoidal/RoPE phases span useful frequencies without changing neighborhoods.
+This fixed scaling preserves chunk independence; it does not fit a bounding box
+to each query batch. Freestream velocity conditions
+each enabled stream. Pressure, shear, and velocity use the existing physical
+non-dimensionalization; WSS and eddy viscosity use the existing DrivAerML
+normalization statistics. The volume head has five channels, including eddy
+viscosity, rather than the paper's seven-channel vorticity layout. The core
+model exposes `decode_vorticity` for velocity-derived curl with physical scale
+corrections, but this recipe does not train a vorticity target or impose a curl
+constraint on its direct outputs.
+
+The joint default layout follows Appendix C.3's 12-block DrivAerML branch design
+(width 192, 3 heads), with one geometry encoder using 65,536 geometry points
+and 16,384 supernodes, plus 16,384 anchors per enabled field branch.
+Single-branch defaults also use 12 blocks. Reduce `dataset_reader_overrides.geometry_points`,
+`num_supernodes`, `num_surface_anchors`, and `num_volume_anchors` for smaller
+GPU budgets. `model.query_chunk_size` bounds each query attention operation;
+training still retains the autograd graph for all chunks. Compilation is off
+by default because radius search has dynamic neighbor counts. CUDA uses the
+existing Warp radius search; CPU uses the bounded PyTorch fallback.
+
+Inference uses the same mode, dataset, and numerical model settings as training.
+Replay any architecture, `coordinate_scale`, or `pooling_radius` overrides from
+`resolved_config.yaml`. Checkpoint loading rejects incompatible numerical
+settings even when tensor shapes match. Query counts, query/pooling chunk sizes,
+and radius-search backend can be tuned independently. This checkpoint contract
+adds extra state; checkpoints from earlier drafts of this AB-UPT integration
+must be regenerated.
+
+For a run using the default model settings:
+
+```bash
+python src/infer.py model=ab_upt_joint dataset=drivaer_ml_ab_upt_joint \
+    checkpoint_path=/path/to/checkpoints run_id=YOUR_RUN_ID \
+    dataset_reader_overrides.surface_queries=null \
+    dataset_reader_overrides.volume_queries=null rescale_geometry=true
+```
+
+`null` queries all available locations while retaining the configured fixed
+anchor budgets. Query decoding reuses one context for the entire case. Export
+places physical `pred_*`/`true_*` surface fields on
+`boundaries.abupt_surface.point_data` and volume fields on
+`interior.point_data`, with each branch's original query coordinates. Surface
+force integration uses the aligned `vehicle` triangles. For sampled surfaces,
+inverse-inclusion-probability measures produce Monte Carlo force estimates;
+full-surface queries avoid that sampling error. Checkpointing and resume use
+the recipe's standard optimizer, scheduler, and `.mdlus` mechanisms.
