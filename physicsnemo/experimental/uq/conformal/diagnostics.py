@@ -87,7 +87,7 @@ class CoverageAccumulator:
     from the predictor, so the report measures what the predictor's
     calibrator guarantees:
 
-    - ``"cellwise"`` (``CellwiseCalibrator``): how often each element lies
+    - ``"pointwise"`` (``PointwiseCalibrator``): how often each element lies
       inside its interval.
     - ``"functional"`` (``FunctionalBandCalibrator``): how often a sample
       lies inside its band at every point.
@@ -99,12 +99,12 @@ class CoverageAccumulator:
 
     Parameters
     ----------
-    tier : {"cellwise", "functional", "risk_control"}
+    tier : {"pointwise", "functional", "risk_control"}
         The predictor's ``tier``, naming the calibrator that produced it;
         selects the reported statistic.
     alpha : float
         The predictor's target miscoverage (or risk) level. Reported in the
-        metadata and used to count cellwise elements at or above target
+        metadata and used to count pointwise elements at or above target
         coverage.
     n_cal : int
         Number of calibration samples of the predictor; reported only.
@@ -197,7 +197,7 @@ class CoverageAccumulator:
         ValueError
             If ``target`` is empty, shapes differ, a value is NaN or
             infinite, a width or the running width sum overflows float64, or
-            (cellwise) the sample shape differs from earlier samples.
+            (pointwise) the sample shape differs from earlier samples.
 
         Notes
         -----
@@ -232,7 +232,7 @@ class CoverageAccumulator:
             counters.width_sum = width_total
             counters.width_count += width_count
             counters.n_samples += 1
-            if self._tier != "cellwise":
+            if self._tier != "pointwise":
                 counters.coverage_sum = _add(counters.coverage_sum, coverage)
             elif key in self._element_hits:
                 previous = self._element_hits[key]
@@ -279,13 +279,13 @@ class CoverageAccumulator:
             )
 
             match self._tier:
-                case "cellwise":
+                case "pointwise":
                     # Hit counts stay on device until finalize().
                     coverage = element_covered.to(torch.int64)
                     previous = self._element_hits.get(key)
                     if previous is not None and previous.shape != coverage.shape:
                         raise ValueError(
-                            f"{_field_label(key)}: a cellwise accumulator needs a "
+                            f"{_field_label(key)}: a pointwise accumulator needs a "
                             f"fixed sample shape; got {tuple(coverage.shape)} after "
                             f"{tuple(previous.shape)}."
                         )
@@ -300,7 +300,7 @@ class CoverageAccumulator:
         return staged
 
     def empirical_coverage_map(self) -> Float[Tensor, "*dims"] | TensorDict:
-        r"""Fraction of samples in which each element was covered (cellwise only).
+        r"""Fraction of samples in which each element was covered (pointwise only).
 
         Use it to locate the regions of the mesh that the predictor under- or
         over-covers.
@@ -315,11 +315,11 @@ class CoverageAccumulator:
         Raises
         ------
         RuntimeError
-            If the tier is not cellwise, or before the first :meth:`update`.
+            If the tier is not pointwise, or before the first :meth:`update`.
         """
-        if self._tier != "cellwise":
+        if self._tier != "pointwise":
             raise RuntimeError(
-                "empirical_coverage_map() is available only for cellwise predictors."
+                "empirical_coverage_map() is available only for pointwise predictors."
             )
         if not self._element_hits:
             raise RuntimeError("No samples collected; call update() first.")
@@ -344,7 +344,7 @@ class CoverageAccumulator:
             (mean width over every element of every sample), and the tier's
             statistic:
 
-            - cellwise: ``mean_element_coverage``,
+            - pointwise: ``mean_element_coverage``,
               ``minimum_element_coverage``, and ``fraction_at_target`` (the
               fraction of elements whose coverage is at least the target).
             - functional: ``whole_field_coverage``, the fraction of samples
@@ -375,7 +375,7 @@ class CoverageAccumulator:
                 ),
             }
             match self._tier:
-                case "cellwise" if n:
+                case "pointwise" if n:
                     hits = self._element_hits[key]
                     at_target = hits >= _minimum_hits_at_target(n, self._alpha)
                     entry.update(
@@ -383,7 +383,7 @@ class CoverageAccumulator:
                         minimum_element_coverage=float(hits.min()) / n,
                         fraction_at_target=float(at_target.to(torch.float64).mean()),
                     )
-                case "cellwise":
+                case "pointwise":
                     entry.update(
                         mean_element_coverage=None,
                         minimum_element_coverage=None,

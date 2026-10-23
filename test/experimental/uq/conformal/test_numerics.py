@@ -366,7 +366,7 @@ def test_admitted_targets_stay_inside_interval(tier, dtype, persist, tmp_path):
         predictor.save(tmp_path / "artifact.pt")
         predictor = ConformalPredictor.load(tmp_path / "artifact.pt")
         assert bool((predictor.thresholds.double() >= original).all())
-        if tier != "cellwise":
+        if tier != "pointwise":
             assert predictor.thresholds.dtype == _F64
 
     pred = torch.randn(200, generator=generator).to(dtype)
