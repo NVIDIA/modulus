@@ -163,6 +163,14 @@ def test_text_2d_2d_curved_glyph_area():
     assert mesh.cell_areas.sum().item() == pytest.approx(abs(expected), rel=1e-3)
 
 
+def test_text_3d_from_curved_glyph():
+    """The 3D text primitives, built from ``text_2d_2d``, keep the filled ring."""
+    area = text_2d_2d("\u25cb").cell_areas.sum().item()
+    volume = text_3d_3d("\u25cb", extrusion_height=2.0).cell_areas.sum().item()
+    assert volume == pytest.approx(2.0 * area, rel=1e-6)
+    assert text_2d_3d("\u25cb", extrusion_height=2.0).is_watertight()
+
+
 def test_winding_number_chunked():
     """Chunking bounds memory without changing the winding numbers."""
     from physicsnemo.mesh.primitives.text import _winding_number
