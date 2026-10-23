@@ -114,7 +114,9 @@ def pipeline(root, mode):
     ds = OmegaConf.load(ROOT / "datasets" / f"drivaer_ml_ab_upt_{mode}.yaml")
     ds.train_datadir = str(root)
     ds.sampling_resolution = 13
-    cfg.dataset_reader_overrides.update(COUNTS)
+    cfg.dataset_reader_overrides.update(
+        {k: v for k, v in COUNTS.items() if k in cfg.dataset_reader_overrides}
+    )
     cfg.model.update(SMALL)
     ds = _apply_dataset_reader_overrides(ds, cfg)
     dataset = build_dataset(ds, device="cpu", num_workers=1)
@@ -125,9 +127,26 @@ def pipeline(root, mode):
 @pytest.mark.parametrize("mode", ["surface", "volume", "joint"])
 def test_native_pipeline_train_checkpoint_export(native_case, mode, tmp_path):
     """All modes optimize and round-trip with unequal query sizes."""
-    root, _ = native_case
+    root, original = native_case
+    if mode == "surface":
+        # Exercise the actual recipe with no volume coordinates or labels on disk.
+        root = tmp_path / "surface_only"
+        path = root / "run_1" / "domain_1.pdmsh"
+        path.parent.mkdir(parents=True)
+        DomainMesh(
+            interior=Mesh(points=torch.empty(0, 3)),
+            boundaries={"vehicle": original.boundaries["vehicle"]},
+            global_data=original.global_data,
+        ).save(str(path))
     cfg, ds, dataset = pipeline(root, mode)
     domain, meta = dataset[0]
+    assert ("abupt_surface_anchors" in domain.boundary_names) == (mode != "volume")
+    assert ("abupt_volume_anchors" in domain.boundary_names) == (mode != "surface")
+    if mode == "surface":
+        assert domain.interior.n_points == 0
+        assert "volume_anchors" not in cfg.forward_kwargs
+    if mode == "volume":
+        assert "surface_anchors" not in cfg.forward_kwargs
     targets = OmegaConf.to_container(ds.targets)
     sources = OmegaConf.to_container(ds.target_sources)
     collate = build_collate_fn(
@@ -320,10 +339,13 @@ def test_reader_keeps_labels_aligned_with_original_coordinates(native_case, mode
     reader = ABUPTDomainReader(root, mode=mode, **COUNTS)
     reader.set_generator(torch.Generator().manual_seed(654))
     sampled, _ = reader[0]
-    surface = sampled.boundaries["abupt_surface"]
-    torch.testing.assert_close(
-        surface.points, sampled.boundaries["vehicle"].cell_centroids
-    )
+    surface = sampled.boundaries.get("abupt_surface")
+    if mode != "volume":
+        torch.testing.assert_close(
+            surface.points, sampled.boundaries["vehicle"].cell_centroids
+        )
+    else:
+        assert surface is None
     for enabled, query_mesh, source_positions, source_data, fields in (
         (
             mode != "volume",
@@ -348,9 +370,7 @@ def test_reader_keeps_labels_aligned_with_original_coordinates(native_case, mode
         ),
     ):
         if not enabled:
-            assert not list(
-                query_mesh.point_data.keys(include_nested=True, leaves_only=True)
-            )
+            assert query_mesh is None or query_mesh.n_points == 0
             continue
         distances = torch.cdist(query_mesh.points.double(), source_positions.double())
         nearest = distances.argmin(dim=1)

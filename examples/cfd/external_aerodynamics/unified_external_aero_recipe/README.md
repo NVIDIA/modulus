@@ -849,11 +849,17 @@ The experimental AB-UPT integration implements the architecture described in
 Research implementation source, pretrained weights, and reference outputs were
 not used. These are integration recipes, not reproduced benchmark results.
 
-Use native DrivAerML `run_*/domain_*.pdmsh` domains containing both the interior
-and the triangulated `vehicle` boundary. Set `dataset_paths.drivaer_ml` in
+Use native DrivAerML `run_*/domain_*.pdmsh` domains with a triangulated
+`vehicle` boundary. Surface mode needs only that boundary and global metadata;
+the domain interior may be an empty mesh. Volume and joint modes also need
+interior coordinates and volume targets. Set `dataset_paths.drivaer_ml` in
 `datasets/dataset_paths.yaml`, and use the usual train/val manifest splits.
-Both anchor streams are required in every mode; single-output jobs only
-supervise the selected branch and omit the other branch's private decoder/head.
+Joint mode retains the paper's interacting surface and volume streams.
+Surface-only and volume-only modes are single-branch ablations: they omit the
+inactive branch entirely, including its anchors, embeddings, decoder, and head.
+The interleaved cross-attention blocks become self-attention blocks, preserving
+the active branch's depth. Their accuracy is not established by the paper's
+joint-training results.
 
 ```bash
 # Separate surface job: pressure and wall shear stress.
@@ -892,7 +898,7 @@ multiplies coordinates and radius by `model.coordinate_scale` (default 1000),
 so sinusoidal/RoPE phases span useful frequencies without changing neighborhoods.
 This fixed scaling preserves chunk independence; it does not fit a bounding box
 to each query batch. Freestream velocity conditions
-both streams. Pressure, shear, and velocity use the existing physical
+each enabled stream. Pressure, shear, and velocity use the existing physical
 non-dimensionalization; WSS and eddy viscosity use the existing DrivAerML
 normalization statistics. The volume head has five channels, including eddy
 viscosity, rather than the paper's seven-channel vorticity layout. The core
@@ -900,9 +906,10 @@ model exposes `decode_vorticity` for velocity-derived curl with physical scale
 corrections, but this recipe does not train a vorticity target or impose a curl
 constraint on its direct outputs.
 
-The default layout follows Appendix C.3's 12-block DrivAerML branch design
-(width 192, 3 heads), with 65,536 geometry points and 16,384 supernodes/anchors
-per stream. Reduce `dataset_reader_overrides.geometry_points`,
+The joint default layout follows Appendix C.3's 12-block DrivAerML branch design
+(width 192, 3 heads), with one geometry encoder using 65,536 geometry points
+and 16,384 supernodes, plus 16,384 anchors per enabled field branch.
+Single-branch defaults also use 12 blocks. Reduce `dataset_reader_overrides.geometry_points`,
 `num_supernodes`, `num_surface_anchors`, and `num_volume_anchors` for smaller
 GPU budgets. `model.query_chunk_size` bounds each query attention operation;
 training still retains the autograd graph for all chunks. Compilation is off

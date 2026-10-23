@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# AB-UPT always retains both interacting anchor streams.
+# Single-branch AB-UPT ablation; the inactive stream is not constructed.
 input_type: tensors
 output_type: tensordict
 compile: false
@@ -25,15 +25,12 @@ dataset_reader_overrides:
   geometry_points: 65536
   num_supernodes: 16384
   num_surface_anchors: 16384
-  num_volume_anchors: 16384
   surface_queries: ${sampling_resolution}
-  volume_queries: ${sampling_resolution}
 
 forward_kwargs:
   geometry: boundaries.abupt_geometry.points
   supernodes: boundaries.abupt_supernodes.points
   surface_anchors: boundaries.abupt_surface_anchors.points
-  volume_anchors: boundaries.abupt_volume_anchors.points
   parameters: global_data.U_inf
   surface_queries: boundaries.abupt_surface.points
 

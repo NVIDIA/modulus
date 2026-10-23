@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Both geometry/anchor streams are required even for single-head training.
+# Single-branch ablation: only the selected field and anchor stream are loaded.
 train_datadir: ${dataset_paths.drivaer_ml}
 independent_validation: true
 
@@ -25,7 +25,6 @@ pipeline:
     pattern: "run_*/domain_*.pdmsh"
     mode: surface
     surface_queries: ${sampling_resolution}
-    volume_queries: ${sampling_resolution}
   transforms:
     - _target_: ${dp:NonDimensionalizeByMetadata}
       association: point_data

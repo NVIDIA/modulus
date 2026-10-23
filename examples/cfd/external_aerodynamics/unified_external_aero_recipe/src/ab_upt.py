@@ -46,7 +46,7 @@ VOLUME_TARGETS = {
 
 
 def _modes(mode: str) -> tuple[bool, bool]:
-    """Validate the supervised branches."""
+    """Validate which branches are present and supervised."""
     if mode not in ("surface", "volume", "joint"):
         raise ValueError("mode must be 'surface', 'volume', or 'joint'")
     return mode != "volume", mode != "surface"
@@ -130,9 +130,9 @@ class ABUPTRecipe(Module):
         self,
         geometry,
         supernodes,
-        surface_anchors,
-        volume_anchors,
-        parameters,
+        surface_anchors=None,
+        volume_anchors=None,
+        parameters=None,
         surface_queries=None,
         volume_queries=None,
     ):
@@ -152,6 +152,8 @@ class ABUPTRecipe(Module):
                 raise ValueError(f"Explicit {field}_queries are required by the recipe")
             if not enabled and queries is not None:
                 raise ValueError(f"Queries supplied for disabled {field} head")
+        if parameters is None:
+            raise ValueError("Freestream parameters are required by the recipe")
         if parameters.ndim == 3 and parameters.shape[1] == 1:
             parameters = parameters[:, 0]
         # Native mesh coordinates and metadata can use different floating
@@ -162,8 +164,12 @@ class ABUPTRecipe(Module):
         context = self.operator.encode(
             geometry.to(dtype=model_dtype) * self.coordinate_scale,
             supernodes.to(dtype=model_dtype) * self.coordinate_scale,
-            surface_anchors.to(dtype=model_dtype) * self.coordinate_scale,
-            volume_anchors.to(dtype=model_dtype) * self.coordinate_scale,
+            surface_anchors.to(dtype=model_dtype) * self.coordinate_scale
+            if surface_anchors is not None
+            else None,
+            volume_anchors.to(dtype=model_dtype) * self.coordinate_scale
+            if volume_anchors is not None
+            else None,
             parameters.to(dtype=model_dtype),
         )
         output = TensorDict({}, batch_size=[geometry.shape[0]], device=geometry.device)
@@ -194,7 +200,8 @@ class ABUPTDomainReader(DomainMeshReader):
     TensorDict stores before device transfer. Zarr loading uses the base
     reader's full-domain path, so its host-memory use can be larger. Geometry
     uses surface vertices, supernodes are a subset of that cloud, and surface
-    anchors/queries use cell centroids. Both anchor streams are always present.
+    anchors/queries use cell centroids. Only enabled branches have anchors;
+    surface mode accepts a domain with an empty interior mesh.
     Uniform sampling without replacement is performed on CPU with independent
     NumPy SeedSequence streams. Validation must use a distinct reader at epoch 0.
 
@@ -247,7 +254,7 @@ class ABUPTDomainReader(DomainMeshReader):
     def _indices(self, total, count, index, stream):
         """Select sorted indices with a stream independent of other draws."""
         if total == 0:
-            raise ValueError("AB-UPT requires nonempty surface and volume meshes")
+            raise ValueError("AB-UPT requires nonempty meshes for enabled branches")
         if count is None or count >= total:
             return torch.arange(total)
         rng = np.random.default_rng(
@@ -260,37 +267,55 @@ class ABUPTDomainReader(DomainMeshReader):
         domain = self._load_sample(index)
         if "vehicle" not in domain.boundary_names:
             raise ValueError("AB-UPT requires a 'vehicle' surface boundary")
-        vehicle, interior = domain.boundaries["vehicle"], domain.interior
+        vehicle = domain.boundaries["vehicle"]
+        interior = domain.interior if self.volume else None
         if vehicle.cells.shape[-1] != 3:
             raise ValueError("AB-UPT recipe requires a triangulated vehicle surface")
         gi = self._indices(vehicle.n_points, self.geometry_points, index, 0)
         geometry = vehicle.points[gi].clone()
         si = self._indices(len(gi), self.num_supernodes, index, 1)
-        sa = self._indices(vehicle.n_cells, self.num_surface_anchors, index, 2)
-        va = self._indices(interior.n_points, self.num_volume_anchors, index, 3)
-        # For inactive output heads retain only anchors, without loading labels.
-        sq = (
-            self._indices(vehicle.n_cells, self.surface_queries, index, 4)
-            if self.surface
-            else sa
-        )
-        vq = (
-            self._indices(interior.n_points, self.volume_queries, index, 5)
-            if self.volume
-            else va
-        )
-
-        def centroids(ids):
-            return vehicle.points[vehicle.cells[ids].long()].mean(dim=1)
-
-        surface_data, volume_data = TensorDict({}, [len(sq)]), TensorDict({}, [len(vq)])
+        boundaries = {
+            "abupt_geometry": Mesh(points=geometry),
+            "abupt_supernodes": Mesh(points=geometry[si].clone()),
+        }
         if self.surface:
+            sa = self._indices(vehicle.n_cells, self.num_surface_anchors, index, 2)
+            sq = self._indices(vehicle.n_cells, self.surface_queries, index, 4)
+
+            def centroids(ids):
+                return vehicle.points[vehicle.cells[ids].long()].mean(dim=1)
+
+            surface_data = TensorDict({}, [len(sq)])
             for src, dst in (
                 ("pMeanTrim", "surface.pressure"),
                 ("wallShearStressMeanTrim", "surface.wss"),
             ):
                 surface_data.set(as_nested_key(dst), vehicle.cell_data[src][sq].clone())
+            boundaries["abupt_surface_anchors"] = Mesh(points=centroids(sa))
+            boundaries["abupt_surface"] = Mesh(
+                points=centroids(sq), point_data=surface_data
+            )
+            # Remap only selected triangles, without a full-mesh point-index map.
+            vertices, cells = torch.unique(
+                vehicle.cells[sq].long(), sorted=True, return_inverse=True
+            )
+            sampled_vehicle = Mesh(
+                points=vehicle.points[vertices].clone(), cells=cells.reshape(-1, 3)
+            )
+            if "_effective_measure" in vehicle.cell_data:
+                measures = vehicle.cell_data["_effective_measure"][sq].clone()
+            else:
+                measures = cell_measures(sampled_vehicle)
+            set_cell_measures(sampled_vehicle, measures * (vehicle.n_cells / len(sq)))
+            sampled_vehicle.cell_data["normals"] = sampled_vehicle.cell_normals
+            boundaries["vehicle"] = sampled_vehicle
+        else:
+            boundaries["vehicle"] = Mesh(points=geometry.clone())
+        sampled_interior = Mesh(points=geometry.new_empty((0, 3)))
         if self.volume:
+            va = self._indices(interior.n_points, self.num_volume_anchors, index, 3)
+            vq = self._indices(interior.n_points, self.volume_queries, index, 5)
+            volume_data = TensorDict({}, [len(vq)])
             for src, dst in (
                 ("UMeanTrim", "volume.velocity"),
                 ("pMeanTrim", "volume.pressure"),
@@ -299,30 +324,15 @@ class ABUPTDomainReader(DomainMeshReader):
                 volume_data.set(
                     as_nested_key(dst), interior.point_data[src][vq].clone()
                 )
-        # Remap only selected triangles; avoid a full-mesh point-index map.
-        vertices, cells = torch.unique(
-            vehicle.cells[sq].long(), sorted=True, return_inverse=True
-        )
-        sampled_vehicle = Mesh(
-            points=vehicle.points[vertices].clone(), cells=cells.reshape(-1, 3)
-        )
-        # Preserve explicit source measures when present, otherwise geometric areas.
-        if "_effective_measure" in vehicle.cell_data:
-            measures = vehicle.cell_data["_effective_measure"][sq].clone()
-        else:
-            measures = cell_measures(sampled_vehicle)
-        set_cell_measures(sampled_vehicle, measures * (vehicle.n_cells / len(sq)))
-        sampled_vehicle.cell_data["normals"] = sampled_vehicle.cell_normals
+            boundaries["abupt_volume_anchors"] = Mesh(
+                points=interior.points[va].clone()
+            )
+            sampled_interior = Mesh(
+                points=interior.points[vq].clone(), point_data=volume_data
+            )
         result = DomainMesh(
-            interior=Mesh(points=interior.points[vq].clone(), point_data=volume_data),
-            boundaries={
-                "vehicle": sampled_vehicle,
-                "abupt_surface": Mesh(points=centroids(sq), point_data=surface_data),
-                "abupt_geometry": Mesh(points=geometry),
-                "abupt_supernodes": Mesh(points=geometry[si].clone()),
-                "abupt_surface_anchors": Mesh(points=centroids(sa)),
-                "abupt_volume_anchors": Mesh(points=interior.points[va].clone()),
-            },
+            interior=sampled_interior,
+            boundaries=boundaries,
             global_data=domain.global_data.clone(),
         )
         if self.pin_memory:

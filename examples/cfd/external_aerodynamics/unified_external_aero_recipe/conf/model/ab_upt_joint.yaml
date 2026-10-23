@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# AB-UPT always retains both interacting anchor streams.
+# Joint AB-UPT retains both interacting anchor streams.
 input_type: tensors
 output_type: tensordict
 compile: false
