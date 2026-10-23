@@ -168,10 +168,8 @@ follows in a similar fashion.
 <!-- {: .center} -->
 ![Visualization of Distributed Message Passing](../../../docs/img/swe_distributed_gnn_figures/dist_message_passing.png)
 
-Most of these distributed primitives are hidden away in the `DistributedGraph` class.
-The GNN layers, and models built on them such as `MeshGraphNet`, accept a
-`DistributedGraph` in place of a PyG graph and then run message passing on each
-rank's part of the graph.
+Most of these distributed primitives are hidden away in the `DistributedGraph` class,
+which the GNN layers accept in place of a PyG graph.
 The following example briefly shows how these would work in a simplified context.
 `GraphCastNet` itself already has been implemented such that its graph use these wrappers
 under the hood which means that the user only has to e.g. specify the name of the process

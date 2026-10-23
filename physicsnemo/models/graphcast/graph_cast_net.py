@@ -123,60 +123,31 @@ def _partition_graph(
     edge_index: torch.Tensor,
     src_lat_lon: torch.Tensor,
     dst_lat_lon: torch.Tensor,
+    edge_features: torch.Tensor,
     partition_size: int,
     partition_group_name: Optional[str],
     use_lat_lon_partitioning: bool,
 ) -> Tuple[DistributedGraph, torch.Tensor]:
-    r"""
-    Partition a graph across the ranks of a process group.
-
-    Parameters
-    ----------
-    edge_index : torch.Tensor
-        Edge index of shape :math:`(2, E)`.
-    src_lat_lon : torch.Tensor
-        Latitude and longitude of each source node in degrees, of shape
-        :math:`(N_{src}, 2)`.
-    dst_lat_lon : torch.Tensor
-        Latitude and longitude of each destination node in degrees, of shape
-        :math:`(N_{dst}, 2)`.
-    partition_size : int
-        Number of ranks across which the graph is distributed.
-    partition_group_name : str | None
-        Name of the process group across which the graph is distributed.
-    use_lat_lon_partitioning : bool
-        If ``True``, partition nodes by lat-lon boxes instead of by ID.
-
-    Returns
-    -------
-    Tuple[DistributedGraph, torch.Tensor]
-        The distributed graph, and the permutation that puts edge features in
-        its CSC order.
-    """
+    """Splits a graph across the ranks of a process group, and returns it with
+    this rank's edge features. Lat-lon coordinates are in degrees."""
     offsets, indices, edge_perm = edge_index_to_csc(edge_index, dst_lat_lon.size(0))
     graph_partition = None
     if use_lat_lon_partitioning:
         dist_manager = DistributedManager()
-        min_seps, max_seps = get_lat_lon_partition_separators(partition_size)
         graph_partition = partition_graph_by_coordinate_bbox(
             offsets,
             indices,
-            src_coordinates=src_lat_lon,
-            dst_coordinates=dst_lat_lon,
-            coordinate_separators_min=min_seps,
-            coordinate_separators_max=max_seps,
-            partition_size=partition_size,
-            partition_rank=dist_manager.group_rank(partition_group_name),
-            device=dist_manager.device,
+            src_lat_lon,
+            dst_lat_lon,
+            *get_lat_lon_partition_separators(partition_size),
+            partition_size,
+            dist_manager.group_rank(partition_group_name),
+            dist_manager.device,
         )
-    dist_graph = DistributedGraph(
-        offsets,
-        indices,
-        partition_size,
-        partition_group_name,
-        graph_partition=graph_partition,
+    graph = DistributedGraph(
+        offsets, indices, partition_size, partition_group_name, graph_partition
     )
-    return dist_graph, edge_perm
+    return graph, graph.get_edge_features_in_partition(edge_features[edge_perm])
 
 
 @dataclass
@@ -409,44 +380,26 @@ class GraphCastNet(Module):
             raise ValueError(f"Unsupported graph backend: {graph_backend}")
 
         if self.is_distributed:
-            # Split each graph across the ranks: every rank keeps its destination
-            # nodes and their incoming edges, plus the matching edge features.
-            g2m_graph, m2g_graph, mesh_graph = (
-                self.g2m_graph,
-                self.m2g_graph,
-                self.mesh_graph,
+            # Each rank keeps its destination nodes, their incoming edges, and
+            # those edges' features.
+            args = (partition_size, partition_group_name, use_lat_lon_partitioning)
+            g2m, m2g, mesh = self.g2m_graph, self.m2g_graph, self.mesh_graph
+            self.g2m_graph, self.g2m_edata = _partition_graph(
+                g2m["g2m"].edge_index,
+                g2m["grid"].lat_lon,
+                g2m["mesh"].lat_lon,
+                self.g2m_edata,
+                *args,
             )
-            partition_kwargs = {
-                "partition_size": partition_size,
-                "partition_group_name": partition_group_name,
-                "use_lat_lon_partitioning": use_lat_lon_partitioning,
-            }
-            self.g2m_graph, edge_perm = _partition_graph(
-                g2m_graph[g2m_graph.edge_types[0]].edge_index,
-                g2m_graph["grid"].lat_lon,
-                g2m_graph["mesh"].lat_lon,
-                **partition_kwargs,
+            self.m2g_graph, self.m2g_edata = _partition_graph(
+                m2g["m2g"].edge_index,
+                m2g["mesh"].lat_lon,
+                m2g["grid"].lat_lon,
+                self.m2g_edata,
+                *args,
             )
-            self.g2m_edata = self.g2m_graph.get_edge_features_in_partition(
-                self.g2m_edata[edge_perm]
-            )
-            self.m2g_graph, edge_perm = _partition_graph(
-                m2g_graph[m2g_graph.edge_types[0]].edge_index,
-                m2g_graph["mesh"].lat_lon,
-                m2g_graph["grid"].lat_lon,
-                **partition_kwargs,
-            )
-            self.m2g_edata = self.m2g_graph.get_edge_features_in_partition(
-                self.m2g_edata[edge_perm]
-            )
-            self.mesh_graph, edge_perm = _partition_graph(
-                mesh_graph.edge_index,
-                mesh_graph.lat_lon,
-                mesh_graph.lat_lon,
-                **partition_kwargs,
-            )
-            self.mesh_edata = self.mesh_graph.get_edge_features_in_partition(
-                self.mesh_edata[edge_perm]
+            self.mesh_graph, self.mesh_edata = _partition_graph(
+                mesh.edge_index, mesh.lat_lon, mesh.lat_lon, self.mesh_edata, *args
             )
             self.mesh_ndata = self.mesh_graph.get_dst_node_features_in_partition(
                 self.mesh_ndata

@@ -888,39 +888,27 @@ def edge_index_to_csc(
     edge_index: torch.Tensor, num_dst_nodes: int
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
-    Convert a COO ``edge_index``, as PyG graphs store it, to the CSC structure
-    that the graph partitioning functions and :class:`DistributedGraph` take.
+    Convert a PyG ``edge_index`` to the CSC structure that the partitioning
+    functions and :class:`DistributedGraph` take.
 
     Parameters
     ----------
     edge_index : torch.Tensor
-        Edge index of shape :math:`(2, E)`, with source node IDs in row 0 and
-        destination node IDs in row 1.
+        Source and destination node IDs of each edge, of shape :math:`(2, E)`.
     num_dst_nodes : int
         Number of destination nodes, including any without incoming edges.
 
     Returns
     -------
-    offsets : torch.Tensor
-        CSC offsets of shape :math:`(N_{dst} + 1,)`.
-    indices : torch.Tensor
-        Source node ID of each edge in CSC order, of shape :math:`(E,)`.
-    edge_perm : torch.Tensor
-        Permutation of shape :math:`(E,)` that puts edges in CSC order. Apply it
-        to edge features, as in ``edge_features[edge_perm]``, before partitioning
-        them with :meth:`DistributedGraph.get_edge_features_in_partition`.
+    Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        CSC offsets and indices, and the permutation that puts edges in CSC order.
+        Apply it to edge features before partitioning them.
 
     Examples
     --------
-    >>> import torch
     >>> edge_index = torch.tensor([[0, 1, 2], [1, 0, 1]])
-    >>> offsets, indices, edge_perm = edge_index_to_csc(edge_index, num_dst_nodes=2)
-    >>> offsets
-    tensor([0, 1, 3])
-    >>> indices
-    tensor([1, 0, 2])
-    >>> edge_perm
-    tensor([1, 0, 2])
+    >>> edge_index_to_csc(edge_index, num_dst_nodes=2)
+    (tensor([0, 1, 3]), tensor([1, 0, 2]), tensor([1, 0, 2]))
     """
     src, dst = edge_index.long()
     edge_perm = torch.argsort(dst, stable=True)
@@ -964,37 +952,26 @@ class DistributedGraph:
             node-wise partitioning scheme will be applied to global_offsets and global_indices,
             otherwise, these will be ignored and the passed partition will be used instead.
         process_group : torch.distributed.ProcessGroup, optional
-            Process group across which graphs are distributed, for callers that
-            manage their own process groups rather than naming them in
-            ``DistributedManager``. Pass either this or ``graph_partition_group_name``,
-            not both. The graph then lives on the device of ``graph_partition`` if
-            given, else on the current CUDA device, or on the CPU without CUDA.
+            Process group across which graphs are distributed, in place of
+            ``graph_partition_group_name`` for groups that ``DistributedManager``
+            does not know. The graph then lives on the current CUDA device, if any.
         """
 
-        if process_group is not None:
-            if graph_partition_group_name is not None:
-                raise ValueError(
-                    "Pass either graph_partition_group_name or process_group, not both."
-                )
-            if graph_partition is not None:
-                self.device = graph_partition.device
-            elif torch.cuda.is_available():
-                self.device = torch.device("cuda", torch.cuda.current_device())
-            else:
-                self.device = torch.device("cpu")
-            self.partition_rank = dist.get_rank(group=process_group)
-            self.partition_size = dist.get_world_size(group=process_group)
-            self.process_group = process_group
-        else:
+        if process_group is None:
             dist_manager = DistributedManager()
             self.device = dist_manager.device
-            self.partition_rank = dist_manager.group_rank(
-                name=graph_partition_group_name
+            process_group = dist_manager.group(name=graph_partition_group_name)
+        elif graph_partition_group_name is not None:
+            raise ValueError(
+                "Pass graph_partition_group_name or process_group, not both."
             )
-            self.partition_size = dist_manager.group_size(
-                name=graph_partition_group_name
-            )
-            self.process_group = dist_manager.group(name=graph_partition_group_name)
+        elif torch.cuda.is_available():
+            self.device = torch.device("cuda", torch.cuda.current_device())
+        else:
+            self.device = torch.device("cpu")
+        self.process_group = process_group
+        self.partition_rank = dist.get_rank(group=process_group)
+        self.partition_size = dist.get_world_size(group=process_group)
         error_msg = f"Passed partition_size does not correspond to size of process_group, got {partition_size} and {self.partition_size} respectively."
         if self.partition_size != partition_size:
             raise AssertionError(error_msg)
@@ -1035,23 +1012,13 @@ class DistributedGraph:
     @cached_property
     def local_graph(self) -> graph_types.GraphType:
         """
-        This rank's part of the graph as a PyG ``Data`` object in local node IDs.
-
-        Each rank owns its destination nodes and all their incoming edges, so
-        message passing runs on this graph once
-        :meth:`get_src_node_features_in_local_graph` has fetched the source node
-        features it needs from other ranks. Source IDs index those fetched
-        features, and destination IDs index this rank's destination nodes.
+        This rank's part of the graph as a PyG ``Data`` object. Its source IDs index
+        the output of :meth:`get_src_node_features_in_local_graph`, and its
+        destination IDs index this rank's destination nodes.
         """
         if not graph_types.PYG_AVAILABLE:
             graph_types.raise_missing_pyg_error()
-        offsets = self.graph_partition.local_offsets
-        dst = torch.repeat_interleave(
-            torch.arange(
-                self.graph_partition.num_local_dst_nodes, device=offsets.device
-            ),
-            offsets.diff(),
-        )
+        dst = torch.repeat_interleave(self.graph_partition.local_offsets.diff())
         src = self.graph_partition.local_indices.long()
         return graph_types.PyGData(edge_index=torch.stack([src, dst]))
 
