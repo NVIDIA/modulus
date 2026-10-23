@@ -330,6 +330,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- GraphCast and MeshGraphNet run on graphs partitioned across GPUs again
+  (`partition_size > 1`, or a `DistributedGraph` in place of the PyG graph),
+  so the distributed shallow-water example works. This broke when the DGL
+  backend was removed.
 - `weighted_multinomial` with `replacement=True` accepts more than 2^24
   weights, instead of raising `torch.multinomial`'s category-limit error. So
   DoMINO's `sample_points_on_mesh` now works on meshes with over 2^24 faces.

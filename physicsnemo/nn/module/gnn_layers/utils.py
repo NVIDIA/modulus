@@ -21,6 +21,7 @@ import torch
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint
 
+from physicsnemo.nn.module.gnn_layers.distributed_graph import DistributedGraph
 from physicsnemo.nn.module.gnn_layers.graph_types import (
     PYG_AVAILABLE,
     GraphType,
@@ -85,6 +86,31 @@ if PYG_AVAILABLE:
     PyGData = pyg_data.Data
     PyGHeteroData = pyg_data.HeteroData
 
+    def _fetch_remote_src_feat(
+        nfeat: Union[Tensor, Tuple[Tensor, Tensor]],
+        graph: DistributedGraph,
+    ) -> Tuple[Tuple[Tensor, Tensor], PyGData]:
+        """Fetches the source node features that this rank's edges need from other
+        ranks, for message passing on a partitioned graph.
+
+        Parameters
+        ----------
+        nfeat : Tensor | Tuple[Tensor, Tensor]
+            Node features of this rank's partition (static setting) or tuple of
+            source and destination node features (bipartite setting).
+        graph : DistributedGraph
+            The partitioned graph.
+
+        Returns
+        -------
+        Tuple[Tuple[Tensor, Tensor], PyGData]
+            Source node features of the local graph, destination node features,
+            and the local graph.
+        """
+        src_feat, dst_feat = nfeat if isinstance(nfeat, tuple) else (nfeat, nfeat)
+        src_feat = graph.get_src_node_features_in_local_graph(src_feat)
+        return (src_feat, dst_feat), graph.local_graph
+
     def concat_message_function(edges: Tensor) -> Dict[str, Tensor]:
         """Concatenates source node, destination node, and edge features.
 
@@ -135,7 +161,7 @@ if PYG_AVAILABLE:
     def concat_efeat(
         efeat: Tensor,
         nfeat: Union[Tensor, Tuple[Tensor]],
-        graph: GraphType,
+        graph: GraphType | DistributedGraph,
     ) -> Tensor:
         """Concatenates edge features with source and destination node features.
         Use for homogeneous graphs.
@@ -146,14 +172,17 @@ if PYG_AVAILABLE:
             Edge features.
         nfeat : Tensor | Tuple[Tensor]
             Node features.
-        graph : GraphType
-            Graph.
+        graph : GraphType | DistributedGraph
+            Graph, or this rank's partition of a distributed graph.
 
         Returns
         -------
         Tensor
             Concatenated edge features with source and destination node features.
         """
+        if isinstance(graph, DistributedGraph):
+            nfeat, graph = _fetch_remote_src_feat(nfeat, graph)
+
         if isinstance(nfeat, Tensor):
             if isinstance(graph, (PyGData, PyGHeteroData)):
                 efeat = concat_efeat_pyg(efeat, nfeat, graph)
@@ -224,7 +253,7 @@ if PYG_AVAILABLE:
     def sum_efeat(
         efeat: Tensor,
         nfeat: Union[Tensor, Tuple[Tensor]],
-        graph: GraphType,
+        graph: GraphType | DistributedGraph,
     ):
         """Sums edge features with source and destination node features.
 
@@ -235,14 +264,17 @@ if PYG_AVAILABLE:
         nfeat : Tensor | Tuple[Tensor]
             Node features (static setting) or tuple of node features of
             source and destination nodes (bipartite setting).
-        graph : GraphType
-            The underlying graph.
+        graph : GraphType | DistributedGraph
+            The underlying graph, or this rank's partition of a distributed graph.
 
         Returns
         -------
         Tensor
             Sum of edge features with source and destination node features.
         """
+        if isinstance(graph, DistributedGraph):
+            nfeat, graph = _fetch_remote_src_feat(nfeat, graph)
+
         if isinstance(nfeat, Tensor):
             if isinstance(graph, PyGData):
                 src_feat, dst_feat = nfeat, nfeat
@@ -282,7 +314,7 @@ if PYG_AVAILABLE:
     def aggregate_and_concat(
         efeat: Tensor,
         nfeat: Tensor,
-        graph: GraphType,
+        graph: GraphType | DistributedGraph,
         aggregation: str,
     ):
         """
@@ -294,8 +326,8 @@ if PYG_AVAILABLE:
             Edge features.
         nfeat : Tensor
             Node features (destination nodes).
-        graph : GraphType
-            Graph.
+        graph : GraphType | DistributedGraph
+            Graph, or this rank's partition of a distributed graph.
         aggregation : str
             Aggregation method (sum or mean).
 
@@ -309,6 +341,11 @@ if PYG_AVAILABLE:
         RuntimeError
             If aggregation method is not sum or mean.
         """
+
+        if isinstance(graph, DistributedGraph):
+            # Each rank owns its destination nodes and all their incoming edges,
+            # so aggregation needs no communication.
+            graph = graph.local_graph
 
         if isinstance(graph, (PyGData, PyGHeteroData)):
             cat_feat = agg_concat_pyg(efeat, nfeat, graph, aggregation)
