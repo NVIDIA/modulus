@@ -80,6 +80,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ClusterTree.merge` joins trees into one forest, whose `root_ids` list the
   root of each tree. Every traversal starts from all of them, so one
   traversal plans a tree against every tree of a forest, on either side.
+- `radius_search` accepts points with 1 or 2 coordinates, as well as 3, with
+  both backends. The torch backend accepts any number of coordinates, and
+  points with more than 3 use it by default.
 
 ### Changed
 
@@ -345,6 +348,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   differentiable with respect to the mesh vertices and the query points.
   Before, `backward` raised because the Warp op had no autograd formula. The
   hit points and hit faces carry no gradients.
+- With `max_points`, the Warp backend of `radius_search` leaves the `.grad` of
+  batched points and queries unset in the forward pass. Before, it set them to
+  zeros.
 - `Mesh.clean()`, `clean_mesh`, `merge_duplicate_points`, and `validate()` find
   every duplicate point in clusters of more than 100 coincident points. Before,
   some duplicates were missed and stayed in the cleaned mesh.
