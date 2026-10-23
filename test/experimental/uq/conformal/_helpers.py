@@ -29,9 +29,9 @@ from tensordict import TensorDict
 
 from physicsnemo.experimental.uq.conformal import (
     AbsoluteErrorScore,
-    CellwiseCalibrator,
     ConformalPredictor,
     FunctionalBandCalibrator,
+    PointwiseCalibrator,
 )
 from physicsnemo.experimental.uq.conformal._utils import (
     TIERS,
@@ -51,7 +51,7 @@ __all__ = [
 ]
 
 CALIBRATORS = {
-    "cellwise": CellwiseCalibrator,
+    "pointwise": PointwiseCalibrator,
     "functional": FunctionalBandCalibrator,
 }
 CALIBRATOR_CLASSES = [
@@ -75,7 +75,7 @@ def fit(
 ):
     """Fit one predictor on ``n_samples`` seeded ``pred + 0.3 * noise`` samples.
 
-    Returns ``(predictor, points)``: the cellwise tier calibrates on a fixed
+    Returns ``(predictor, points)``: the pointwise tier calibrates on a fixed
     ``(shape[0], 1)`` mesh passed on every call (and needed again at
     prediction time); the scaled tiers get ``points=None``. ``fields``
     switches to ``TensorDict`` mode (one independent draw per field, so a
@@ -87,7 +87,7 @@ def fit(
     kwargs = {} if difficulty is None else {"difficulty": difficulty}
     calibrator = CALIBRATORS[tier](score or AbsoluteErrorScore(), alpha, **kwargs)
     points = None
-    if tier == "cellwise":
+    if tier == "pointwise":
         points = torch.arange(shape[0], dtype=torch.float64, device=device)
         points = points.reshape(shape[0], 1)
 

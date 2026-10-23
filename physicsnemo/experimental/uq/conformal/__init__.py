@@ -24,7 +24,7 @@ then call ``predictor.predict_interval`` on new model outputs to get
 
 Pick the calibrator by the guarantee you need:
 
-- :class:`~physicsnemo.experimental.uq.conformal.CellwiseCalibrator`: each
+- :class:`~physicsnemo.experimental.uq.conformal.PointwiseCalibrator`: each
   output element is covered with probability at least :math:`1 - \alpha`.
   Every sample must have the same output layout: the same mesh, with the
   same points in the same order, or a fixed set of outputs such as scalar
@@ -80,7 +80,7 @@ no longer guaranteed. Each calibrator's docstring states its guarantee.
 """
 
 from .calibrators import (
-    CellwiseCalibrator,
+    PointwiseCalibrator,
     FunctionalBandCalibrator,
 )
 from .diagnostics import CoverageAccumulator
@@ -98,12 +98,12 @@ from .scores import (
 __all__ = [
     "AbsoluteErrorScore",
     "AuxDifficulty",
-    "CellwiseCalibrator",
     "ConformalPredictor",
     "CoverageAccumulator",
     "FunctionalBandCalibrator",
     "NonconformityScore",
     "NormalizedErrorScore",
+    "PointwiseCalibrator",
     "QuantileRegressionScore",
     "check_score",
     "register_score",

@@ -154,7 +154,7 @@ def test_aux_difficulty_validates_raw_input(raw, error, match):
 def test_unused_aux_can_be_omitted(tier):
     calibrator = CALIBRATORS[tier](AbsoluteErrorScore(), alpha=0.5)
     pred, target = torch.zeros(1), torch.ones(1)
-    points = torch.zeros(1, 1) if tier == "cellwise" else None
+    points = torch.zeros(1, 1) if tier == "pointwise" else None
     for aux in (None, {}, {"spread": None}):
         calibrator.update(pred, target, aux=aux, points=points)
     predictor = calibrator.finalize()
@@ -172,7 +172,7 @@ def test_normalized_low_precision_sigma_keeps_fitted_intervals_tight(tier, devic
     pred = torch.zeros(1, dtype=torch.float64, device=device)
     target = torch.ones_like(pred)
     aux = {"sigma": torch.full((1,), 60000.0, dtype=torch.float16, device=device)}
-    points = torch.zeros(1, 1, device=device) if tier == "cellwise" else None
+    points = torch.zeros(1, 1, device=device) if tier == "pointwise" else None
     for _ in range(3):
         calibrator.update(pred, target, aux=aux, points=points)
     predictor = calibrator.finalize()

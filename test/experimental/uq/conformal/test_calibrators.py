@@ -23,10 +23,10 @@ from tensordict import TensorDict
 from physicsnemo.experimental.uq.conformal import (
     AbsoluteErrorScore,
     AuxDifficulty,
-    CellwiseCalibrator,
     ConformalPredictor,
     FunctionalBandCalibrator,
     NormalizedErrorScore,
+    PointwiseCalibrator,
     QuantileRegressionScore,
 )
 from physicsnemo.experimental.uq.conformal._utils import TENSOR_KEY, points_fingerprint
@@ -42,15 +42,15 @@ def _td(**fields):
     return TensorDict(fields, batch_size=[])
 
 
-def test_cellwise_uses_exact_conformal_rank_and_returns_one_predictor():
-    calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.4)
+def test_pointwise_uses_exact_conformal_rank_and_returns_one_predictor():
+    calibrator = PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.4)
     points = torch.arange(2.0).reshape(2, 1)
     for target in ([1.0, 4.0], [2.0, 3.0], [3.0, 2.0], [4.0, 1.0]):
         calibrator.update(torch.zeros(2), torch.tensor(target), points=points)
 
     predictor = calibrator.finalize()
     assert type(predictor) is ConformalPredictor
-    assert predictor.tier == "cellwise"
+    assert predictor.tier == "pointwise"
     assert predictor.n_cal == 4
     # k = ceil(5 * 0.6) = 3: the third-smallest per cell.
     assert torch.equal(predictor.thresholds, torch.tensor([3.0, 3.0]))
@@ -65,9 +65,9 @@ def test_plain_tensor_errors_do_not_leak_internal_key():
 
 
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64], ids=str)
-def test_cellwise_retains_contiguous_scores_without_changing_bits(dtype):
+def test_pointwise_retains_contiguous_scores_without_changing_bits(dtype):
     """Flattening retained scores needs no corpus copy or dtype conversion."""
-    calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
+    calibrator = PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
     points = torch.arange(5.0).reshape(5, 1)
     reference = []
     for offset in (0.1, 2.0, 1.0):
@@ -85,8 +85,8 @@ def test_cellwise_retains_contiguous_scores_without_changing_bits(dtype):
     assert torch.equal(calibrator.finalize().thresholds, expected_thresholds)
 
 
-def test_cellwise_fingerprints_points_transactionally():
-    calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
+def test_pointwise_fingerprints_points_transactionally():
+    calibrator = PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
     points = torch.arange(3.0).reshape(3, 1)
     with pytest.raises(ValueError, match="leading entry per point"):
         calibrator.update(torch.zeros(2), torch.zeros(2), points=points)
@@ -108,10 +108,10 @@ def test_cellwise_fingerprints_points_transactionally():
     assert calibrator.n_cal == 2
 
 
-def test_cellwise_without_points_calibrates_scalar_observables(tmp_path, device):
+def test_pointwise_without_points_calibrates_scalar_observables(tmp_path, device):
     """Three scalar outputs (say drag, lift, moment) need no mesh."""
     generator = torch.Generator(device=device).manual_seed(0)
-    calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.2)
+    calibrator = PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.2)
     for _ in range(20):
         prediction = torch.randn(3, generator=generator, device=device)
         noise = torch.tensor([0.1, 1.0, 10.0], device=device)
@@ -139,9 +139,9 @@ def test_cellwise_without_points_calibrates_scalar_observables(tmp_path, device)
     assert calibrator.n_cal == 20
 
 
-def test_cellwise_rejects_output_layout_drift_on_the_same_mesh():
+def test_pointwise_rejects_output_layout_drift_on_the_same_mesh():
     points = torch.arange(4.0).reshape(4, 1)
-    calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
+    calibrator = PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.5)
     calibrator.update(torch.zeros(4, 1), torch.zeros(4, 1), points=points)
     with pytest.raises(ValueError, match="score shape"):
         calibrator.update(torch.zeros(4, 2), torch.zeros(4, 2), points=points)
@@ -267,7 +267,7 @@ def test_difficulty_adaptation_and_strategy_snapshot_are_fixed():
     lo_again, hi_again = predictor.predict_interval(zeros, aux=aux)
     assert torch.equal(lo, lo_again) and torch.equal(hi, hi_again)
     for name, value in [
-        ("tier", "cellwise"),
+        ("tier", "pointwise"),
         ("alpha", 0.1),
         ("n_cal", 1),
         ("score", AbsoluteErrorScore()),
@@ -367,7 +367,7 @@ def test_unregistered_strategy_subclasses_are_rejected():
             AbsoluteErrorScore(), alpha=0.5, difficulty=_CustomDifficulty()
         )
     # Every shipped score remains constructible.
-    CellwiseCalibrator(NormalizedErrorScore(), alpha=0.5)
+    PointwiseCalibrator(NormalizedErrorScore(), alpha=0.5)
 
 
 def test_finalize_without_samples_fails_closed():

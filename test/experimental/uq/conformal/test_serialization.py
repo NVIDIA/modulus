@@ -62,11 +62,11 @@ def test_save_load_round_trip(tier, tmp_path):
     torch.testing.assert_close(hi, hi_ref)
 
 
-def test_artifact_has_one_exact_schema_and_cellwise_load_requires_the_mesh(tmp_path):
+def test_artifact_has_one_exact_schema_and_pointwise_load_requires_the_mesh(tmp_path):
     provenance = {"dataset": "drivaer", "epoch": 300}
     path = tmp_path / "artifact.pt"
     make_predictor(
-        tier="cellwise", thresholds=torch.ones(6, 3), points=_MESH_POINTS
+        tier="pointwise", thresholds=torch.ones(6, 3), points=_MESH_POINTS
     ).save(path, provenance=provenance)
     payload = torch.load(path, weights_only=True)
 
@@ -84,7 +84,7 @@ def test_artifact_has_one_exact_schema_and_cellwise_load_requires_the_mesh(tmp_p
     }
     assert payload["format"] == "physicsnemo.uq.conformal"
     assert payload["version"] == 1
-    assert payload["tier"] == "cellwise"
+    assert payload["tier"] == "pointwise"
     assert payload["score"] == {"kind": "absolute_error", "kwargs": {}}
     assert payload["difficulty"] is None
     assert payload["mesh_fingerprint"] == _MESH
@@ -105,7 +105,7 @@ def test_artifact_has_one_exact_schema_and_cellwise_load_requires_the_mesh(tmp_p
 def test_constructor_and_threshold_access_snapshot_storage(tmp_path):
     thresholds = torch.ones(6, 3)
     predictor = make_predictor(
-        tier="cellwise", thresholds=thresholds, points=_MESH_POINTS
+        tier="pointwise", thresholds=thresholds, points=_MESH_POINTS
     )
     path = tmp_path / "artifact.pt"
     predictor.save(path)
@@ -118,7 +118,7 @@ def test_constructor_and_threshold_access_snapshot_storage(tmp_path):
 
 def test_map_location_places_loaded_thresholds(device, tmp_path):
     path = tmp_path / "artifact.pt"
-    predictor, points = fit("cellwise", n_samples=5, shape=(6, 3))
+    predictor, points = fit("pointwise", n_samples=5, shape=(6, 3))
     predictor.save(path)
     loaded = ConformalPredictor.load(path, map_location=device)
     lo, _ = loaded.predict_interval(
@@ -196,8 +196,8 @@ BASES = {
         tier="functional", score=NormalizedErrorScore()
     ),
     "aux": lambda: make_predictor(difficulty=AuxDifficulty(key="spread", eps=1e-4)),
-    "cellwise": lambda: make_predictor(
-        tier="cellwise", thresholds=torch.ones(6, 3), points=_MESH_POINTS
+    "pointwise": lambda: make_predictor(
+        tier="pointwise", thresholds=torch.ones(6, 3), points=_MESH_POINTS
     ),
 }
 
@@ -242,10 +242,10 @@ CORRUPTIONS = {
     # Wire-valid (exact float) but semantically invalid eps is still rejected at load.
     "normalized_negative_eps": (_set_in("score", "kwargs", {"eps": -1.0}), _CTOR, "normalized"),
     "aux_negative_eps": (_set_in("difficulty", "kwargs", {"key": "spread", "eps": -1.0}), _CTOR, "aux"),
-    # Cellwise artifacts need a well-formed mesh fingerprint.
-    "cellwise_malformed_mesh": (_set("mesh_fingerprint", "not-a-digest"), "mesh_fingerprint must be", "cellwise"),
-    "cellwise_uppercase_mesh": (_set("mesh_fingerprint", "float32-3x1-" + "A" * 32), "mesh_fingerprint must be", "cellwise"),
-    "cellwise_sha256_mesh": (_set("mesh_fingerprint", "a" * 64), "mesh_fingerprint must be", "cellwise"),
+    # Pointwise artifacts need a well-formed mesh fingerprint.
+    "pointwise_malformed_mesh": (_set("mesh_fingerprint", "not-a-digest"), "mesh_fingerprint must be", "pointwise"),
+    "pointwise_uppercase_mesh": (_set("mesh_fingerprint", "float32-3x1-" + "A" * 32), "mesh_fingerprint must be", "pointwise"),
+    "pointwise_sha256_mesh": (_set("mesh_fingerprint", "a" * 64), "mesh_fingerprint must be", "pointwise"),
 }
 # fmt: on
 

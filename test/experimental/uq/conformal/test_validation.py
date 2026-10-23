@@ -171,7 +171,7 @@ _POINTS = torch.arange(3.0).reshape(3, 1)
 def _calibrator_entry(tier):
     def build():
         calibrator = CALIBRATORS[tier](AbsoluteErrorScore(), alpha=0.5)
-        points = _POINTS if tier == "cellwise" else None
+        points = _POINTS if tier == "pointwise" else None
         calibrator.update(_F, _F, points=points)
         return (
             lambda bad: calibrator.update(_F, bad, points=points),

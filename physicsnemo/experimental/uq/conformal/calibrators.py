@@ -18,7 +18,7 @@ r"""Calibrators that turn held-out model errors into conformal intervals.
 
 Choose a calibrator by the guarantee you need:
 
-- :class:`~physicsnemo.experimental.uq.conformal.CellwiseCalibrator`: an
+- :class:`~physicsnemo.experimental.uq.conformal.PointwiseCalibrator`: an
   interval for each output element, when every sample uses the same mesh.
 - :class:`~physicsnemo.experimental.uq.conformal.FunctionalBandCalibrator`:
   a functional band that contains every point of a field at once; meshes
@@ -83,7 +83,7 @@ from .scores import (
 )
 
 __all__ = [
-    "CellwiseCalibrator",
+    "PointwiseCalibrator",
     "FunctionalBandCalibrator",
 ]
 
@@ -262,7 +262,7 @@ class _SplitCalibratorBase:
         )
 
 
-class CellwiseCalibrator(_SplitCalibratorBase):
+class PointwiseCalibrator(_SplitCalibratorBase):
     r"""Calibrate a separate interval width for every output element of a fixed layout.
 
     Use this calibrator when every calibration and deployment sample has the
@@ -315,11 +315,11 @@ class CellwiseCalibrator(_SplitCalibratorBase):
     --------
     >>> import torch
     >>> from physicsnemo.experimental.uq.conformal import (
-    ...     AbsoluteErrorScore, CellwiseCalibrator,
+    ...     AbsoluteErrorScore, PointwiseCalibrator,
     ... )
     >>> _ = torch.manual_seed(0)
     >>> points = torch.rand(50, 3)
-    >>> calibrator = CellwiseCalibrator(AbsoluteErrorScore(), alpha=0.1)
+    >>> calibrator = PointwiseCalibrator(AbsoluteErrorScore(), alpha=0.1)
     >>> for _ in range(20):
     ...     prediction = torch.randn(50, 2)
     ...     target = prediction + 0.1 * torch.randn(50, 2)
@@ -408,7 +408,7 @@ class CellwiseCalibrator(_SplitCalibratorBase):
                 raise ValueError(
                     f"{_field_label(key)}: score shape {tuple(score.shape)} differs "
                     f"from the first sample's {tuple(self._scores[key][0].shape)}; "
-                    "CellwiseCalibrator needs the same shape on every call."
+                    "PointwiseCalibrator needs the same shape on every call."
                 )
             return score.detach().cpu().contiguous()
 
@@ -421,7 +421,7 @@ class CellwiseCalibrator(_SplitCalibratorBase):
         Returns
         -------
         ConformalPredictor
-            A cellwise
+            A pointwise
             :class:`~physicsnemo.experimental.uq.conformal.ConformalPredictor`
             with one threshold per output element. If calibration used
             ``points``, its ``predict_interval`` requires the same ``points``.
@@ -436,7 +436,7 @@ class CellwiseCalibrator(_SplitCalibratorBase):
         """
         self._require_finalizable()
         return self._build_predictor(
-            "cellwise",
+            "pointwise",
             self._conformal_thresholds(),
             mesh_fingerprint=self._mesh_fingerprint,
         )
@@ -550,7 +550,7 @@ class FunctionalBandCalibrator(_ScaledCalibratorBase):
     ----------
     score : NonconformityScore
         Defines the interval (see
-        :class:`~physicsnemo.experimental.uq.conformal.CellwiseCalibrator`).
+        :class:`~physicsnemo.experimental.uq.conformal.PointwiseCalibrator`).
         The calibrator keeps a copy.
     alpha : float
         Target miscoverage level in :math:`(0, 1)`.
@@ -559,7 +559,7 @@ class FunctionalBandCalibrator(_ScaledCalibratorBase):
         ``None`` gives a constant width.
     keys : Sequence[str], optional
         Names of the ``TensorDict`` fields to calibrate (see
-        :class:`~physicsnemo.experimental.uq.conformal.CellwiseCalibrator`).
+        :class:`~physicsnemo.experimental.uq.conformal.PointwiseCalibrator`).
         By default every field is calibrated.
 
     Raises

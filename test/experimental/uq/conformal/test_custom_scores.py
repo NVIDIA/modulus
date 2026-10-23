@@ -21,10 +21,10 @@ import torch
 
 from physicsnemo.experimental.uq.conformal import (
     AbsoluteErrorScore,
-    CellwiseCalibrator,
     ConformalPredictor,
     NonconformityScore,
     NormalizedErrorScore,
+    PointwiseCalibrator,
     QuantileRegressionScore,
     check_score,
     register_score,
@@ -110,7 +110,7 @@ def test_custom_score_calibrates_predicts_and_round_trips(tmp_path, tier, device
 def test_custom_score_requires_its_aux_entries(tier):
     register_score("test_relative_error")(_RelativeErrorScore)
     calibrator = CALIBRATORS[tier](_RelativeErrorScore(), alpha=0.5)
-    points = torch.zeros(3, 1) if tier == "cellwise" else None
+    points = torch.zeros(3, 1) if tier == "pointwise" else None
     with pytest.raises(ValueError, match=r"requires aux entries \['weight'\]"):
         calibrator.update(torch.ones(3), torch.ones(3), points=points)
 
@@ -119,7 +119,7 @@ def test_custom_score_requires_its_aux_entries(tier):
 def test_first_sample_rejects_a_score_whose_bounds_do_not_invert_it(tier):
     register_score("test_half_width")(_HalfWidthScore)
     calibrator = CALIBRATORS[tier](_HalfWidthScore(), alpha=0.5)
-    points = torch.zeros(4, 1) if tier == "cellwise" else None
+    points = torch.zeros(4, 1) if tier == "pointwise" else None
     with pytest.raises(ValueError, match="does not invert score"):
         calibrator.update(torch.zeros(4), torch.ones(4), points=points)
     assert calibrator.n_cal == 0
@@ -166,4 +166,4 @@ def test_registration_is_validated():
 def test_config_values_must_be_saveable_primitives():
     register_score("test_relative_error")(_RelativeErrorScore)
     with pytest.raises(TypeError, match="must be a bool, int, float, or str"):
-        CellwiseCalibrator(_RelativeErrorScore(floor=torch.tensor(0.1)), alpha=0.5)
+        PointwiseCalibrator(_RelativeErrorScore(floor=torch.tensor(0.1)), alpha=0.5)

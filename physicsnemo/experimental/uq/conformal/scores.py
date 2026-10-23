@@ -251,7 +251,7 @@ class NonconformityScore:
             Model output of shape :math:`(*\text{dims})`.
         threshold : torch.Tensor
             Fitted threshold, broadcastable against ``prediction``: one value
-            per element of shape :math:`(*\text{dims})` for the cellwise
+            per element of shape :math:`(*\text{dims})` for the pointwise
             calibrator, or a scalar (already multiplied by the
             ``AuxDifficulty`` scale, if any) for the functional band
             calibrator.
