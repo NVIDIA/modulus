@@ -34,6 +34,9 @@ Pick the calibrator by the guarantee you need:
   a functional band contains every point of a field at once with
   probability at least :math:`1 - \alpha`. Point sets may differ between
   samples.
+- :class:`~physicsnemo.experimental.uq.conformal.RiskControlCalibrator`: the
+  expected fraction of points outside the band is at most :math:`\alpha`.
+  Point sets may differ between samples.
 
 Pick the score by what the model outputs:
 :class:`~physicsnemo.experimental.uq.conformal.AbsoluteErrorScore` for a
@@ -45,7 +48,7 @@ quantile heads in ``aux["lo"]`` and ``aux["hi"]``. For any other score,
 subclass :class:`~physicsnemo.experimental.uq.conformal.NonconformityScore`
 and register it with
 :func:`~physicsnemo.experimental.uq.conformal.register_score`. The
-functional band calibrator also accepts an
+functional band and risk-control calibrators also accept an
 :class:`~physicsnemo.experimental.uq.conformal.AuxDifficulty` to widen the
 band where a per-point uncertainty estimate is large.
 
@@ -53,7 +56,7 @@ All calibrators accept plain tensors or ``TensorDict`` containers of fields.
 
 Typical usage::
 
-    calibrator = FunctionalBandCalibrator(AbsoluteErrorScore(), alpha=0.1)
+    calibrator = RiskControlCalibrator(AbsoluteErrorScore(), alpha=0.1)
     for pred, target in calibration_set:
         calibrator.update(pred, target)
     predictor = calibrator.finalize()
@@ -82,6 +85,7 @@ no longer guaranteed. Each calibrator's docstring states its guarantee.
 from .calibrators import (
     PointwiseCalibrator,
     FunctionalBandCalibrator,
+    RiskControlCalibrator,
 )
 from .diagnostics import CoverageAccumulator
 from .predictors import ConformalPredictor
@@ -105,6 +109,7 @@ __all__ = [
     "NormalizedErrorScore",
     "PointwiseCalibrator",
     "QuantileRegressionScore",
+    "RiskControlCalibrator",
     "check_score",
     "register_score",
 ]

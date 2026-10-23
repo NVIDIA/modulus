@@ -114,22 +114,25 @@ class ConformalPredictor:
     The predictor has the guarantee of the calibrator that produced it. A
     pointwise predictor works only on the calibration output shape and, if
     calibration used ``points``, only on the calibration mesh (same
-    coordinates, dtype, and point order). A functional predictor accepts any
-    mesh and may widen intervals per point with an ``AuxDifficulty``.
+    coordinates, dtype, and point order). Functional and risk-control
+    predictors accept any mesh and may widen intervals per point with an
+    ``AuxDifficulty``.
 
     Parameters
     ----------
-    tier : {"pointwise", "functional"}
+    tier : {"pointwise", "functional", "risk_control"}
         Calibrator that produced ``thresholds``: ``"pointwise"`` for
         :class:`~physicsnemo.experimental.uq.conformal.PointwiseCalibrator`,
         ``"functional"`` for
-        :class:`~physicsnemo.experimental.uq.conformal.FunctionalBandCalibrator`.
+        :class:`~physicsnemo.experimental.uq.conformal.FunctionalBandCalibrator`,
+        ``"risk_control"`` for
+        :class:`~physicsnemo.experimental.uq.conformal.RiskControlCalibrator`.
     score : NonconformityScore
         Score used during calibration: a built-in score or a registered
         custom one. The predictor keeps its own copy, so
         later changes to ``score`` have no effect.
     alpha : float
-        Target miscoverage level in :math:`(0, 1)`.
+        Target miscoverage (or risk) level in :math:`(0, 1)`.
     n_cal : int
         Number of calibration samples.
     thresholds : torch.Tensor | TensorDict
@@ -140,7 +143,7 @@ class ConformalPredictor:
         :class:`~physicsnemo.experimental.uq.conformal.QuantileRegressionScore`.
     difficulty : AuxDifficulty, optional
         Per-point scale applied to the threshold at prediction time
-        (functional tier only).
+        (functional and risk-control tiers only).
     points : torch.Tensor, optional
         Calibration mesh coordinates of shape
         :math:`(n_{\text{points}}, n_{\text{spatial\_dims}})`, for the
@@ -153,7 +156,7 @@ class ConformalPredictor:
     ValueError
         If any of these hold:
 
-        - ``tier`` is not one of the two names above.
+        - ``tier`` is not one of the three names above.
         - :math:`n_{cal} < (1 - \alpha) / \alpha`: collect more samples or
           raise ``alpha``.
         - ``tier="pointwise"`` with ``difficulty``.
@@ -235,7 +238,7 @@ class ConformalPredictor:
             if difficulty is not None:
                 raise ValueError(
                     "A pointwise predictor does not take difficulty=; only "
-                    "functional predictors use AuxDifficulty."
+                    "functional and risk_control predictors use AuxDifficulty."
                 )
             difficulty_snapshot = None
             mesh_snapshot = (
@@ -281,14 +284,15 @@ class ConformalPredictor:
     def tier(self) -> Tier:
         r"""Calibrator that produced this predictor.
 
-        ``"pointwise"`` for ``PointwiseCalibrator`` or ``"functional"`` for
-        ``FunctionalBandCalibrator``.
+        ``"pointwise"`` for ``PointwiseCalibrator``, ``"functional"`` for
+        ``FunctionalBandCalibrator``, or ``"risk_control"`` for
+        ``RiskControlCalibrator``.
         """
         return self._tier
 
     @property
     def alpha(self) -> float:
-        r"""Target miscoverage level."""
+        r"""Target miscoverage level, or target risk for ``"risk_control"``."""
         return self._alpha
 
     @property
@@ -397,7 +401,8 @@ class ConformalPredictor:
             require_mesh(
                 points,
                 self._mesh_fingerprint,
-                " If meshes vary, calibrate with FunctionalBandCalibrator.",
+                " If meshes vary, calibrate with FunctionalBandCalibrator or "
+                "RiskControlCalibrator.",
                 pending,
             )
         elif points is not None:
@@ -481,6 +486,8 @@ class ConformalPredictor:
             (pointwise) ``points`` describes a different mesh.
             If meshes vary between samples, calibrate with
             :class:`~physicsnemo.experimental.uq.conformal.FunctionalBandCalibrator`
+            or
+            :class:`~physicsnemo.experimental.uq.conformal.RiskControlCalibrator`
             instead.
         KeyError
             If a ``TensorDict`` prediction lacks a calibrated field.
