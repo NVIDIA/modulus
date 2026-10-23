@@ -571,6 +571,7 @@ def partition_graph_nodewise(
     partition_rank: int,
     device: torch.device,
     matrix_decomp: bool = False,
+    num_src_nodes: Optional[int] = None,
 ) -> GraphPartition:
     """
     Utility function which partitions a global graph given as CSC structure naively
@@ -602,8 +603,13 @@ def partition_graph_nodewise(
         on which the local graph and related buffers will live on
     matrix_decomp : bool
         flag to enable matrix decomposition for partitioning
+    num_src_nodes : int, optional
+        Number of source nodes. Defaults to the largest source ID plus one, which
+        misses source nodes with higher IDs that have no outgoing edges.
     """
-    num_global_src_nodes = global_indices.max().item() + 1
+    num_global_src_nodes = (
+        num_src_nodes if num_src_nodes is not None else global_indices.max().item() + 1
+    )
     num_global_dst_nodes = global_offsets.size(0) - 1
     num_dst_nodes_per_partition = (
         num_global_dst_nodes + partition_size - 1
@@ -844,7 +850,7 @@ def partition_graph_by_coordinate_bbox(
             error_msg = f"Expected len(coordinate_separators_max[{rank}]) == dim"
             error_msg += f", but got {a} and {b} respectively"
 
-    num_global_src_nodes = global_indices.max().item() + 1
+    num_global_src_nodes = src_coordinates.size(0)
     num_global_dst_nodes = global_offsets.size(0) - 1
 
     mapping_dst_ids_to_ranks = torch.zeros(
@@ -954,7 +960,8 @@ class DistributedGraph:
         process_group : torch.distributed.ProcessGroup, optional
             Process group across which graphs are distributed, in place of
             ``graph_partition_group_name`` for groups that ``DistributedManager``
-            does not know. The graph then lives on the current CUDA device, if any.
+            does not know. The graph then lives on the current CUDA device, if any,
+            so call ``torch.cuda.set_device`` first.
         """
 
         if process_group is None:
@@ -1011,7 +1018,7 @@ class DistributedGraph:
 
     @cached_property
     def local_graph(self) -> graph_types.GraphType:
-        """
+        r"""
         This rank's part of the graph as a PyG ``Data`` object. Its source IDs index
         the output of :meth:`get_src_node_features_in_local_graph`, and its
         destination IDs index this rank's destination nodes.

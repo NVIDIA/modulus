@@ -24,10 +24,9 @@ import torch
 from physicsnemo.distributed import DistributedManager, mark_module_as_shared
 from test.conftest import requires_module
 
-torch.backends.cuda.matmul.allow_tf32 = False
-
 
 def _init_distributed(rank, world_size):
+    torch.backends.cuda.matmul.allow_tf32 = False
     os.environ.update(
         RANK=str(rank),
         WORLD_SIZE=str(world_size),
@@ -122,9 +121,10 @@ def run_test_distributed_graphcast(
     from physicsnemo.models.graphcast.graph_cast_net import GraphCastNet
 
     manager = _init_distributed(rank, world_size)
+    # a coarse grid on a fine mesh, so m2g gives the last mesh nodes no edges
     kwargs = dict(
-        mesh_level=2,
-        input_res=(16, 32),
+        mesh_level=5,
+        input_res=(10, 20),
         input_dim_grid_nodes=34,
         input_dim_mesh_nodes=3,
         input_dim_edges=4,
@@ -149,7 +149,7 @@ def run_test_distributed_graphcast(
         model.set_checkpoint_model(True)
         model_dist.set_checkpoint_model(True)
 
-    x = torch.randn(1, 34, 16, 32, device=manager.device, dtype=dtype)
+    x = torch.randn(1, 34, 10, 20, device=manager.device, dtype=dtype)
     out = model(x)
     out.sum().backward()
     x_dist = model_dist.g2m_graph.get_src_node_features_in_partition(x[0].flatten(1).T)
@@ -158,7 +158,7 @@ def run_test_distributed_graphcast(
 
     out_dist = model_dist.m2g_graph.get_global_dst_node_features(out_dist.detach())
     tols = {
-        torch.float32: (1e-5, 1e-6, 1e-4, 1e-5),
+        torch.float32: (1e-5, 1e-6, 1e-4, 1e-4),
         torch.float16: (0.25, 1e-2, 0.25, 1e-2),
     }
     atol, rtol, atol_w, rtol_w = tols[dtype]

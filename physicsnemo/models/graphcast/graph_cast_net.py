@@ -30,6 +30,7 @@ from physicsnemo.nn.module.gnn_layers.distributed_graph import (
     DistributedGraph,
     edge_index_to_csc,
     partition_graph_by_coordinate_bbox,
+    partition_graph_nodewise,
 )
 from physicsnemo.nn.module.gnn_layers.embedder import (
     GraphCastDecoderEmbedder,
@@ -128,12 +129,12 @@ def _partition_graph(
     partition_group_name: Optional[str],
     use_lat_lon_partitioning: bool,
 ) -> Tuple[DistributedGraph, torch.Tensor]:
-    """Splits a graph across the ranks of a process group, and returns it with
+    r"""Splits a graph across the ranks of a process group, and returns it with
     this rank's edge features. Lat-lon coordinates are in degrees."""
     offsets, indices, edge_perm = edge_index_to_csc(edge_index, dst_lat_lon.size(0))
-    graph_partition = None
+    dist_manager = DistributedManager()
+    rank, device = dist_manager.group_rank(partition_group_name), dist_manager.device
     if use_lat_lon_partitioning:
-        dist_manager = DistributedManager()
         graph_partition = partition_graph_by_coordinate_bbox(
             offsets,
             indices,
@@ -141,8 +142,18 @@ def _partition_graph(
             dst_lat_lon,
             *get_lat_lon_partition_separators(partition_size),
             partition_size,
-            dist_manager.group_rank(partition_group_name),
-            dist_manager.device,
+            rank,
+            device,
+        )
+    else:
+        # Pass the node count: m2g may give the last mesh nodes no edges.
+        graph_partition = partition_graph_nodewise(
+            offsets,
+            indices,
+            partition_size,
+            rank,
+            device,
+            num_src_nodes=len(src_lat_lon),
         )
     graph = DistributedGraph(
         offsets, indices, partition_size, partition_group_name, graph_partition

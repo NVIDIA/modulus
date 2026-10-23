@@ -89,7 +89,7 @@ if PYG_AVAILABLE:
     def _fetch_remote_src_feat(
         nfeat: Union[Tensor, Tuple[Tensor, Tensor]], graph: DistributedGraph
     ) -> Tuple[Tuple[Tensor, Tensor], PyGData]:
-        """Fetches from other ranks the source node features that this rank's edges
+        r"""Fetches from other ranks the source node features that this rank's edges
         need. Returns the node features and graph for local message passing."""
         src_feat, dst_feat = nfeat if isinstance(nfeat, tuple) else (nfeat, nfeat)
         src_feat = graph.get_src_node_features_in_local_graph(src_feat)
