@@ -457,8 +457,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Composing the cell and point subsamples on a triangulated boundary kept only
   the cells whose three vertices all survived the point cut, about `N / 27` of
   the `N` requested. The default keeps the composed behavior.
-- The `hemisphere` and `cone` primitives have a single pole or apex vertex.
-  Before, it was repeated around the ring, leaving zero-area triangles.
+- The `hemisphere` and `cone` primitives have a single pole or apex vertex,
+  so the cone is closed. Before, the vertex was repeated around the ring,
+  leaving zero-area triangles.
 - `tetrahedron_surface` edges have length `side_length`, and
   `sphere_icosahedral` with `subdivisions=0` honors `radius`.
 - `sphere_volume` and `cylinder_volume` tetrahedra fill the solid without
