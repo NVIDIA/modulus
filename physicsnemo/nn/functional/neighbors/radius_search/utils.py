@@ -20,7 +20,7 @@ import torch
 def validate_inputs(points: torch.Tensor, queries: torch.Tensor):
     """Validate and normalize inputs to (B, N, D) shape. Returns (points, queries, was_unbatched).
 
-    ``D`` is the number of coordinates. It must be 1, 2, or 3, and the same for
+    ``D`` is the number of coordinates. It must be at least 1, and the same for
     points and queries.
     """
     if points.ndim == 2 and queries.ndim == 2:
@@ -34,8 +34,8 @@ def validate_inputs(points: torch.Tensor, queries: torch.Tensor):
         was_unbatched = False
     else:
         raise ValueError(
-            f"points and queries must be 2D (N, D) or 3D (B, N, D), "
-            f"got {points.ndim}D and {queries.ndim}D"
+            f"points and queries must have rank 2 (N, D) or 3 (B, N, D), "
+            f"got ranks {points.ndim} and {queries.ndim}"
         )
 
     if points.shape[-1] != queries.shape[-1]:
@@ -43,11 +43,8 @@ def validate_inputs(points: torch.Tensor, queries: torch.Tensor):
             f"points and queries must have the same number of coordinates, "
             f"got {points.shape[-1]} and {queries.shape[-1]}"
         )
-    if not 1 <= points.shape[-1] <= 3:
-        raise ValueError(
-            f"points and queries must have 1, 2, or 3 coordinates, "
-            f"got {points.shape[-1]}"
-        )
+    if points.shape[-1] == 0:
+        raise ValueError("points and queries must have at least 1 coordinate, got 0")
 
     if was_unbatched:
         return points.unsqueeze(0), queries.unsqueeze(0), True

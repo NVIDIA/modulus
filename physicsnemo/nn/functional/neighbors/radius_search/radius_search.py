@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Literal
+
 import torch
 from jaxtyping import Float
 
@@ -29,7 +31,9 @@ class RadiusSearch(FunctionSpec):
     Can use brute-force methods with PyTorch, or an accelerated spatial decomposition method with Warp.
 
     Accepts both unbatched inputs of shape ``(N, D)`` and batched inputs of shape ``(B, N, D)``,
-    where the number of coordinates ``D`` is 1, 2, or 3 and the same for points and queries.
+    where the number of coordinates ``D`` is the same for points and queries. The torch backend
+    accepts any ``D``, and the Warp backend accepts 1, 2, or 3. By default, points with more than
+    3 coordinates use the torch backend.
     When unbatched inputs are provided, they are treated as ``B=1`` internally and the batch
     dimension is stripped from the output. Only ranks 2 and 3 are accepted; higher-rank inputs
     raise ``ValueError``.
@@ -87,7 +91,8 @@ class RadiusSearch(FunctionSpec):
         KeyError: If an explicit implementation name is not registered.
         ImportError: If the selected implementation is unavailable.
         ValueError: If inputs are not rank 2 or 3, if points and queries have a
-            different number of coordinates, or if that number is not 1, 2, or 3.
+            different number of coordinates, if they have no coordinates, or if the
+            Warp backend gets more than 3.
 
     """
 
@@ -129,6 +134,35 @@ class RadiusSearch(FunctionSpec):
         """Pure-PyTorch brute-force radius search via cdist."""
         return radius_search_torch(
             points, queries, radius, max_points, return_dists, return_points
+        )
+
+    @classmethod
+    def dispatch(
+        cls,
+        points: Float[torch.Tensor, "*batch num_points dim"],
+        queries: Float[torch.Tensor, "*batch num_queries dim"],
+        radius: float,
+        max_points: int | None = None,
+        return_dists: bool = False,
+        return_points: bool = False,
+        *,
+        implementation: Literal["warp", "torch"] | None = None,
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
+        """Select the torch backend for points with more than 3 coordinates by default.
+
+        The Warp kernels use 3D points, so the Warp backend accepts 1, 2, or 3
+        coordinates. An explicit ``implementation`` is used as given.
+        """
+        if implementation is None and points.ndim > 0 and points.shape[-1] > 3:
+            implementation = "torch"
+        return super().dispatch(
+            points,
+            queries,
+            radius,
+            max_points,
+            return_dists,
+            return_points,
+            implementation=implementation,
         )
 
     @classmethod
