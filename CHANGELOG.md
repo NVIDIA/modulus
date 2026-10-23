@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Adds an experimental, independently implemented AB-UPT operator with
+  interacting surface/volume anchors, reusable query contexts, and a
+  physically scaled finite-difference vorticity helper.
+
 - Adds a Rotor37 compressor blade example with GeoTransolver
   (`examples/cfd/rotor37_geotransolver`)
 - Adds an experimental, independently implemented SMART operator with sampled

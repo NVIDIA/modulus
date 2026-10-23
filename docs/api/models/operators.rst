@@ -26,3 +26,21 @@ the `SMART paper <https://arxiv.org/abs/2601.18707>`_.
 .. autoclass:: physicsnemo.experimental.models.smart.SMART
     :show-inheritance:
     :members: encode_geometry, decode_queries
+
+AB-UPT (Experimental)
+--------------------
+
+AB-UPT uses geometry supernodes and interacting surface/volume anchor streams
+to define a query-independent field. The independent implementation follows
+`the AB-UPT paper <https://arxiv.org/abs/2502.09692v4>`_, without research
+implementation code, weights, or reference outputs. It supports joint or
+single-head prediction, reusable per-forward contexts, and finite-difference
+vorticity with physical scaling. See the class notes for implementation choices
+where the paper does not specify details.
+
+.. autoclass:: physicsnemo.experimental.models.ab_upt.ABUPT
+    :show-inheritance:
+    :members: encode_geometry, encode, decode_queries, decode_vorticity
+
+.. autoclass:: physicsnemo.experimental.models.ab_upt.ABUPTContext
+
