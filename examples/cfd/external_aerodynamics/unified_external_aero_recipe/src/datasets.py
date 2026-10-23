@@ -965,8 +965,14 @@ def build_dataloaders(
         combined_train_indices.extend(range(train_offset, train_offset + len(dataset)))
         train_offset += len(dataset)
         val_datadir = OmegaConf.select(ds_yaml, "val_datadir", default=None)
+        val_yaml = None
         if val_datadir and Path(val_datadir).exists():
             val_yaml = OmegaConf.merge(ds_yaml, {"train_datadir": val_datadir})
+        elif ds_yaml.get("independent_validation", False):
+            # The no-holdout fallback may reuse training cases, but stochastic
+            # readers still need separate epoch state for fixed validation.
+            val_yaml = ds_yaml
+        if val_yaml is not None:
             val_dataset = build_dataset(
                 val_yaml,
                 augment=False,

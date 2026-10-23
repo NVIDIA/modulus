@@ -909,7 +909,15 @@ training still retains the autograd graph for all chunks. Compilation is off
 by default because radius search has dynamic neighbor counts. CUDA uses the
 existing Warp radius search; CPU uses the bounded PyTorch fallback.
 
-Inference uses the same mode and dataset as training:
+Inference uses the same mode, dataset, and numerical model settings as training.
+Replay any architecture, `coordinate_scale`, or `pooling_radius` overrides from
+`resolved_config.yaml`. Checkpoint loading rejects incompatible numerical
+settings even when tensor shapes match. Query counts, query/pooling chunk sizes,
+and radius-search backend can be tuned independently. This checkpoint contract
+adds extra state; checkpoints from earlier drafts of this AB-UPT integration
+must be regenerated.
+
+For a run using the default model settings:
 
 ```bash
 python src/infer.py model=ab_upt_joint dataset=drivaer_ml_ab_upt_joint \

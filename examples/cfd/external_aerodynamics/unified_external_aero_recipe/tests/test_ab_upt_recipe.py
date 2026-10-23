@@ -29,6 +29,7 @@ from datasets import (
     build_dataset,
 )
 from forces import ForceContext
+from forward_kwargs import extract_targets, walk_path
 from hydra import compose, initialize_config_dir
 from infer import (
     _to_pointwise,
@@ -124,7 +125,7 @@ def pipeline(root, mode):
 @pytest.mark.parametrize("mode", ["surface", "volume", "joint"])
 def test_native_pipeline_train_checkpoint_export(native_case, mode, tmp_path):
     """All modes optimize and round-trip with unequal query sizes."""
-    root, original = native_case
+    root, _ = native_case
     cfg, ds, dataset = pipeline(root, mode)
     domain, meta = dataset[0]
     targets = OmegaConf.to_container(ds.targets)
@@ -179,8 +180,6 @@ def test_native_pipeline_train_checkpoint_export(native_case, mode, tmp_path):
     # Check inversion against the selected original values, independent of transforms.
     raw, _ = dataset.reader[0]
     for name, source in sources.items():
-        from forward_kwargs import walk_path
-
         torch.testing.assert_close(
             physical[as_nested_key(name)], walk_path(raw, source), rtol=1e-5, atol=2e-5
         )
@@ -197,8 +196,6 @@ def test_native_pipeline_train_checkpoint_export(native_case, mode, tmp_path):
     saved = DomainMesh.load(str(output))
     for name, source in sources.items():
         mesh_path, leaf = source.split(".point_data.")
-        from forward_kwargs import walk_path
-
         data = walk_path(saved, mesh_path).point_data
         parts = list(as_nested_key(leaf))
         parts[-1] = "pred_" + parts[-1]
@@ -311,8 +308,166 @@ def test_target_contract_rejects_wrong_mode(native_case):
     model = ABUPTRecipe(mode="surface", **SMALL)
     with pytest.raises(ValueError, match="disabled volume"):
         model(**batch["forward_kwargs"])
-    from forward_kwargs import extract_targets
-
     with pytest.raises(ValueError, match="exactly match"):
         extract_targets(dataset[0][0], {"surface.pressure": "scalar"}, {})
     dataset.close()
+
+
+@pytest.mark.parametrize("mode", ["surface", "volume", "joint"])
+def test_reader_keeps_labels_aligned_with_original_coordinates(native_case, mode):
+    """Match sampled coordinates to the original mesh, independently of the reader."""
+    root, original = native_case
+    reader = ABUPTDomainReader(root, mode=mode, **COUNTS)
+    reader.set_generator(torch.Generator().manual_seed(654))
+    sampled, _ = reader[0]
+    surface = sampled.boundaries["abupt_surface"]
+    torch.testing.assert_close(
+        surface.points, sampled.boundaries["vehicle"].cell_centroids
+    )
+    for enabled, query_mesh, source_positions, source_data, fields in (
+        (
+            mode != "volume",
+            surface,
+            original.boundaries["vehicle"].cell_centroids,
+            original.boundaries["vehicle"].cell_data,
+            (
+                ("surface.pressure", "pMeanTrim"),
+                ("surface.wss", "wallShearStressMeanTrim"),
+            ),
+        ),
+        (
+            mode != "surface",
+            sampled.interior,
+            original.interior.points,
+            original.interior.point_data,
+            (
+                ("volume.velocity", "UMeanTrim"),
+                ("volume.pressure", "pMeanTrim"),
+                ("volume.nut", "nutMeanTrim"),
+            ),
+        ),
+    ):
+        if not enabled:
+            assert not list(
+                query_mesh.point_data.keys(include_nested=True, leaves_only=True)
+            )
+            continue
+        distances = torch.cdist(query_mesh.points.double(), source_positions.double())
+        nearest = distances.argmin(dim=1)
+        torch.testing.assert_close(query_mesh.points, source_positions[nearest])
+        assert nearest.unique().numel() == query_mesh.n_points
+        for target, source in fields:
+            torch.testing.assert_close(
+                query_mesh.point_data[as_nested_key(target)],
+                source_data[source][nearest],
+            )
+
+
+@pytest.mark.parametrize(
+    "coordinate_dtypes,metadata_dtype",
+    [
+        ((torch.float64,), torch.float64),
+        ((torch.float64,), torch.float32),
+        ((torch.float32,), torch.float64),
+        ((torch.float32, torch.float64), torch.float64),
+    ],
+)
+@pytest.mark.parametrize("model_dtype", [torch.float32, torch.float64])
+def test_adapter_accepts_mixed_native_dtypes_without_changing_inputs(
+    coordinate_dtypes, metadata_dtype, model_dtype
+):
+    """Native dtypes match model-precision execution and retain input gradients."""
+    torch.manual_seed(81)
+    model = ABUPTRecipe(**SMALL, query_chunk_size=4).to(dtype=model_dtype)
+    coordinates = {
+        name: torch.rand(1, count, 3)
+        for name, count in (
+            ("geometry", 19),
+            ("supernodes", 5),
+            ("surface_anchors", 7),
+            ("volume_anchors", 9),
+            ("surface_queries", 11),
+            ("volume_queries", 13),
+        )
+    }
+    baseline = {
+        name: value.clone().requires_grad_() for name, value in coordinates.items()
+    }
+    baseline["parameters"] = torch.tensor([[[30.0, 1.0, 0.0]]], requires_grad=True)
+    native = {
+        name: value.to(coordinate_dtypes[i % len(coordinate_dtypes)])
+        .clone()
+        .requires_grad_()
+        for i, (name, value) in enumerate(coordinates.items())
+    }
+    native["parameters"] = (
+        baseline["parameters"].detach().to(metadata_dtype).clone().requires_grad_()
+    )
+    original = {name: value.detach().clone() for name, value in native.items()}
+    expected = model(**baseline)
+    sum(
+        v.square().mean()
+        for v in expected.values(include_nested=True, leaves_only=True)
+    ).backward()
+    parameter_gradients = {name: p.grad.clone() for name, p in model.named_parameters()}
+    model.zero_grad(set_to_none=True)
+    actual = model(**native)
+    sum(
+        v.square().mean() for v in actual.values(include_nested=True, leaves_only=True)
+    ).backward()
+    for key, value in actual.items(include_nested=True, leaves_only=True):
+        assert value.dtype == model_dtype
+        torch.testing.assert_close(value, expected[key])
+    for name, parameter in model.named_parameters():
+        torch.testing.assert_close(parameter.grad, parameter_gradients[name])
+    for name, value in native.items():
+        # Both the dtype and values used by export stay intact.
+        torch.testing.assert_close(value, original[name])
+        assert value.grad is not None and torch.isfinite(value.grad).all()
+        torch.testing.assert_close(value.grad.float(), baseline[name].grad)
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"coordinate_scale": 1.0},
+        {"pooling_radius": 0.5},
+        {"num_heads": 4},
+        {"num_interaction_blocks": 0, "num_shared_layers": 3},
+    ],
+)
+def test_production_checkpoint_load_rejects_changed_numerics(tmp_path, override):
+    """Weight-compatible settings must not silently change the restored field."""
+    path = tmp_path / "semantics.mdlus"
+    source = ABUPTRecipe(**SMALL)
+    source.save(str(path))
+    destination = ABUPTRecipe(**(SMALL | override))
+    with pytest.raises(ValueError, match="checkpoint settings"):
+        destination.load(str(path))
+
+
+def test_production_checkpoint_load_allows_decode_tuning(tmp_path):
+    """Operational chunk sizes/backend remain adjustable after training."""
+    path = tmp_path / "decode-tuning.mdlus"
+    source = ABUPTRecipe(**SMALL, query_chunk_size=17)
+    source.save(str(path))
+    destination = ABUPTRecipe(
+        **(SMALL | {"pooling_chunk_size": 97, "radius_search_backend": None}),
+        query_chunk_size=3,
+    )
+    destination.load(str(path))
+    args = {
+        name: torch.rand(1, count, 3)
+        for name, count in (
+            ("geometry", 19),
+            ("supernodes", 5),
+            ("surface_anchors", 7),
+            ("volume_anchors", 9),
+            ("surface_queries", 11),
+            ("volume_queries", 13),
+        )
+    }
+    args["parameters"] = torch.tensor([[30.0, 0.0, 0.0]])
+    expected, actual = source(**args), destination(**args)
+    for key, value in expected.items(include_nested=True, leaves_only=True):
+        torch.testing.assert_close(actual[key], value, rtol=2e-5, atol=2e-6)

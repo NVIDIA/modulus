@@ -105,6 +105,27 @@ class ABUPTRecipe(Module):
         )
         self.meta = replace(self.operator.meta, name="ABUPTRecipe")
 
+    def get_extra_state(self):
+        """Persist settings that change predictions but not weight shapes."""
+        return {
+            "version": 1,
+            "coordinate_scale": self.coordinate_scale,
+            "pooling_radius": self.operator.pooling_radius,
+            "num_heads": self.operator.num_heads,
+            "cross_branch": list(self.operator.cross_branch),
+        }
+
+    def set_extra_state(self, state):
+        """Reject numerically incompatible resume/inference configurations."""
+        expected = self.get_extra_state()
+        if not isinstance(state, dict) or state != expected:
+            raise ValueError(
+                "AB-UPT checkpoint settings do not match the current model: "
+                f"checkpoint={state!r}, current={expected!r}. "
+                "Use the model settings from the training run's resolved_config.yaml. "
+                "Query/pooling chunk sizes and search backend may be changed."
+            )
+
     def forward(
         self,
         geometry,
@@ -116,18 +137,7 @@ class ABUPTRecipe(Module):
         volume_queries=None,
     ):
         """Return named batched fields; surface and volume lengths may differ."""
-        if parameters.ndim == 3 and parameters.shape[1] == 1:
-            parameters = parameters[:, 0]
-        # Velocity magnitude remains available to distinguish flow conditions.
-        context = self.operator.encode(
-            geometry * self.coordinate_scale,
-            supernodes * self.coordinate_scale,
-            surface_anchors * self.coordinate_scale,
-            volume_anchors * self.coordinate_scale,
-            parameters,
-        )
-        output = TensorDict({}, batch_size=[geometry.shape[0]], device=geometry.device)
-        for field, enabled, queries, targets in (
+        branches = (
             (
                 "surface",
                 self.operator.surface_channels,
@@ -135,18 +145,36 @@ class ABUPTRecipe(Module):
                 SURFACE_TARGETS,
             ),
             ("volume", self.operator.volume_channels, volume_queries, VOLUME_TARGETS),
-        ):
-            if not enabled:
-                if queries is not None:
-                    raise ValueError(f"Queries supplied for disabled {field} head")
-                continue
-            if queries is None:
+        )
+        # Reject invalid branch contracts before building the geometry graph.
+        for field, enabled, queries, _ in branches:
+            if enabled and queries is None:
                 raise ValueError(f"Explicit {field}_queries are required by the recipe")
+            if not enabled and queries is not None:
+                raise ValueError(f"Queries supplied for disabled {field} head")
+        if parameters.ndim == 3 and parameters.shape[1] == 1:
+            parameters = parameters[:, 0]
+        # Native mesh coordinates and metadata can use different floating
+        # dtypes. Cast model inputs without mutating the meshes used for export;
+        # Tensor.to preserves gradients through any required conversion.
+        model_dtype = next(self.operator.parameters()).dtype
+        # Velocity magnitude remains available to distinguish flow conditions.
+        context = self.operator.encode(
+            geometry.to(dtype=model_dtype) * self.coordinate_scale,
+            supernodes.to(dtype=model_dtype) * self.coordinate_scale,
+            surface_anchors.to(dtype=model_dtype) * self.coordinate_scale,
+            volume_anchors.to(dtype=model_dtype) * self.coordinate_scale,
+            parameters.to(dtype=model_dtype),
+        )
+        output = TensorDict({}, batch_size=[geometry.shape[0]], device=geometry.device)
+        for field, enabled, queries, targets in branches:
+            if not enabled:
+                continue
             chunks = queries.split(self.query_chunk_size, dim=1)
             prediction = torch.cat(
                 [
                     self.operator.decode_queries(
-                        q * self.coordinate_scale, context, field
+                        q.to(dtype=model_dtype) * self.coordinate_scale, context, field
                     )
                     for q in chunks
                 ],
