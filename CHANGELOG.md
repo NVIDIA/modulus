@@ -335,6 +335,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `initialize_mlflow` offline mode logs to SQLite (`./mlruns/mlflow.db`)
+  instead of the file store that current MLflow rejects.
+- `docs/test_scripts` run again on current PhysicsNeMo.
 - `weighted_multinomial` with `replacement=True` accepts more than 2^24
   weights, instead of raising `torch.multinomial`'s category-limit error. So
   DoMINO's `sample_points_on_mesh` now works on meshes with over 2^24 faces.
