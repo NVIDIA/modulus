@@ -139,8 +139,8 @@ cost more time:
    * - ``check_inverted_cells``
      - off
      - Cells with a negative signed volume, on meshes of codimension 0 with a
-       manifold dimension of 2 or more. The sign depends on the vertex order,
-       so primitives can report many cells. Other meshes report ``-1``.
+       manifold dimension of 2 or more. The sign depends on the vertex order
+       (see :ref:`mesh-orientation-conventions`). Other meshes report ``-1``.
    * - ``check_manifoldness``
      - off
      - Edges that break manifold topology, on meshes with a manifold
